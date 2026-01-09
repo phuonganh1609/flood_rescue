@@ -1,5 +1,118 @@
 openapi: 3.0.0
 info:
   title: Flood Rescue API
+  description: API for flood rescue operations
   version: 1.0.0
-paths: {}
+servers:
+  - url: http://localhost:8080
+    description: Local server
+paths:
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  example: anh@example.com
+                fullName:
+                  type: string
+                  example: Phuong Anh
+                password:
+                  type: string
+                  example: 12345678
+                role:
+                  type: string
+                  example: Citizen
+                phoneNumber:
+                  type: string
+                  example: "0919656060"
+              required:
+                - email
+                - fullName
+                - password
+                - role
+                - phoneNumber
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Đăng ký thành công
+        '400':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Email đã được sử dụng
+        '500':
+          description: Server error
+  /api/auth/login:
+    post:
+      summary: Login user
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  example: anh@example.com
+                password:
+                  type: string
+                  example: 12345678
+              required:
+                - email
+                - password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  message:
+                    type: string
+                    example: Đăng nhập thành công
+        '400':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Tên người dùng hoặc mật khẩu không đúng
+        '500':
+          description: Server error
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

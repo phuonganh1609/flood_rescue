@@ -9,7 +9,6 @@ const YAML = require('yamljs')
 const path = require('path');
 
 const authRoute = require('./route/authRoute')
-// const lessonRoute = require('./routes/lessonRoute')
 
 dotenv.config();
 const app = express();
