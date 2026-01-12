@@ -1,3 +1,5 @@
+# **Folder Structure**
+
 src/
 ├── app.js
 ├── server.js
@@ -37,6 +39,8 @@ src/
 └── shared/ # (Tùy chọn) Chứa các Base class hoặc logic dùng chung cho các module
 └── base.repository.js
 
+---
+
 ## 📦 Cấu trúc 1 Module Chuẩn
 
 Ví dụ: requests module
@@ -50,12 +54,14 @@ modules/requests/
 └── request.model.js (optional – nếu dùng ORM)
 
 👉 Quy ước
-`controller`: HTTP (req, res)
-`service`: business logic
-`repository`: DB access
-`routes`: map endpoint
-`validation`: Joi / Zod
-`model`: Sequelize / Prisma / TypeORM
+| Thành phần | Chức năng |
+|---------------|-----------|
+| `controller` | HTTP (req, res) |
+| `service` | Business logic |
+| `repository` | DB access |
+| `routes` | Map endpoint |
+| `validation` | Joi / Zod |
+| `model` | Sequelize / Prisma / TypeORM |
 
 # CHI TIẾT CÁC MODULE
 
