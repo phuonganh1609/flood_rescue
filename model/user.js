@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const {Schema} = mongoose;
 
-// const Role = require('./role');
 
 const UserSchema  = new Schema({
     fullName: {

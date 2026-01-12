@@ -75,14 +75,14 @@ paths:
             schema:
               type: object
               properties:
-                email:
+                phoneNumber:
                   type: string
-                  example: anh@example.com
+                  example: "0919656060"
                 password:
                   type: string
                   example: 12345678
               required:
-                - email
+                - phoneNumber
                 - password
       responses:
         '200':
@@ -108,6 +108,173 @@ paths:
                   message:
                     type: string
                     example: Tên người dùng hoặc mật khẩu không đúng
+        '500':
+          description: Server error
+  /api/auth/createRescueTeam:
+    post:
+      summary: Create a new rescue team
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "Team 1"
+                status:
+                  type: string
+                  example: "Active"
+              required:
+                - name
+                - status
+      responses:
+        '201':
+          description: Create rescue team successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Tạo đội cứu hộ thành công
+        '400':
+          description: Rescue team already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Đội cứu hộ đã tồn tại
+        '500':
+          description: Server error
+  /api/auth/addTeamMember:
+    post:
+      summary: Add a member to a rescue team
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                teamName:
+                  type: string
+                  example: "Team 1"
+                memberName:
+                  type: string
+                  example: "Nguyen Van A"
+                memberRole:
+                  type: string
+                  example: "Member"
+              required:
+                - teamName
+                - memberName
+                - memberRole
+      responses:
+        '201':
+          description: Add member to team successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Thêm thành viên vào đội cứu hộ thành công
+        '400':
+          description: Member already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Thành viên đã tồn tại trong đội cứu hộ
+        '500':
+          description: Server error
+  /api/auth/addRequest:
+    post:
+      summary: Add a request for rescue or relief
+      tags:
+        - Authentication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userName:
+                  type: string
+                  example: "Nguyen Van A"
+                typeRequest:
+                  type: string
+                  example: "Rescue"
+                latitude:
+                  type: Decimal
+                  example: 21.028511
+                longitude:
+                  type: Decimal
+                  example: 105.854203
+                description:
+                  type: string
+                  example: "Need immediate rescue"
+                status:
+                  type: string
+                  example: "Pending"
+                requestSupply:
+                  type: array
+                  items:
+                    type: string
+                  example: ["Water", "Food"]
+                requestMedia:
+                  type: string
+              required:
+                - userName
+                - typeRequest
+                - latitude
+                - longitude
+                - description
+                - status
+                - requestSupply
+                - requestMedia
+      responses:
+        '201':
+          description: Add member to team successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Thêm thành viên vào đội cứu hộ thành công
+        '400':
+          description: Member already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Thành viên đã tồn tại trong đội cứu hộ
         '500':
           description: Server error
 components:

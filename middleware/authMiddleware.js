@@ -18,10 +18,10 @@ const authenticate = (req, res, next) => {
 };
 
 const authorize = (allowedRoles) => (req, res, next) => {
-    console.log('Authorizing user with role:', req.user.roleName);
+    console.log('Authorizing user with role:', req.user.role);
     console.log('Allowed roles for this route:', allowedRoles.join(', '));
 
-    if (!allowedRoles.includes(req.user.roleName)) {
+    if (!allowedRoles.includes(req.user.role)) {
         console.log('Access denied: User role not authorized.');
         return res.status(403).json({ message: "Access denied" });
     }
