@@ -16,7 +16,7 @@
 - **Method:** POST
 - **Endpoint:** `/api/auth/register`
 - **Description:** Đăng ký tài khoản (Citizen)
-- **Request:** `{ name, phone, email, password }`
+- **Request:** `{ fullname, phone, email, password }`
 - **Response:** `{ userId }`
 - **Auth:** Không
 

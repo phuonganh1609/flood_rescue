@@ -20,6 +20,11 @@ app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
+// Health Check
+app.get("/ping", (req, res) => {
+  res.status(200).send("pong");
+});
+
 // Routes
 app.use("/api/auth", authRoute);
 
