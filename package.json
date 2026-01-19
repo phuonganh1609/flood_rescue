@@ -2,10 +2,11 @@
   "name": "flood_rescue",
   "version": "1.0.0",
   "description": "Flood rescue management system",
-  "main": "app.js",
+  "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon app.js"
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
@@ -15,6 +16,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.2",
     "nodemon": "^3.1.11",
