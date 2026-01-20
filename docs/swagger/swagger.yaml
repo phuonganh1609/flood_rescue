@@ -1,0 +1,2003 @@
+openapi: 3.0.4
+info:
+  title: Flood Rescue & Relief System API
+  description: |-
+    API documentation for Flood Rescue & Relief Management System.
+
+    This system manages rescue and relief operations during flood emergencies, including:
+    - User authentication and authorization
+    - Emergency rescue/relief requests
+    - Mission assignment and tracking
+    - Resource and inventory management
+    - Real-time team position tracking
+    - Notifications and reporting
+
+    **Roles:**
+    - Citizen: Can submit requests and view their status
+    - Rescue Team: Receives and executes missions
+    - Rescue Coordinator: Manages requests and assigns missions
+    - Manager: Manages resources and inventory
+    - Admin: Full system access
+
+    **Production Server:** https://flood-rescue.onrender.com
+  contact:
+    email: duylase184704@fpt.edu.vn
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  version: 1.0.0
+servers:
+  - url: https://flood-rescue.onrender.com
+    description: Production server
+  - url: http://localhost:8080
+    description: Local development server
+tags:
+  - name: Auth
+    description: Authentication and user management
+  - name: Requests
+    description: Rescue and relief request operations
+  - name: Missions
+    description: Mission management and tracking
+  - name: Teams
+    description: Rescue team management
+  - name: Resources
+    description: Vehicle and equipment management
+  - name: Inventory
+    description: Relief supplies and inventory management
+  - name: Notifications
+    description: System notifications
+  - name: Reports
+    description: Reporting and analytics
+  - name: Admin
+    description: Administrative operations
+  - name: System
+    description: System configuration and settings
+
+paths:
+  /api/auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register new user account
+      description: Register a new user account (default role is Citizen)
+      operationId: register
+      requestBody:
+        description: User registration information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                    example: "60d5ec49f1b2c8b1f8e4e1a1"
+        "400":
+          description: Invalid input or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: User login
+      description: Login to the system with phone number and password
+      operationId: login
+      requestBody:
+        description: Login credentials
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/user:
+    get:
+      tags:
+        - Auth
+      summary: Get current user information
+      description: Get information of currently authenticated user
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/createRescueTeam:
+    post:
+      tags:
+        - Auth
+      summary: Create a rescue team
+      description: Create a new rescue team (Coordinator, Manager, or Admin only)
+      operationId: createRescueTeam
+      security:
+        - bearerAuth: []
+      requestBody:
+        description: Rescue team information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRescueTeamRequest"
+      responses:
+        "201":
+          description: Rescue team created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  teamId:
+                    type: string
+                    example: "60d5ec49f1b2c8b1f8e4e1a2"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/addTeamMember:
+    post:
+      tags:
+        - Auth
+      summary: Add member to rescue team
+      description: Add a new member to an existing rescue team
+      operationId: addTeamMember
+      security:
+        - bearerAuth: []
+      requestBody:
+        description: Team member information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddTeamMemberRequest"
+      responses:
+        "201":
+          description: Team member added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/addRequest:
+    post:
+      tags:
+        - Auth
+      summary: Submit rescue or relief request
+      description: Submit a new rescue or relief request
+      operationId: addRequest
+      security:
+        - bearerAuth: []
+      requestBody:
+        description: Request information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequestInput"
+      responses:
+        "201":
+          description: Request created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requestId:
+                    type: string
+                    example: "60d5ec49f1b2c8b1f8e4e1a3"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/requests:
+    get:
+      tags:
+        - Requests
+      summary: List all requests
+      description: Get list of rescue/relief requests (can filter by status)
+      operationId: listRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by request status
+          required: false
+          schema:
+            type: string
+            enum:
+              - Pending
+              - Verified
+              - Assigned
+              - InProgress
+              - Completed
+              - Cancelled
+              - Spam
+        - name: type
+          in: query
+          description: Filter by request type
+          required: false
+          schema:
+            type: string
+            enum:
+              - Rescue
+              - Relief
+        - name: priority
+          in: query
+          description: Filter by priority level
+          required: false
+          schema:
+            type: string
+            enum:
+              - Critical
+              - High
+              - Normal
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Request"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/requests/my:
+    get:
+      tags:
+        - Requests
+      summary: Get my requests
+      description: Get all requests submitted by current user (Citizen)
+      operationId: getMyRequests
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Request"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/requests/{id}:
+    get:
+      tags:
+        - Requests
+      summary: Get request detail
+      description: Get detailed information about a specific request
+      operationId: getRequestDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Request ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request detail retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Request"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/requests/{id}/verify:
+    patch:
+      tags:
+        - Requests
+      summary: Verify request
+      description: Verify or mark request as spam (Coordinator only)
+      operationId: verifyRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Request ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - Verified
+                    - Spam
+              required:
+                - status
+      responses:
+        "200":
+          description: Request verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/requests/{id}/priority:
+    patch:
+      tags:
+        - Requests
+      summary: Set request priority
+      description: Set priority level for a request (Coordinator only)
+      operationId: setRequestPriority
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Request ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                priority:
+                  type: string
+                  enum:
+                    - Critical
+                    - High
+                    - Normal
+              required:
+                - priority
+      responses:
+        "200":
+          description: Priority updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/requests/{id}/confirm:
+    patch:
+      tags:
+        - Requests
+      summary: Confirm safety or receipt
+      description: Citizen confirms they are safe or received relief supplies
+      operationId: confirmRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Request ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Confirmation successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - not request owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions:
+    post:
+      tags:
+        - Missions
+      summary: Create mission
+      description: Create a new rescue mission and assign to a team (Coordinator only)
+      operationId: createMission
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMissionRequest"
+      responses:
+        "201":
+          description: Mission created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  missionId:
+                    type: string
+                    example: "60d5ec49f1b2c8b1f8e4e1a4"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/assigned:
+    get:
+      tags:
+        - Missions
+      summary: Get assigned missions
+      description: Get missions assigned to current user's rescue team
+      operationId: getAssignedMissions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Missions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Mission"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/{id}:
+    get:
+      tags:
+        - Missions
+      summary: Get mission detail
+      description: Get detailed information about a specific mission
+      operationId: getMissionDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission detail retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/{id}/reassign:
+    patch:
+      tags:
+        - Missions
+      summary: Reassign mission
+      description: Reassign mission to a different team (Coordinator only)
+      operationId: reassignMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                teamId:
+                  type: string
+                  example: "60d5ec49f1b2c8b1f8e4e1a2"
+              required:
+                - teamId
+      responses:
+        "200":
+          description: Mission reassigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/{id}/status:
+    patch:
+      tags:
+        - Missions
+      summary: Update mission status
+      description: Update the status of a mission (Rescue Team only)
+      operationId: updateMissionStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - Assigned
+                    - InProgress
+                    - Completed
+                    - Cancelled
+              required:
+                - status
+      responses:
+        "200":
+          description: Mission status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - not assigned team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/{id}/report:
+    post:
+      tags:
+        - Missions
+      summary: Submit mission report
+      description: Submit report after completing a mission (Rescue Team only)
+      operationId: submitMissionReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary:
+                  type: string
+                  example: "Successfully rescued 5 people from flood area"
+                obstacles:
+                  type: string
+                  example: "Road partially blocked, had to use alternate route"
+              required:
+                - summary
+      responses:
+        "201":
+          description: Report submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reportId:
+                    type: string
+                    example: "60d5ec49f1b2c8b1f8e4e1a5"
+        "403":
+          description: Forbidden - not assigned team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/{id}/positions:
+    get:
+      tags:
+        - Missions
+      summary: Get mission positions
+      description: Get real-time position updates for a mission's rescue team
+      operationId: getMissionPositions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Positions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Position"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/team-positions:
+    post:
+      tags:
+        - Missions
+      summary: Send team position
+      description: Send real-time position update of rescue team (Rescue Team only)
+      operationId: sendTeamPosition
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                missionId:
+                  type: string
+                  example: "60d5ec49f1b2c8b1f8e4e1a4"
+                latitude:
+                  type: number
+                  format: double
+                  example: 10.762622
+                longitude:
+                  type: number
+                  format: double
+                  example: 106.660172
+              required:
+                - missionId
+                - latitude
+                - longitude
+      responses:
+        "200":
+          description: Position sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - not assigned team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/resources:
+    get:
+      tags:
+        - Resources
+      summary: List resources
+      description: Get list of vehicles and equipment (Manager/Coordinator only)
+      operationId: listResources
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Resources retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Resource"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Resources
+      summary: Create resource
+      description: Add new vehicle or equipment (Manager only)
+      operationId: createResource
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "Rescue Boat #1"
+                type:
+                  type: string
+                  enum:
+                    - Boat
+                    - Truck
+                    - Ambulance
+                    - Helicopter
+                    - Equipment
+                  example: "Boat"
+                capacity:
+                  type: integer
+                  example: 10
+              required:
+                - name
+                - type
+      responses:
+        "201":
+          description: Resource created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resourceId:
+                    type: string
+                    example: "60d5ec49f1b2c8b1f8e4e1a6"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/resources/{id}:
+    patch:
+      tags:
+        - Resources
+      summary: Update resource
+      description: Update resource status (Manager only)
+      operationId: updateResource
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Resource ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - Available
+                    - In Use
+                    - Maintenance
+                    - Unavailable
+              required:
+                - status
+      responses:
+        "200":
+          description: Resource updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/supplies:
+    get:
+      tags:
+        - Inventory
+      summary: List relief supplies
+      description: Get list of relief supplies inventory (Manager only)
+      operationId: listSupplies
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Supplies retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supply"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/inventory/{id}:
+    patch:
+      tags:
+        - Inventory
+      summary: Update inventory
+      description: Update inventory quantity (Manager only)
+      operationId: updateInventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Inventory item ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: integer
+                  example: 100
+              required:
+                - quantity
+      responses:
+        "200":
+          description: Inventory updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Inventory item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/relief-distributions:
+    post:
+      tags:
+        - Inventory
+      summary: Distribute relief supplies
+      description: Distribute relief supplies to a mission (Manager only)
+      operationId: distributeSupplies
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                missionId:
+                  type: string
+                  example: "60d5ec49f1b2c8b1f8e4e1a4"
+                supplyId:
+                  type: string
+                  example: "60d5ec49f1b2c8b1f8e4e1a7"
+                quantity:
+                  type: integer
+                  example: 50
+              required:
+                - missionId
+                - supplyId
+                - quantity
+      responses:
+        "200":
+          description: Supplies distributed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          description: Invalid input or insufficient inventory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/notifications:
+    get:
+      tags:
+        - Notifications
+      summary: Get notifications
+      description: Get notifications for current user
+      operationId: getNotifications
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/notifications/{id}/read:
+    patch:
+      tags:
+        - Notifications
+      summary: Mark notification as read
+      description: Mark a notification as read
+      operationId: markNotificationAsRead
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Notification ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "404":
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/users:
+    get:
+      tags:
+        - Admin
+      summary: List users
+      description: Get list of all users (Admin only)
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/users/{id}/role:
+    patch:
+      tags:
+        - Admin
+      summary: Update user role
+      description: Update user role/permissions (Admin only)
+      operationId: updateUserRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: User ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum:
+                    - Citizen
+                    - Rescue Team
+                    - Rescue Coordinator
+                    - Manager
+                    - Admin
+              required:
+                - role
+      responses:
+        "200":
+          description: User role updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/system/categories:
+    get:
+      tags:
+        - System
+      summary: Get system categories
+      description: Get system configuration and categories (Admin only)
+      operationId: getSystemCategories
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/reports/summary:
+    get:
+      tags:
+        - Reports
+      summary: Get summary report
+      description: Get summary statistics and reports (Admin/Manager only)
+      operationId: getSummaryReport
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Report retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SummaryReport"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/reports/export:
+    get:
+      tags:
+        - Reports
+      summary: Export report
+      description: Export report to CSV file (Admin only)
+      operationId: exportReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          description: Report start date
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: Report end date
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Report exported successfully
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - fullName
+        - email
+        - phoneNumber
+        - password
+      properties:
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: "Nguyen Van A"
+        email:
+          type: string
+          format: email
+          example: "nguyenvana@example.com"
+        phoneNumber:
+          type: string
+          pattern: "^[0-9]{10,11}$"
+          example: "0901234567"
+        password:
+          type: string
+          minLength: 6
+          maxLength: 100
+          example: "password123"
+        role:
+          type: string
+          enum:
+            - Citizen
+            - Rescue Team
+            - Rescue Coordinator
+            - Manager
+            - Admin
+          default: Citizen
+
+    LoginRequest:
+      type: object
+      required:
+        - phoneNumber
+        - password
+      properties:
+        phoneNumber:
+          type: string
+          pattern: "^[0-9]{10,11}$"
+          example: "0901234567"
+        password:
+          type: string
+          example: "password123"
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        fullName:
+          type: string
+          example: "Nguyen Van A"
+        email:
+          type: string
+          example: "nguyenvana@example.com"
+        phoneNumber:
+          type: string
+          example: "0901234567"
+        role:
+          type: string
+          enum:
+            - Citizen
+            - Rescue Team
+            - Rescue Coordinator
+            - Manager
+            - Admin
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateRescueTeamRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: "Team Alpha"
+        status:
+          type: string
+          enum:
+            - Active
+            - Offline
+            - Busy
+          default: Active
+
+    AddTeamMemberRequest:
+      type: object
+      required:
+        - memberName
+        - teamName
+      properties:
+        memberName:
+          type: string
+          example: "Nguyen Van B"
+        teamName:
+          type: string
+          example: "Team Alpha"
+        memberRole:
+          type: string
+          enum:
+            - Leader
+            - Member
+            - Driver
+            - Medic
+          default: Member
+
+    CreateRequestInput:
+      type: object
+      required:
+        - type
+        - latitude
+        - longitude
+        - description
+      properties:
+        type:
+          type: string
+          enum:
+            - Rescue
+            - Relief
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          example: 10.762622
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          example: 106.660172
+        description:
+          type: string
+          minLength: 10
+          maxLength: 500
+          example: "Trapped in flooded house, need immediate rescue"
+        requestSupply:
+          type: string
+          maxLength: 200
+          example: "Food, water, first aid kit"
+        requestMedia:
+          type: string
+          format: uri
+          example: "https://example.com/image.jpg"
+
+    Request:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a3"
+        userName:
+          type: string
+          example: "Nguyen Van A"
+        type:
+          type: string
+          enum:
+            - Rescue
+            - Relief
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        description:
+          type: string
+        priority:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Normal
+        status:
+          type: string
+          enum:
+            - Pending
+            - Verified
+            - Assigned
+            - InProgress
+            - Completed
+            - Cancelled
+            - Spam
+        requestSupply:
+          type: array
+          items:
+            type: string
+        requestMedia:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateMissionRequest:
+      type: object
+      required:
+        - teamId
+        - requestIds
+      properties:
+        teamId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a2"
+        requestIds:
+          type: array
+          items:
+            type: string
+          example: ["60d5ec49f1b2c8b1f8e4e1a3"]
+        vehicleId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a6"
+
+    Mission:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a4"
+        teamId:
+          type: string
+        requestIds:
+          type: array
+          items:
+            type: string
+        vehicleId:
+          type: string
+        status:
+          type: string
+          enum:
+            - Assigned
+            - InProgress
+            - Completed
+            - Cancelled
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Position:
+      type: object
+      properties:
+        missionId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a4"
+        latitude:
+          type: number
+          format: double
+          example: 10.762622
+        longitude:
+          type: number
+          format: double
+          example: 106.660172
+        timestamp:
+          type: string
+          format: date-time
+
+    Resource:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a6"
+        name:
+          type: string
+          example: "Rescue Boat #1"
+        type:
+          type: string
+          enum:
+            - Boat
+            - Truck
+            - Ambulance
+            - Helicopter
+            - Equipment
+        capacity:
+          type: integer
+          example: 10
+        status:
+          type: string
+          enum:
+            - Available
+            - In Use
+            - Maintenance
+            - Unavailable
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Supply:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a7"
+        name:
+          type: string
+          example: "Water Bottles"
+        quantity:
+          type: integer
+          example: 1000
+        unit:
+          type: string
+          example: "bottles"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a8"
+        userId:
+          type: string
+        title:
+          type: string
+          example: "New Mission Assigned"
+        message:
+          type: string
+          example: "You have been assigned to Mission #123"
+        type:
+          type: string
+          enum:
+            - Info
+            - Warning
+            - Success
+            - Error
+        isRead:
+          type: boolean
+          default: false
+        createdAt:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a9"
+        name:
+          type: string
+          example: "Emergency Types"
+        values:
+          type: array
+          items:
+            type: string
+
+    SummaryReport:
+      type: object
+      properties:
+        totalRequests:
+          type: integer
+          example: 150
+        pendingRequests:
+          type: integer
+          example: 20
+        completedMissions:
+          type: integer
+          example: 100
+        activeTeams:
+          type: integer
+          example: 10
+        totalResourcesUsed:
+          type: integer
+          example: 45
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 100
+        totalPages:
+          type: integer
+          example: 5
+
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: "An error occurred"
+        code:
+          type: string
+          example: "ERROR_CODE"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "JWT token authentication. Format: `Bearer <token>`"
