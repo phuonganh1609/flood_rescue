@@ -1,11 +1,11 @@
-const bcrypt = require("bcryptjs");
-const {
+import bcrypt from "bcryptjs";
+import {
   authRepository,
   rescueTeamRepository,
   teamMemberRepository,
   requestRepository,
-} = require("./auth.repository");
-const { generateToken } = require("./token.util");
+} from "./auth.repository.js";
+import { generateToken } from "./token.util.js";
 
 /**
  * Service cho Authentication operations
@@ -251,8 +251,10 @@ class RequestService {
   }
 }
 
-module.exports = {
-  authService: new AuthService(),
-  rescueTeamService: new RescueTeamService(),
-  requestService: new RequestService(),
-};
+export { AuthService, RescueTeamService, RequestService };
+
+const authService = new AuthService();
+const rescueTeamService = new RescueTeamService();
+const requestService = new RequestService();
+
+export { authService, rescueTeamService, requestService };

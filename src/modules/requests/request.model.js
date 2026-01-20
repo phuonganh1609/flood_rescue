@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 const { Schema } = mongoose;
 
 const RequestMissionSchema = new Schema(
@@ -48,4 +48,4 @@ const RequestMissionSchema = new Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("RequestMission", RequestMissionSchema);
+export default mongoose.model("RequestMission", RequestMissionSchema);

@@ -2,6 +2,7 @@
   "name": "flood_rescue",
   "version": "1.0.0",
   "description": "Flood rescue management system",
+  "type": "module",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

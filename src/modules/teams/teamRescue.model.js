@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 const { Schema } = mongoose;
 
 const RescueTeamSchema = new Schema(
@@ -16,4 +16,4 @@ const RescueTeamSchema = new Schema(
   { timestamps: true },
 );
 
-module.exports = mongoose.model("RescueTeam", RescueTeamSchema);
+export default mongoose.model("RescueTeam", RescueTeamSchema);

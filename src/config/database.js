@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 /**
  * Kết nối MongoDB
@@ -39,4 +39,4 @@ mongoose.connection.on("error", (error) => {
   console.error("❌ MongoDB error:", error);
 });
 
-module.exports = { connectDB };
+export { connectDB };

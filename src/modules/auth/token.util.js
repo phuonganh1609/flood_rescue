@@ -1,4 +1,4 @@
-const jwt = require("jsonwebtoken");
+import jwt from "jsonwebtoken";
 
 /**
  * Generate JWT access token
@@ -67,9 +67,4 @@ const extractTokenFromHeader = (authHeader) => {
   return authHeader.substring(7);
 };
 
-module.exports = {
-  generateToken,
-  verifyToken,
-  decodeToken,
-  extractTokenFromHeader,
-};
+export { generateToken, verifyToken, decodeToken, extractTokenFromHeader };

@@ -1,7 +1,7 @@
 //Khởi động server (listen port)
-require("dotenv").config();
-const app = require("./app");
-const { connectDB } = require("./config/database");
+import "dotenv/config.js";
+import app from "./app.js";
+import { connectDB } from "./config/database.js";
 
 const PORT = process.env.PORT || 8080;
 

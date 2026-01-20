@@ -1,5 +1,5 @@
-const jwt = require("jsonwebtoken");
-const User = require("../modules/users/user.model");
+import jwt from "jsonwebtoken";
+import User from "../modules/users/user.model.js";
 
 const authenticate = (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
@@ -32,4 +32,4 @@ const authorize = (allowedRoles) => (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, authorize };
+export { authenticate, authorize };

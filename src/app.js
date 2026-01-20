@@ -1,11 +1,15 @@
-const express = require("express");
-const cors = require("cors");
-const cookieParser = require("cookie-parser");
-const swaggerUi = require("swagger-ui-express");
-const YAML = require("yamljs");
-const path = require("path");
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import swaggerUi from "swagger-ui-express";
+import YAML from "yamljs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const authRoute = require("./modules/auth/auth.routes");
+import authRoute from "./modules/auth/auth.routes.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -28,4 +32,4 @@ app.get("/ping", (req, res) => {
 // Routes
 app.use("/api/auth", authRoute);
 
-module.exports = app;
+export default app;

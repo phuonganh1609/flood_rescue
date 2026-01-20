@@ -1,13 +1,13 @@
-const {
+import {
   authService,
   rescueTeamService,
   requestService,
-} = require("./auth.service");
+} from "./auth.service.js";
 
 /**
  * Controller cho Authentication
  */
-exports.register = async (req, res) => {
+export const register = async (req, res) => {
   try {
     const result = await authService.register(req.body);
     res.status(201).json(result);
@@ -18,7 +18,7 @@ exports.register = async (req, res) => {
   }
 };
 
-exports.login = async (req, res) => {
+export const login = async (req, res) => {
   try {
     const result = await authService.login(req.body);
     res.json(result);
@@ -29,7 +29,7 @@ exports.login = async (req, res) => {
   }
 };
 
-exports.getUser = async (req, res) => {
+export const getUser = async (req, res) => {
   try {
     const user = await authService.getCurrentUser(req.user.id);
     res.json(user);
@@ -43,7 +43,7 @@ exports.getUser = async (req, res) => {
 /**
  * Controller cho RescueTeam
  */
-exports.createRescueTeam = async (req, res) => {
+export const createRescueTeam = async (req, res) => {
   try {
     const result = await rescueTeamService.createRescueTeam(req.body);
     res.status(201).json(result);
@@ -54,7 +54,7 @@ exports.createRescueTeam = async (req, res) => {
   }
 };
 
-exports.addMemberTeam = async (req, res) => {
+export const addMemberTeam = async (req, res) => {
   try {
     const result = await rescueTeamService.addMemberToTeam(req.body);
     res.status(201).json(result);
@@ -68,7 +68,7 @@ exports.addMemberTeam = async (req, res) => {
 /**
  * Controller cho Request
  */
-exports.addRequest = async (req, res) => {
+export const addRequest = async (req, res) => {
   try {
     const result = await requestService.createRequest(req.user.id, req.body);
     res.status(201).json(result);

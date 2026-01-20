@@ -1,15 +1,15 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
-const authController = require("./auth.controller");
-const { authenticate, authorize } = require("../../middlewares/authMiddleware");
-const { validate } = require("../../middlewares/validate.middleware");
-const {
+import * as authController from "./auth.controller.js";
+import { authenticate, authorize } from "../../middlewares/authMiddleware.js";
+import { validate } from "../../middlewares/validate.middleware.js";
+import {
   registerSchema,
   loginSchema,
   createRescueTeamSchema,
   addMemberTeamSchema,
   addRequestSchema,
-} = require("./auth.validation");
+} from "./auth.validation.js";
 
 // Auth routes
 router.post("/register", validate(registerSchema), authController.register);
@@ -40,4 +40,4 @@ router.post(
   authController.addRequest,
 );
 
-module.exports = router;
+export default router;

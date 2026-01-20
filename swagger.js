@@ -1,4 +1,6 @@
-const yaml = require('yamljs');
-const swaggerDocument = yaml.load('./swagger/swagger.yaml');
+import yaml from "yamljs";
+
+const swaggerDocument = yaml.load("./swagger/swagger.yaml");
 console.log(swaggerDocument);
-module.exports = swaggerDocument;
+
+export default swaggerDocument;

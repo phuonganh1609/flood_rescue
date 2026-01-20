@@ -1,7 +1,7 @@
-const User = require("../users/user.model");
-const RescueTeam = require("../teams/teamRescue.model");
-const TeamMember = require("../teams/teamMember.model");
-const RequestMission = require("../requests/request.model");
+import User from "../users/user.model.js";
+import RescueTeam from "../teams/teamRescue.model.js";
+import TeamMember from "../teams/teamMember.model.js";
+import RequestMission from "../requests/request.model.js";
 
 /**
  * Repository cho User operations
@@ -204,9 +204,21 @@ class RequestRepository {
   }
 }
 
-module.exports = {
-  authRepository: new AuthRepository(),
-  rescueTeamRepository: new RescueTeamRepository(),
-  teamMemberRepository: new TeamMemberRepository(),
-  requestRepository: new RequestRepository(),
+export {
+  AuthRepository,
+  RescueTeamRepository,
+  TeamMemberRepository,
+  RequestRepository,
+};
+
+const authRepository = new AuthRepository();
+const rescueTeamRepository = new RescueTeamRepository();
+const teamMemberRepository = new TeamMemberRepository();
+const requestRepository = new RequestRepository();
+
+export {
+  authRepository,
+  rescueTeamRepository,
+  teamMemberRepository,
+  requestRepository,
 };

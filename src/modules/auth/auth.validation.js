@@ -1,4 +1,4 @@
-const Joi = require("joi");
+import Joi from "joi";
 
 /**
  * Validation schema cho register
@@ -125,7 +125,7 @@ const addRequestSchema = Joi.object({
   }),
 });
 
-module.exports = {
+export {
   registerSchema,
   loginSchema,
   createRescueTeamSchema,
