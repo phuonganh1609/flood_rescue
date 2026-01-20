@@ -1,8 +1,5 @@
-import {
-  authService,
-  rescueTeamService,
-  requestService,
-} from "./auth.service.js";
+import e from "express";
+import { authService } from "./auth.service.js";
 
 /**
  * Controller cho Authentication
@@ -21,7 +18,20 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const result = await authService.login(req.body);
-    res.json(result);
+
+    // Set refresh token trong HTTP-only cookie
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true, // Không thể truy cập qua JavaScript
+      secure: process.env.NODE_ENV === "production", // Chỉ gửi qua HTTPS trong production
+      sameSite: "strict", // Chống CSRF
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
+    });
+
+    // Chỉ trả accessToken và user info trong response body
+    res.json({
+      accessToken: result.accessToken,
+      user: result.user,
+    });
   } catch (error) {
     res.status(400).json({
       message: error.message || "Lỗi khi đăng nhập",
@@ -40,41 +50,31 @@ export const getUser = async (req, res) => {
   }
 };
 
-/**
- * Controller cho RescueTeam
- */
-export const createRescueTeam = async (req, res) => {
+export const logout = async (req, res) => {
   try {
-    const result = await rescueTeamService.createRescueTeam(req.body);
-    res.status(201).json(result);
-  } catch (error) {
-    res.status(400).json({
-      message: error.message || "Lỗi khi tạo đội cứu hộ",
-    });
-  }
-};
+    // Lấy refresh token từ cookie
+    const refreshToken = req.cookies.refreshToken;
 
-export const addMemberTeam = async (req, res) => {
-  try {
-    const result = await rescueTeamService.addMemberToTeam(req.body);
-    res.status(201).json(result);
-  } catch (error) {
-    res.status(400).json({
-      message: error.message || "Lỗi khi thêm thành viên",
-    });
-  }
-};
+    if (!refreshToken) {
+      return res.status(400).json({
+        message: "Không tìm thấy refresh token",
+      });
+    }
 
-/**
- * Controller cho Request
- */
-export const addRequest = async (req, res) => {
-  try {
-    const result = await requestService.createRequest(req.user.id, req.body);
-    res.status(201).json(result);
+    // Xóa refresh token khỏi database
+    await authService.logout(refreshToken);
+
+    // Xóa cookie trên trình duyệt
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    return res.sendStatus(204);
   } catch (error) {
-    res.status(400).json({
-      message: error.message || "Lỗi khi tạo yêu cầu",
+    return res.status(400).json({
+      message: error.message || "Lỗi khi đăng xuất",
     });
   }
 };

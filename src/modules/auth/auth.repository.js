@@ -1,14 +1,11 @@
 import User from "../users/user.model.js";
-import RescueTeam from "../teams/teamRescue.model.js";
-import TeamMember from "../teams/teamMember.model.js";
-import RequestMission from "../requests/request.model.js";
 
 /**
  * Repository cho User operations
  */
 class AuthRepository {
   /**
-   * Tìm user theo email
+   * Tìm user theo email (bao gồm hashedPassword để verify login)
    * @param {string} email
    * @returns {Promise<Object|null>}
    */
@@ -43,7 +40,7 @@ class AuthRepository {
    * @returns {Promise<Object|null>}
    */
   async findUserById(userId) {
-    return await User.findById(userId).select("-password");
+    return await User.findById(userId).select("-hashedPassword");
   }
 
   /**
@@ -67,158 +64,6 @@ class AuthRepository {
   }
 }
 
-/**
- * Repository cho RescueTeam operations
- */
-class RescueTeamRepository {
-  /**
-   * Tìm rescue team theo tên
-   * @param {string} name
-   * @returns {Promise<Object|null>}
-   */
-  async findTeamByName(name) {
-    return await RescueTeam.findOne({ name });
-  }
-
-  /**
-   * Tạo rescue team mới
-   * @param {Object} teamData
-   * @returns {Promise<Object>}
-   */
-  async createTeam(teamData) {
-    const team = new RescueTeam(teamData);
-    return await team.save();
-  }
-
-  /**
-   * Cập nhật rescue team
-   * @param {string} teamId
-   * @param {Object} updateData
-   * @returns {Promise<Object|null>}
-   */
-  async updateTeam(teamId, updateData) {
-    return await RescueTeam.findByIdAndUpdate(teamId, updateData, {
-      new: true,
-    });
-  }
-
-  /**
-   * Lấy danh sách tất cả teams
-   * @returns {Promise<Array>}
-   */
-  async getAllTeams() {
-    return await RescueTeam.find();
-  }
-}
-
-/**
- * Repository cho TeamMember operations
- */
-class TeamMemberRepository {
-  /**
-   * Tìm member trong team
-   * @param {string} userName
-   * @param {string} rescueTeamName
-   * @returns {Promise<Object|null>}
-   */
-  async findMemberInTeam(userName, rescueTeamName) {
-    return await TeamMember.findOne({
-      userName,
-      rescueTeamName,
-    });
-  }
-
-  /**
-   * Thêm member vào team
-   * @param {Object} memberData
-   * @returns {Promise<Object>}
-   */
-  async addMemberToTeam(memberData) {
-    return await TeamMember.create(memberData);
-  }
-
-  /**
-   * Lấy danh sách members của team
-   * @param {string} rescueTeamName
-   * @returns {Promise<Array>}
-   */
-  async getTeamMembers(rescueTeamName) {
-    return await TeamMember.find({ rescueTeamName });
-  }
-
-  /**
-   * Xóa member khỏi team
-   * @param {string} userName
-   * @param {string} rescueTeamName
-   * @returns {Promise<Object|null>}
-   */
-  async removeMemberFromTeam(userName, rescueTeamName) {
-    return await TeamMember.findOneAndDelete({
-      userName,
-      rescueTeamName,
-    });
-  }
-}
-
-/**
- * Repository cho Request operations
- */
-class RequestRepository {
-  /**
-   * Tạo request mới
-   * @param {Object} requestData
-   * @returns {Promise<Object>}
-   */
-  async createRequest(requestData) {
-    return await RequestMission.create(requestData);
-  }
-
-  /**
-   * Tìm request theo ID
-   * @param {string} requestId
-   * @returns {Promise<Object|null>}
-   */
-  async findRequestById(requestId) {
-    return await RequestMission.findById(requestId);
-  }
-
-  /**
-   * Lấy requests của user
-   * @param {string} userName
-   * @returns {Promise<Array>}
-   */
-  async getRequestsByUser(userName) {
-    return await RequestMission.find({ userName });
-  }
-
-  /**
-   * Cập nhật request
-   * @param {string} requestId
-   * @param {Object} updateData
-   * @returns {Promise<Object|null>}
-   */
-  async updateRequest(requestId, updateData) {
-    return await RequestMission.findByIdAndUpdate(requestId, updateData, {
-      new: true,
-    });
-  }
-}
-
-export {
-  AuthRepository,
-  RescueTeamRepository,
-  TeamMemberRepository,
-  RequestRepository,
-};
-
 const authRepository = new AuthRepository();
-const rescueTeamRepository = new RescueTeamRepository();
-const teamMemberRepository = new TeamMemberRepository();
-const requestRepository = new RequestRepository();
 
-export {
-  authRepository,
-  rescueTeamRepository,
-  teamMemberRepository,
-  requestRepository,
-};
+export { authRepository };

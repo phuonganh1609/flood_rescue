@@ -1,11 +1,10 @@
 import bcrypt from "bcryptjs";
-import {
-  authRepository,
-  rescueTeamRepository,
-  teamMemberRepository,
-  requestRepository,
-} from "./auth.repository.js";
+import crypto from "crypto";
+import { authRepository } from "./auth.repository.js";
+import { sessionRepository } from "./session.repository.js";
 import { generateToken } from "./token.util.js";
+
+const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
 /**
  * Service cho Authentication operations
@@ -37,19 +36,26 @@ class AuthService {
    * @returns {Promise<Object>}
    */
   async register(userData) {
-    const { fullName, email, password, role, phoneNumber } = userData;
+    const { userName, displayName, email, password, role, phoneNumber } =
+      userData;
 
-    // Kiểm tra email hoặc phone đã tồn tại
-    const existingUser = await authRepository.findUserByEmailOrPhone(
-      email,
-      phoneNumber,
-    );
+    if (!userName || !displayName || !email || !password) {
+      throw new Error(
+        "Không thể thiếu userName, displayName, email hoặc password",
+      );
+    }
 
-    if (existingUser) {
-      if (existingUser.email === email) {
-        throw new Error("Email đã được sử dụng");
-      }
-      if (existingUser.phoneNumber === phoneNumber) {
+    // Kiểm tra email đã tồn tại
+    const existingEmail = await authRepository.findUserByEmail(email);
+    if (existingEmail) {
+      throw new Error("Email đã được sử dụng");
+    }
+
+    // Kiểm tra phoneNumber nếu có
+    if (phoneNumber) {
+      const existingPhone =
+        await authRepository.findUserByPhoneNumber(phoneNumber);
+      if (existingPhone) {
         throw new Error("Số điện thoại đã được sử dụng");
       }
     }
@@ -59,11 +65,13 @@ class AuthService {
 
     // Tạo user mới
     const newUser = await authRepository.createUser({
-      fullName,
+      userName,
+      displayName,
       email,
-      password: hashedPassword,
+      hashedPassword,
       role: role || "Citizen",
-      phoneNumber,
+      phoneNumber: phoneNumber || null,
+      isActive: true,
     });
 
     return {
@@ -78,36 +86,52 @@ class AuthService {
    * @returns {Promise<Object>}
    */
   async login(loginData) {
-    const { phoneNumber, password } = loginData;
+    const { email, password } = loginData;
 
-    // Tìm user
-    const user = await authRepository.findUserByPhoneNumber(phoneNumber);
+    // Tìm user theo email và include hashedPassword để verify
+    const user = await authRepository.findUserByEmail(email);
     if (!user) {
-      throw new Error("Tên người dùng hoặc mật khẩu không đúng");
+      throw new Error("Email hoặc mật khẩu không đúng");
+    }
+
+    // Kiểm tra user có active không
+    if (!user.isActive) {
+      throw new Error("Tài khoản đã bị vô hiệu hóa");
     }
 
     // Kiểm tra password
-    const isMatch = await this.comparePassword(password, user.password);
+    const isMatch = await this.comparePassword(password, user.hashedPassword);
     if (!isMatch) {
-      throw new Error("Tên người dùng hoặc mật khẩu không đúng");
+      throw new Error("Email hoặc mật khẩu không đúng");
     }
 
-    // Generate token
-    const token = generateToken({
+    // Tạo access token
+    const accessToken = generateToken({
       id: user._id,
-      phoneNumber: user.phoneNumber,
+      email: user.email,
       role: user.role,
     });
 
+    // Tạo refresh token
+    const refreshToken = crypto.randomBytes(64).toString("hex");
+
+    // Tạo session mới để lưu refresh token
+    await sessionRepository.createSession({
+      userId: user._id,
+      refreshToken,
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL),
+    });
+
     return {
-      token,
-      message: "Đăng nhập thành công",
-      role: user.role,
+      accessToken,
+      refreshToken, // Trả về refresh token để controller xử lý cookie
       user: {
         id: user._id,
-        fullName: user.fullName,
+        userName: user.userName,
+        displayName: user.displayName,
         email: user.email,
         phoneNumber: user.phoneNumber,
+        avatarUrl: user.avatarUrl,
         role: user.role,
       },
     };
@@ -125,136 +149,31 @@ class AuthService {
     }
     return user;
   }
-}
-
-/**
- * Service cho RescueTeam operations
- */
-class RescueTeamService {
-  /**
-   * Tạo rescue team
-   * @param {Object} teamData
-   * @returns {Promise<Object>}
-   */
-  async createRescueTeam(teamData) {
-    const { name, status } = teamData;
-
-    // Kiểm tra team đã tồn tại
-    const existingTeam = await rescueTeamRepository.findTeamByName(name);
-    if (existingTeam) {
-      throw new Error("Đội cứu hộ với tên này đã tồn tại");
-    }
-
-    // Tạo team mới
-    const newTeam = await rescueTeamRepository.createTeam({
-      name,
-      status: status || "Active",
-    });
-
-    return {
-      message: "Tạo đội cứu hộ thành công",
-      teamId: newTeam._id,
-    };
-  }
 
   /**
-   * Thêm member vào team
-   * @param {Object} memberData
+   * Đăng xuất - xóa session
+   * @param {string} refreshToken
    * @returns {Promise<Object>}
    */
-  async addMemberToTeam(memberData) {
-    const { memberName, teamName, memberRole } = memberData;
-
-    // Kiểm tra user tồn tại
-    const user = await authRepository.findUserByEmailOrPhone(
-      memberName,
-      memberName,
-    );
-    if (!user || user.fullName !== memberName) {
-      // Tìm theo fullName
-      const userByName = await authRepository.findUserById(memberName);
-      if (!userByName) {
-        throw new Error("User không tồn tại");
-      }
+  async logout(refreshToken) {
+    if (!refreshToken) {
+      throw new Error("Refresh token không tồn tại");
     }
 
-    // Kiểm tra team tồn tại
-    const team = await rescueTeamRepository.findTeamByName(teamName);
-    if (!team) {
-      throw new Error("Rescue team không tồn tại");
-    }
+    // Xóa session khỏi database
+    const deletedSession =
+      await sessionRepository.deleteSessionByRefreshToken(refreshToken);
 
-    // Kiểm tra user đã thuộc team chưa
-    const existingMember = await teamMemberRepository.findMemberInTeam(
-      memberName,
-      teamName,
-    );
-    if (existingMember) {
-      throw new Error("User đã là thành viên của team này");
+    if (!deletedSession) {
+      throw new Error("Session không tồn tại hoặc đã bị xóa");
     }
-
-    // Thêm member
-    const newMember = await teamMemberRepository.addMemberToTeam({
-      userName: memberName,
-      rescueTeamName: teamName,
-      roleTeam: memberRole || "Member",
-    });
 
     return {
-      message: "Thêm thành viên thành công",
-      data: newMember,
+      message: "Đăng xuất thành công",
     };
   }
 }
-
-/**
- * Service cho Request operations
- */
-class RequestService {
-  /**
-   * Tạo request cứu hộ/cứu trợ
-   * @param {string} userId
-   * @param {Object} requestData
-   * @returns {Promise<Object>}
-   */
-  async createRequest(userId, requestData) {
-    // Lấy thông tin user
-    const user = await authRepository.findUserById(userId);
-    if (!user) {
-      throw new Error("User không tồn tại");
-    }
-
-    const {
-      type,
-      latitude,
-      longitude,
-      description,
-      requestSupply,
-      requestMedia,
-    } = requestData;
-
-    // Tạo request
-    const newRequest = await requestRepository.createRequest({
-      userName: user.fullName,
-      type,
-      latitude,
-      longitude,
-      description,
-      requestSupply: requestSupply || null,
-      requestMedia: requestMedia || null,
-    });
-
-    return {
-      message: "Thêm yêu cầu cứu hộ/cứu trợ thành công",
-      data: newRequest,
-    };
-  }
-}
-
-export { AuthService, RescueTeamService, RequestService };
 
 const authService = new AuthService();
-const rescueTeamService = new RescueTeamService();
-const requestService = new RequestService();
 
-export { authService, rescueTeamService, requestService };
+export { authService };

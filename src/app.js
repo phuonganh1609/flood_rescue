@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import authRoute from "./modules/auth/auth.routes.js";
+import { notFound, errorHandler } from "./middlewares/error.middleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,5 +46,9 @@ app.get("/ping", (req, res) => {
 
 // Routes
 app.use("/api/auth", authRoute);
+
+// Error handling middlewares (must be after all routes)
+app.use(notFound);
+app.use(errorHandler);
 
 export default app;

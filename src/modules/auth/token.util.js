@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 
+const ACCESS_TOKEN_TTL = "30m";
 /**
  * Generate JWT access token
  * @param {Object} payload - User data to encode
@@ -18,7 +19,7 @@ const generateToken = (payload) => {
   };
 
   return jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "1h",
+    expiresIn: ACCESS_TOKEN_TTL,
   });
 };
 

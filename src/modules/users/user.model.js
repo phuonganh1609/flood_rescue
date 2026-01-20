@@ -3,23 +3,39 @@ const { Schema } = mongoose;
 
 const UserSchema = new Schema(
   {
-    fullName: {
+    userName: {
+      type: String,
+      required: true,
+    },
+    hashedPassword: {
       type: String,
       required: true,
     },
     phoneNumber: {
       type: String,
-      required: true,
+      sparse: true, //cho phép null values nhưng unique
     },
     email: {
       type: String,
       required: true,
       unique: true,
       lowercase: true,
+      trim: true,
     },
-    password: {
+    displayName: {
       type: String,
       required: true,
+      trim: true,
+    },
+    avatarUrl: {
+      type: String, //link CDN để hiển thị ảnh
+    },
+    avatarId: {
+      type: String, //Cloudinary public_id để xóa ảnh
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     },
     role: {
       type: String,

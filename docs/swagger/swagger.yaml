@@ -76,6 +76,9 @@ paths:
               schema:
                 type: object
                 properties:
+                  message:
+                    type: string
+                    example: "Đăng ký thành công"
                   userId:
                     type: string
                     example: "60d5ec49f1b2c8b1f8e4e1a1"
@@ -97,7 +100,9 @@ paths:
       tags:
         - Auth
       summary: User login
-      description: Login to the system with phone number and password
+      description: |-
+        Login to the system with email and password.
+        Returns access token in response body and refresh token in HTTP-only cookie.
       operationId: login
       requestBody:
         description: Login credentials
@@ -108,7 +113,13 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Login successful
+          description: Login successful. Refresh token is set in HTTP-only cookie.
+          headers:
+            Set-Cookie:
+              description: HTTP-only cookie containing refresh token (7 days)
+              schema:
+                type: string
+                example: refreshToken=abc123...; HttpOnly; Secure; SameSite=Strict; Max-Age=604800
           content:
             application/json:
               schema:
@@ -126,7 +137,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/auth/user:
+  /api/auth/me:
     get:
       tags:
         - Auth
@@ -148,48 +159,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /api/auth/createRescueTeam:
-    post:
-      tags:
-        - Auth
-      summary: Create a rescue team
-      description: Create a new rescue team (Coordinator, Manager, or Admin only)
-      operationId: createRescueTeam
-      security:
-        - bearerAuth: []
-      requestBody:
-        description: Rescue team information
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateRescueTeamRequest"
-      responses:
-        "201":
-          description: Rescue team created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  teamId:
-                    type: string
-                    example: "60d5ec49f1b2c8b1f8e4e1a2"
-        "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Forbidden - insufficient permissions
+        "404":
+          description: User not found
           content:
             application/json:
               schema:
@@ -201,81 +172,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/auth/addTeamMember:
+  /api/auth/logout:
     post:
       tags:
         - Auth
-      summary: Add member to rescue team
-      description: Add a new member to an existing rescue team
-      operationId: addTeamMember
-      security:
-        - bearerAuth: []
-      requestBody:
-        description: Team member information
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AddTeamMemberRequest"
+      summary: Logout
+      description: |-
+        Logout user by deleting refresh token from database and clearing cookie.
+        Requires refresh token in HTTP-only cookie.
+      operationId: logout
       responses:
-        "201":
-          description: Team member added successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
+        "204":
+          description: Logout successful. Cookie is cleared.
         "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /api/auth/addRequest:
-    post:
-      tags:
-        - Auth
-      summary: Submit rescue or relief request
-      description: Submit a new rescue or relief request
-      operationId: addRequest
-      security:
-        - bearerAuth: []
-      requestBody:
-        description: Request information
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateRequestInput"
-      responses:
-        "201":
-          description: Request created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  requestId:
-                    type: string
-                    example: "60d5ec49f1b2c8b1f8e4e1a3"
-        "400":
-          description: Invalid input
+          description: No refresh token found in cookie
           content:
             application/json:
               schema:
@@ -1571,12 +1481,17 @@ components:
     RegisterRequest:
       type: object
       required:
-        - fullName
+        - userName
+        - displayName
         - email
-        - phoneNumber
         - password
       properties:
-        fullName:
+        userName:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: "nguyenvana"
+        displayName:
           type: string
           minLength: 2
           maxLength: 100
@@ -1589,6 +1504,7 @@ components:
           type: string
           pattern: "^[0-9]{10,11}$"
           example: "0901234567"
+          description: "Optional phone number"
         password:
           type: string
           minLength: 6
@@ -1607,13 +1523,13 @@ components:
     LoginRequest:
       type: object
       required:
-        - phoneNumber
+        - email
         - password
       properties:
-        phoneNumber:
+        email:
           type: string
-          pattern: "^[0-9]{10,11}$"
-          example: "0901234567"
+          format: email
+          example: "nguyenvana@example.com"
         password:
           type: string
           example: "password123"
@@ -1633,7 +1549,10 @@ components:
         _id:
           type: string
           example: "60d5ec49f1b2c8b1f8e4e1a1"
-        fullName:
+        userName:
+          type: string
+          example: "nguyenvana"
+        displayName:
           type: string
           example: "Nguyen Van A"
         email:
@@ -1642,6 +1561,15 @@ components:
         phoneNumber:
           type: string
           example: "0901234567"
+        avatarUrl:
+          type: string
+          example: "https://cloudinary.com/avatar.jpg"
+        avatarId:
+          type: string
+          example: "avatar_public_id"
+        isActive:
+          type: boolean
+          example: true
         role:
           type: string
           enum:
