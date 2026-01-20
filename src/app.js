@@ -2,22 +2,26 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import swaggerUi from "swagger-ui-express";
-import YAML from "yamljs";
-import path from "path";
-import { fileURLToPath } from "url";
+import swaggerDocument from "./config/swagger.js";
 
 import authRoute from "./modules/auth/auth.routes.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
 
-// Swagger
-const swaggerDocument = YAML.load(
-  path.join(__dirname, "../swagger/swagger.yaml"),
+// Swagger UI - served at /api-docs
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument, {
+    swaggerOptions: {
+      url: "/api-docs.json",
+      displayOperationId: true,
+      filter: true,
+      showRequestHeaders: true,
+      tryItOutEnabled: true,
+    },
+  }),
 );
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Middleware
 app.use(cors());

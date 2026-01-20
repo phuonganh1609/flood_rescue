@@ -1,0 +1,23 @@
+# Security Schemes
+
+BearerAuth:
+  type: http
+  scheme: bearer
+  bearerFormat: JWT
+  description: |
+    JWT Bearer token authentication.
+
+    Format: `Authorization: Bearer <token>`
+
+    Roles:
+    - Citizen: General public user
+    - RescueTeam: Member of rescue team
+    - Coordinator: Operation coordinator
+    - Manager: Resource/supply manager
+    - Admin: System administrator
+
+NoAuth:
+  type: apiKey
+  in: header
+  name: X-No-Auth
+  description: No authentication required (public endpoints)

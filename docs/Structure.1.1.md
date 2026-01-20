@@ -128,11 +128,9 @@ flood_rescue/
 │
 ├── docs/                           # ✓
 │   ├── API_list.md                 # ✓
-│   ├── Structure.md                # ✓
-│   └── Structure.1.1.md            # ✓ File này
-│
-└── swagger/                        # ✓
-    └── swagger.yaml                # ✓
+│   ├── Structure.1.1.md            # ✓
+│   └── Swagger/
+
 
 ---
 

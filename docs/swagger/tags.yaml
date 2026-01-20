@@ -1,0 +1,24 @@
+tags:
+  - name: Auth
+    description: "Authentication endpoints: login, register, get current user"
+
+  - name: Requests
+    description: "Rescue/Relief request management: create, list, verify, set priority"
+
+  - name: Missions
+    description: "Mission management: create, assign, update status, submit reports"
+
+  - name: Resources
+    description: "Resource/Vehicle management: list, create, update"
+
+  - name: Supplies
+    description: "Relief supplies and inventory management"
+
+  - name: Notifications
+    description: "User notifications: get, mark as read"
+
+  - name: Users
+    description: "User management: list, update roles"
+
+  - name: Reports
+    description: "System reports and analytics"

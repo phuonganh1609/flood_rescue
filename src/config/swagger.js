@@ -1,5 +1,16 @@
 import swaggerJsdoc from "swagger-jsdoc";
+import YAML from "yamljs";
+import path from "path";
+import { fileURLToPath } from "url";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load OpenAPI YAML file
+const openAPIPath = path.join(__dirname, "../../docs/swagger/openapi.yaml");
+const swaggerSpec = YAML.load(openAPIPath);
+
+// Fallback: If YAML loading fails, use swagger-jsdoc
 const options = {
   definition: {
     openapi: "3.0.0",
@@ -33,11 +44,9 @@ const options = {
       },
     ],
   },
-
-  // nơi swagger sẽ scan comment
   apis: ["./src/modules/**/*.js", "./src/routes/*.js"],
 };
 
-const swaggerSpec = swaggerJsdoc(options);
+const fallbackSwaggerSpec = swaggerJsdoc(options);
 
-export default swaggerSpec;
+export default swaggerSpec || fallbackSwaggerSpec;

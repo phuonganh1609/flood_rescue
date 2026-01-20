@@ -1,0 +1,111 @@
+# Reusable Response Definitions
+
+Success:
+  description: Operation successful
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: true
+          data:
+            type: object
+            nullable: true
+
+Created:
+  description: Resource created successfully
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: true
+          data:
+            type: object
+            nullable: true
+          message:
+            type: string
+            example: Resource created successfully
+
+BadRequest:
+  description: Bad request - validation error
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: false
+          errors:
+            type: array
+            items:
+              type: object
+              properties:
+                field:
+                  type: string
+                message:
+                  type: string
+          message:
+            type: string
+            example: Validation error
+
+Unauthorized:
+  description: Authentication required or token expired
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: false
+          message:
+            type: string
+            example: Unauthorized - Invalid or expired token
+
+Forbidden:
+  description: Access denied - insufficient permissions
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: false
+          message:
+            type: string
+            example: Forbidden - You do not have permission to access this resource
+
+NotFound:
+  description: Resource not found
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: false
+          message:
+            type: string
+            example: Resource not found
+
+ServerError:
+  description: Internal server error
+  content:
+    application/json:
+      schema:
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: false
+          message:
+            type: string
+            example: Internal server error

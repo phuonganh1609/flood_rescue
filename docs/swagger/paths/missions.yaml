@@ -1,0 +1,484 @@
+# Mission Paths
+
+createMission:
+  operationId: createMission
+  tags:
+    - Missions
+  summary: Create mission
+  description: Coordinator creates a new rescue mission and assigns to team
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/MissionCreate"
+  responses:
+    "201":
+      $ref: "#/components/responses/Created"
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  missionId:
+                    type: string
+    "400":
+      $ref: "#/components/responses/BadRequest"
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "403":
+      $ref: "#/components/responses/Forbidden"
+    "500":
+      $ref: "#/components/responses/ServerError"
+
+getAssignedMissions:
+  operationId: getAssignedMissions
+  tags:
+    - Missions
+  summary: Get assigned missions
+  description: Retrieve missions assigned to rescue team
+  parameters:
+    - $ref: "#/components/parameters/page"
+    - $ref: "#/components/parameters/limit"
+    - $ref: "#/components/parameters/status"
+    - $ref: "#/components/parameters/sortBy"
+  responses:
+    "200":
+      description: List of assigned missions
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              data:
+                $ref: "#/components/schemas/MissionList"
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "500":
+      $ref: "#/components/responses/ServerError"
+
+getMissionDetail:
+  operationId: getMissionDetail
+  tags:
+    - Missions
+  summary: Get mission details
+  description: Retrieve detailed information about a specific mission
+  parameters:
+    - $ref: "#/components/parameters/id"
+  responses:
+    "200":
+      description: Mission details
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              data:
+                $ref: "#/components/schemas/Mission"
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "403":
+      $ref: "#/components/responses/Forbidden"
+    "404":
+      $ref: "#/components/responses/NotFound"
+    "500":
+      $ref: "#/components/responses/ServerError"
+
+reassignMission:
+  operationId: reassignMission
+  tags:
+    - Missions
+  summary: Reassign mission
+  description: Coordinator reassigns mission to a different team
+  parameters:
+    - $ref: "#/components/parameters/id"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          properties:
+            teamId:
+              type: string
+          required: [teamId]
+  responses:
+    "200":
+      $ref: "#/components/responses/Success"
+    "400":
+      $ref: "#/components/responses/BadRequest"
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "403":
+      $ref: "#/components/responses/Forbidden"
+    "404":
+      $ref: "#/components/responses/NotFound"
+    "500":
+      $ref: "#/components/responses/ServerError"
+
+updateMissionStatus:
+  operationId: updateMissionStatus
+  tags:
+    - Missions
+  summary: Update mission status
+  description: Rescue team updates mission status during operation
+  parameters:
+    - $ref: "#/components/parameters/id"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/MissionUpdate"
+  responses:
+    "200":
+      $ref: "#/components/responses/Success"
+    "400":
+      $ref: "#/components/responses/BadRequest"
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "404":
+      $ref: "#/components/responses/NotFound"
+    "500":
+      $ref: "#/components/responses/ServerError"
+
+submitMissionReport:
+  operationId: submitMissionReport
+  tags:
+    - Missions
+  summary: Submit mission report
+  description: Rescue team submits report after mission completion
+  parameters:
+    - $ref: "#/components/parameters/id"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/MissionReportCreate"
+  responses:
+    "201":
+      $ref: "#/components/responses/Created"
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  reportId:
+                    type: string
+    "400":
+      $ref: "#/components/responses/BadRequest"
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "404":
+      $ref: "#/components/responses/NotFound"
+    "500":
+      $ref: "#/components/responses/ServerError"
+
+sendTeamPosition:
+  operationId: sendTeamPosition
+  tags:
+    - Missions
+  summary: Send team position
+  description: Rescue team sends real-time location during mission
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/PositionCreate"
+  responses:
+    "200":
+      $ref: "#/components/responses/Success"
+    "400":
+      $ref: "#/components/responses/BadRequest"
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "404":
+      $ref: "#/components/responses/NotFound"
+    "500":
+      $ref: "#/components/responses/ServerError"
+
+getMissionPositions:
+  operationId: getMissionPositions
+  tags:
+    - Missions
+  summary: Get mission positions
+  description: Retrieve real-time positions of rescue team during mission
+  parameters:
+    - $ref: "#/components/parameters/id"
+  responses:
+    "200":
+      description: Team positions during mission
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              data:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Position"
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "403":
+      $ref: "#/components/responses/Forbidden"
+    "404":
+      $ref: "#/components/responses/NotFound"
+    "500":
+      $ref: "#/components/responses/ServerError"
+      - Missions
+    summary: Create mission
+    description: Coordinator creates a new rescue mission and assigns to team
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MissionCreate"
+    responses:
+      "201":
+        $ref: "#/components/responses/Created"
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  properties:
+                    missionId:
+                      type: string
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "500":
+        $ref: "#/components/responses/ServerError"
+
+getAssignedMissions:
+  get:
+    operationId: getAssignedMissions
+    tags:
+      - Missions
+    summary: Get assigned missions
+    description: Retrieve missions assigned to rescue team
+    parameters:
+      - $ref: "#/components/parameters/page"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/status"
+      - $ref: "#/components/parameters/sortBy"
+    responses:
+      "200":
+        description: List of assigned missions
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                data:
+                  $ref: "#/components/schemas/MissionList"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "500":
+        $ref: "#/components/responses/ServerError"
+
+getMissionDetail:
+  get:
+    operationId: getMissionDetail
+    tags:
+      - Missions
+    summary: Get mission details
+    description: Retrieve detailed information about a specific mission
+    parameters:
+      - $ref: "#/components/parameters/id"
+    responses:
+      "200":
+        description: Mission details
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                data:
+                  $ref: "#/components/schemas/Mission"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/ServerError"
+
+reassignMission:
+  patch:
+    operationId: reassignMission
+    tags:
+      - Missions
+    summary: Reassign mission
+    description: Coordinator reassigns mission to a different team
+    parameters:
+      - $ref: "#/components/parameters/id"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              teamId:
+                type: string
+            required: [teamId]
+    responses:
+      "200":
+        $ref: "#/components/responses/Success"
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/ServerError"
+
+updateMissionStatus:
+  patch:
+    operationId: updateMissionStatus
+    tags:
+      - Missions
+    summary: Update mission status
+    description: Rescue team updates mission status during operation
+    parameters:
+      - $ref: "#/components/parameters/id"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MissionUpdate"
+    responses:
+      "200":
+        $ref: "#/components/responses/Success"
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/ServerError"
+
+submitMissionReport:
+  post:
+    operationId: submitMissionReport
+    tags:
+      - Missions
+    summary: Submit mission report
+    description: Rescue team submits report after mission completion
+    parameters:
+      - $ref: "#/components/parameters/id"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/MissionReportCreate"
+    responses:
+      "201":
+        $ref: "#/components/responses/Created"
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                  properties:
+                    reportId:
+                      type: string
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/ServerError"
+
+sendTeamPosition:
+  post:
+    operationId: sendTeamPosition
+    tags:
+      - Missions
+    summary: Send team position
+    description: Rescue team sends real-time location during mission
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/PositionCreate"
+    responses:
+      "200":
+        $ref: "#/components/responses/Success"
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/ServerError"
+
+getMissionPositions:
+  get:
+    operationId: getMissionPositions
+    tags:
+      - Missions
+    summary: Get mission positions
+    description: Retrieve real-time positions of rescue team during mission
+    parameters:
+      - $ref: "#/components/parameters/id"
+    responses:
+      "200":
+        description: Team positions during mission
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                data:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/Position"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/ServerError"

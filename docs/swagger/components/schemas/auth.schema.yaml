@@ -1,0 +1,103 @@
+# Authentication Schemas
+
+User:
+  type: object
+  properties:
+    id:
+      type: string
+      example: 507f1f77bcf86cd799439011
+    email:
+      type: string
+      format: email
+      example: user@example.com
+    fullname:
+      type: string
+      example: John Doe
+    phone:
+      type: string
+      example: "+84912345678"
+    role:
+      type: string
+      enum: [Citizen, RescueTeam, Coordinator, Manager, Admin]
+      example: Citizen
+    createdAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+  required: [id, email, fullname, phone, role]
+
+Token:
+  type: object
+  properties:
+    accessToken:
+      type: string
+      example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+    expiresIn:
+      type: integer
+      example: 86400
+      description: Token expiry time in seconds
+
+LoginRequest:
+  type: object
+  properties:
+    email:
+      type: string
+      format: email
+      example: user@example.com
+    password:
+      type: string
+      format: password
+      minLength: 6
+      example: password123
+  required: [email, password]
+
+LoginResponse:
+  type: object
+  properties:
+    success:
+      type: boolean
+    data:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+  required: [success, data]
+
+RegisterRequest:
+  type: object
+  properties:
+    fullname:
+      type: string
+      minLength: 3
+      maxLength: 100
+      example: John Doe
+    phone:
+      type: string
+      pattern: '^\+?[0-9]{10,}$'
+      example: "+84912345678"
+    email:
+      type: string
+      format: email
+      example: user@example.com
+    password:
+      type: string
+      format: password
+      minLength: 6
+      example: password123
+  required: [fullname, phone, email, password]
+
+RegisterResponse:
+  type: object
+  properties:
+    success:
+      type: boolean
+    data:
+      type: object
+      properties:
+        userId:
+          type: string
+          example: 507f1f77bcf86cd799439011

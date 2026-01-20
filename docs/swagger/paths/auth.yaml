@@ -1,0 +1,79 @@
+# Authentication Paths
+
+login:
+  operationId: login
+  tags:
+    - Auth
+  summary: User login
+  description: Authenticate user with email and password
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/LoginRequest"
+  responses:
+    "200":
+      $ref: "#/components/responses/Success"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/LoginResponse"
+    "400":
+      $ref: "#/components/responses/BadRequest"
+    "500":
+      $ref: "#/components/responses/ServerError"
+  security: []
+
+register:
+  operationId: register
+  tags:
+    - Auth
+  summary: User registration
+  description: Register a new citizen account
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/RegisterRequest"
+  responses:
+    "201":
+      $ref: "#/components/responses/Created"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RegisterResponse"
+    "400":
+      $ref: "#/components/responses/BadRequest"
+    "500":
+      $ref: "#/components/responses/ServerError"
+  security: []
+
+me:
+  operationId: getCurrentUser
+  tags:
+    - Auth
+  summary: Get current user info
+  description: Retrieve authenticated user's profile and role
+  responses:
+    "200":
+      description: Current user information
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              data:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/User"
+                  role:
+                    type: string
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "500":
+      $ref: "#/components/responses/ServerError"

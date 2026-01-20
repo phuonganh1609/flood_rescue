@@ -1,0 +1,56 @@
+# Schema Index - Reference all schemas here
+
+User:
+  $ref: ./auth.schema.yaml#/User
+Token:
+  $ref: ./auth.schema.yaml#/Token
+LoginRequest:
+  $ref: ./auth.schema.yaml#/LoginRequest
+LoginResponse:
+  $ref: ./auth.schema.yaml#/LoginResponse
+RegisterRequest:
+  $ref: ./auth.schema.yaml#/RegisterRequest
+RegisterResponse:
+  $ref: ./auth.schema.yaml#/RegisterResponse
+
+Request:
+  $ref: ./request.schema.yaml#/Request
+RequestCreate:
+  $ref: ./request.schema.yaml#/RequestCreate
+RequestUpdate:
+  $ref: ./request.schema.yaml#/RequestUpdate
+RequestList:
+  $ref: ./request.schema.yaml#/RequestList
+
+Mission:
+  $ref: ./mission.schema.yaml#/Mission
+MissionCreate:
+  $ref: ./mission.schema.yaml#/MissionCreate
+MissionUpdate:
+  $ref: ./mission.schema.yaml#/MissionUpdate
+Position:
+  $ref: ./mission.schema.yaml#/Position
+PositionCreate:
+  $ref: ./mission.schema.yaml#/PositionCreate
+MissionReport:
+  $ref: ./mission.schema.yaml#/MissionReport
+MissionReportCreate:
+  $ref: ./mission.schema.yaml#/MissionReportCreate
+MissionList:
+  $ref: ./mission.schema.yaml#/MissionList
+
+Resource:
+  $ref: ./resource.schema.yaml#/Resource
+ResourceCreate:
+  $ref: ./resource.schema.yaml#/ResourceCreate
+ResourceUpdate:
+  $ref: ./resource.schema.yaml#/ResourceUpdate
+ResourceList:
+  $ref: ./resource.schema.yaml#/ResourceList
+
+Notification:
+  $ref: ./notification.schema.yaml#/Notification
+NotificationUpdate:
+  $ref: ./notification.schema.yaml#/NotificationUpdate
+NotificationList:
+  $ref: ./notification.schema.yaml#/NotificationList

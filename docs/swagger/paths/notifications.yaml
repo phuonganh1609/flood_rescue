@@ -1,0 +1,121 @@
+# Notification Paths
+
+listNotifications:
+  operationId: getNotifications
+  tags:
+    - Notifications
+  summary: Get notifications
+  description: Retrieve user's notifications
+  parameters:
+    - $ref: "#/components/parameters/page"
+    - $ref: "#/components/parameters/limit"
+    - $ref: "#/components/parameters/sortBy"
+  responses:
+    "200":
+      description: User notifications
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              data:
+                $ref: "#/components/schemas/NotificationList"
+              pagination:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+                  total:
+                    type: integer
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "500":
+      $ref: "#/components/responses/ServerError"
+
+markNotificationRead:
+  operationId: markNotificationRead
+  tags:
+    - Notifications
+  summary: Mark notification as read
+  description: Mark a notification as read
+  parameters:
+    - $ref: "#/components/parameters/id"
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "#/components/schemas/NotificationUpdate"
+  responses:
+    "200":
+      $ref: "#/components/responses/Success"
+    "400":
+      $ref: "#/components/responses/BadRequest"
+    "401":
+      $ref: "#/components/responses/Unauthorized"
+    "404":
+      $ref: "#/components/responses/NotFound"
+    "500":
+      $ref: "#/components/responses/ServerError"
+    summary: Get notifications
+    description: Retrieve user's notifications
+    parameters:
+      - $ref: "#/components/parameters/page"
+      - $ref: "#/components/parameters/limit"
+      - $ref: "#/components/parameters/sortBy"
+    responses:
+      "200":
+        description: User notifications
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                success:
+                  type: boolean
+                data:
+                  $ref: "#/components/schemas/NotificationList"
+                pagination:
+                  type: object
+                  properties:
+                    page:
+                      type: integer
+                    limit:
+                      type: integer
+                    total:
+                      type: integer
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "500":
+        $ref: "#/components/responses/ServerError"
+
+markNotificationRead:
+  patch:
+    operationId: markNotificationRead
+    tags:
+      - Notifications
+    summary: Mark notification as read
+    description: Mark a notification as read
+    parameters:
+      - $ref: "#/components/parameters/id"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/NotificationUpdate"
+    responses:
+      "200":
+        $ref: "#/components/responses/Success"
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/ServerError"
