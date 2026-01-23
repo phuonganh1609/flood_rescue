@@ -56,4 +56,4 @@ const loginSchema = Joi.object({
   }),
 });
 
-export { registerSchema, loginSchema };
+export { registerSchema, loginSchema};
