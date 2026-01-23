@@ -211,50 +211,56 @@ class RescueTeamService {
  * Service cho Request operations
  */
 class RequestService {
-  /**
-   * Tạo request cứu hộ/cứu trợ
-   * @param {string} userId
-   * @param {Object} requestData
-   * @returns {Promise<Object>}
-   */
-  async createRequest(userId, requestData) {
-    // Lấy thông tin user
+  async createRequest(userId, requestData, files) {
     const user = await authRepository.findUserById(userId);
-    if (!user) {
-      throw new Error("User không tồn tại");
-    }
+    if (!user) throw new Error("User không tồn tại");
 
     const {
       type,
       latitude,
       longitude,
       description,
+      peopleCount,
       requestSupply,
-      requestMedia,
     } = requestData;
 
-    // Tạo request
     const newRequest = await requestRepository.createRequest({
       userName: user.fullName,
       type,
       latitude,
       longitude,
       description,
+      peopleCount: peopleCount || 1,
       requestSupply: requestSupply || null,
-      requestMedia: requestMedia || null,
     });
 
+    const uploadedFiles = [];
+
+    if (files.length > 0) {
+      for (const file of files) {
+        const media = await uploadFileForUser({
+          userId,
+          scope: "requests",
+          refId: newRequest.id,
+          file,
+        });
+
+        uploadedFiles.push({
+          requestId: newRequest.id,
+          ...media,
+        });
+      }
+
+      await requestRepository.createRequestMedia(uploadedFiles);
+    }
+
     return {
-      message: "Thêm yêu cầu cứu hộ/cứu trợ thành công",
-      data: newRequest,
+      message: "Tạo request thành công",
+      data: {
+        ...newRequest,
+        media: uploadedFiles,
+      },
     };
   }
 }
 
-export { AuthService, RescueTeamService, RequestService };
-
-const authService = new AuthService();
-const rescueTeamService = new RescueTeamService();
-const requestService = new RequestService();
-
-export { authService, rescueTeamService, requestService };

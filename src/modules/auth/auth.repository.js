@@ -202,6 +202,18 @@ class RequestRepository {
       new: true,
     });
   }
+
+    /**
+   * Lưu danh sách media của request
+   * @param {Array<Object>} mediaList
+   */
+  async createRequestMedia(mediaList) {
+    if (!mediaList || mediaList.length === 0) return [];
+
+    return await prisma.requestMedia.createMany({
+      data: mediaList,
+    });
+  }
 }
 
 export {

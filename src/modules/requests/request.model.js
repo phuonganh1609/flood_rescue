@@ -10,7 +10,13 @@ const RequestMissionSchema = new Schema(
 
     type: {
       type: String,
-      enum: ["Rescue", "Relief"],
+      enum: ["Cứu trợ", "Cứu nạn"],
+    },
+
+    incidentType: {
+      type: String,
+      enum: ["Ngập lụt", "Bị Kẹt", "Bị Thương", "Sạt lở", "Khác"],
+      default: "Khác",
     },
 
     latitude: {
@@ -27,15 +33,20 @@ const RequestMissionSchema = new Schema(
       type: String,
     },
 
+    peopleCount: {
+      type: Number,
+      default: 1,
+    },
+    
     priority: {
       type: String,
-      enum: ["Critical", "High", "Normal"],
-      default: "Normal",
+      enum: ["Báo Động", "Cao", "Bình thường"],
+      default: "Bình thường",
     },
 
     status: {
       type: String,
-      default: "Pending",
+      default: "Chờ xử lý",
     },
 
     requestSupply: {

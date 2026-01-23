@@ -3,7 +3,6 @@ import {
   rescueTeamService,
   requestService,
 } from "./auth.service.js";
-
 /**
  * Controller cho Authentication
  */
@@ -70,11 +69,17 @@ export const addMemberTeam = async (req, res) => {
  */
 export const addRequest = async (req, res) => {
   try {
-    const result = await requestService.createRequest(req.user.id, req.body);
+    const userId = req.user.id;
+    const files = req.files || [];
+
+    const result = await requestService.createRequest(
+      userId,
+      req.body,
+      files
+    );
+
     res.status(201).json(result);
-  } catch (error) {
-    res.status(400).json({
-      message: error.message || "Lỗi khi tạo yêu cầu",
-    });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
 };

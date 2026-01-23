@@ -10,6 +10,7 @@ import {
   addMemberTeamSchema,
   addRequestSchema,
 } from "./auth.validation.js";
+import { uploadFileForUser } from "../../middlewares/uploadMiddleware.js";
 
 // Auth routes
 router.post("/register", validate(registerSchema), authController.register);
@@ -36,6 +37,7 @@ router.post(
 router.post(
   "/addRequest",
   authenticate,
+  uploadFileForUser.array("requestMedia", 5),
   validate(addRequestSchema),
   authController.addRequest,
 );

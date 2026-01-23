@@ -11,6 +11,9 @@ import authRoute from "./modules/auth/auth.routes.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
+
+
 // Load Swagger YAML documentation
 const swaggerDocument = YAML.load(
   path.join(__dirname, "../docs/swagger/swagger.yaml"),
