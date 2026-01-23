@@ -8,9 +8,22 @@ const RequestMissionSchema = new Schema(
       required: true,
     },
 
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
     type: {
       type: String,
       enum: ["Rescue", "Relief"],
+      required: true,
+    },
+
+    incidentType: {
+      type: String,
+      enum: ["Flood", "Trapped", "Injured", "Landslide", "Other"],
+      default: "Other",
     },
 
     latitude: {
@@ -25,6 +38,14 @@ const RequestMissionSchema = new Schema(
 
     description: {
       type: String,
+      required: true,
+    },
+
+    peopleCount: {
+      type: Number,
+      min: 1,
+      max: 100,
+      default: 1,
     },
 
     priority: {
@@ -35,14 +56,18 @@ const RequestMissionSchema = new Schema(
 
     status: {
       type: String,
+      enum: ["Pending", "In Progress", "Completed", "Cancelled"],
       default: "Pending",
     },
 
     requestSupply: {
       type: [String],
+      default: [],
     },
+
     requestMedia: {
-      type: String,
+      type: [Object],
+      default: [],
     },
   },
   { timestamps: true },

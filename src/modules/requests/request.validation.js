@@ -1,23 +1,23 @@
 import Joi from "joi";
 
 /**
- * Validation schema cho thêm request
+ * Validation schema for creating a request
  */
 const addRequestSchema = Joi.object({
   type: Joi.string()
-    .valid("Cứu trợ", "Cứu nạn")
+    .valid("Rescue", "Relief")
     .required()
     .messages({
-      "string.empty": "Loại yêu cầu không được để trống",
-      "any.only": "Loại yêu cầu phải là Cứu trợ hoặc Cứu nạn",
-      "any.required": "Loại yêu cầu là bắt buộc",
+      "string.empty": "Request type is required",
+      "any.only": "Request type must be either Rescue or Relief",
+      "any.required": "Request type is required",
     }),
   
   incidentType: Joi.string()
-    .valid("Ngập lụt", "Bị Kẹt", "Bị Thương", "Sạt lở", "Khác")
-    .default("Khác")
+    .valid("Flood", "Trapped", "Injured", "Landslide", "Other")
+    .default("Other")
     .messages({
-      "any.only": "Loại sự cố không hợp lệ",
+      "any.only": "Invalid incident type",
     }),
 
   latitude: Joi.number()
@@ -25,10 +25,10 @@ const addRequestSchema = Joi.object({
     .max(90)
     .required()
     .messages({
-      "number.base": "Vĩ độ phải là số",
-      "number.min": "Vĩ độ phải từ -90 đến 90",
-      "number.max": "Vĩ độ phải từ -90 đến 90",
-      "any.required": "Vĩ độ là bắt buộc",
+      "number.base": "Latitude must be a number",
+      "number.min": "Latitude must be between -90 and 90",
+      "number.max": "Latitude must be between -90 and 90",
+      "any.required": "Latitude is required",
     }),
 
   longitude: Joi.number()
@@ -36,10 +36,10 @@ const addRequestSchema = Joi.object({
     .max(180)
     .required()
     .messages({
-      "number.base": "Kinh độ phải là số",
-      "number.min": "Kinh độ phải từ -180 đến 180",
-      "number.max": "Kinh độ phải từ -180 đến 180",
-      "any.required": "Kinh độ là bắt buộc",
+      "number.base": "Longitude must be a number",
+      "number.min": "Longitude must be between -180 and 180",
+      "number.max": "Longitude must be between -180 and 180",
+      "any.required": "Longitude is required",
     }),
 
   description: Joi.string()
@@ -47,10 +47,10 @@ const addRequestSchema = Joi.object({
     .max(500)
     .required()
     .messages({
-      "string.empty": "Mô tả không được để trống",
-      "string.min": "Mô tả phải có ít nhất 10 ký tự",
-      "string.max": "Mô tả không được vượt quá 500 ký tự",
-      "any.required": "Mô tả là bắt buộc",
+      "string.empty": "Description is required",
+      "string.min": "Description must be at least 10 characters",
+      "string.max": "Description cannot exceed 500 characters",
+      "any.required": "Description is required",
     }),
 
   peopleCount: Joi.number()
@@ -59,20 +59,17 @@ const addRequestSchema = Joi.object({
     .max(100)
     .default(1)
     .messages({
-      "number.base": "Số người phải là số",
-      "number.min": "Số người phải ít nhất là 1",
-      "number.max": "Số người không được vượt quá 100",
+      "number.base": "People count must be a number",
+      "number.min": "People count must be at least 1",
+      "number.max": "People count cannot exceed 100",
     }),
 
-  requestSupply: Joi.string()
-    .max(200)
-    .allow(null, "")
+  requestSupply: Joi.array()
+    .items(Joi.string())
+    .default([])
     .messages({
-      "string.max": "Yêu cầu vật tư không được vượt quá 200 ký tự",
-    }),
-    requestMedia: Joi.string().max(500).allow(null, "").messages({
-      "string.max": "Đường dẫn media không được vượt quá 500 ký tự",
+      "array.base": "Request supply must be an array",
     }),
 });
 
-export { addRequestSchema  };
+export { addRequestSchema };
