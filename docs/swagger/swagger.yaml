@@ -137,6 +137,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: |
+        Refresh access token bằng refresh token lưu trong HTTP-only cookie. Không cần Authorization header.
+      operationId: refreshToken
+      parameters:
+        - name: refreshToken
+          in: cookie
+          required: true
+          description: Refresh token được set trong cookie khi đăng nhập
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Refresh thành công, trả về access token mới
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Refresh token không hợp lệ hoặc đã hết hạn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/auth/me:
     get:
       tags:
@@ -181,6 +216,8 @@ paths:
         Logout user by deleting refresh token from database and clearing cookie.
         Requires refresh token in HTTP-only cookie.
       operationId: logout
+      security:
+        - bearerAuth: []
       responses:
         "204":
           description: Logout successful. Cookie is cleared.
