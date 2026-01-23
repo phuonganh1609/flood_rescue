@@ -172,6 +172,62 @@ class AuthService {
       message: "Đăng xuất thành công",
     };
   }
+
+  /**
+   * Refresh access token
+   * @param {string} refreshToken
+   * @returns {Promise<Object>}
+   */
+  async refreshAccessToken(refreshToken) {
+    if (!refreshToken) {
+      throw new Error("Refresh token không tồn tại");
+    }
+
+    // Tìm session trong db theo refresh token
+    const session = await sessionRepository.findSessionByRefreshToken(refreshToken);
+    
+    if (!session) {
+      throw new Error("Refresh token không hợp lệ");
+    }
+
+    // Kiểm tra session có hết hạn chưa
+    if (session.expiresAt < new Date()) {
+      await sessionRepository.deleteSessionByRefreshToken(refreshToken);
+      throw new Error("Refresh token đã hết hạn");
+    }
+
+    // Lấy thông tin user
+    const user = await authRepository.findUserById(session.userId);
+    
+    if (!user) {
+      throw new Error("Người dùng không tồn tại");
+    }
+
+    // Kiểm tra user còn active không
+    if (!user.isActive) {
+      throw new Error("Tài khoản đã bị vô hiệu hóa");
+    }
+
+    // Tạo access token mới
+    const accessToken = generateToken({
+      id: user._id,
+      email: user.email,
+      role: user.role,
+    });
+
+    return {
+      accessToken,
+      user: {
+        id: user._id,
+        userName: user.userName,
+        displayName: user.displayName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        avatarUrl: user.avatarUrl,
+        role: user.role,
+      },
+    };
+  }
 }
 
 const authService = new AuthService();

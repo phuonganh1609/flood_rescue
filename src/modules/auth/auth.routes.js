@@ -8,6 +8,7 @@ import { registerSchema, loginSchema } from "./auth.validation.js";
 // Public routes
 router.post("/register", validate(registerSchema), authController.register);
 router.post("/login", validate(loginSchema), authController.login);
+router.post("/refresh", authController.refresh);
 
 // Protected routes
 router.get("/me", authenticate, authController.getUser);

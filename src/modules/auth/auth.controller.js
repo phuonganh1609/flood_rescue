@@ -78,3 +78,29 @@ export const logout = async (req, res) => {
     });
   }
 };
+
+export const refresh = async (req, res) => {
+  try {
+    // Lấy refresh token từ cookie
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        message: "Không tìm thấy refresh token",
+      });
+    }
+
+    // Tạo access token mới
+    const result = await authService.refreshAccessToken(refreshToken);
+
+    // Trả về access token mới và thông tin user
+    return res.json({
+      accessToken: result.accessToken,
+      user: result.user,
+    });
+  } catch (error) {
+    return res.status(401).json({
+      message: error.message || "Lỗi khi refresh token",
+    });
+  }
+};
