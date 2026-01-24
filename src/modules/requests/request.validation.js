@@ -70,6 +70,27 @@ const addRequestSchema = Joi.object({
     .messages({
       "array.base": "Request supply must be an array",
     }),
+
+  userID: Joi.string()
+    .pattern(/^[0-9a-fA-F]{24}$/)
+    .optional()
+    .messages({
+      "string.pattern.base": "userID must be a valid MongoDB ObjectId",
+    }),
+
+  media: Joi.alternatives()
+    .try(
+      Joi.string().min(1).messages({
+        "string.empty": "media must be a valid file path",
+      }),
+      Joi.array().items(Joi.string().min(1)).messages({
+        "array.base": "media must be a string or array of strings",
+      })
+    )
+    .optional()
+    .messages({
+      "alternatives.match": "media must be a string or array of strings",
+    }),
 });
 
 export { addRequestSchema };

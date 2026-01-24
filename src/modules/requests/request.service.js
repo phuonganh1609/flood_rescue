@@ -1,6 +1,6 @@
 import { authRepository } from "../auth/auth.repository.js";
 import { requestRepository } from "./request.repository.js";
-import { uploadFileForUser } from "../../middlewares/uploadMiddleware.js";
+import { uploadFileForUser } from "../../middlewares/uploadMidleware.js";
 
 /**
  * Service for Request operations
@@ -25,7 +25,14 @@ class RequestService {
       description,
       peopleCount,
       requestSupply,
+      media,
     } = requestData;
+
+    // Xử lý media - convert string thành array nếu cần
+    let mediaArray = [];
+    if (media) {
+      mediaArray = Array.isArray(media) ? media : [media];
+    }
 
     const newRequest = await requestRepository.createRequest({
       userId,
@@ -37,7 +44,7 @@ class RequestService {
       description,
       peopleCount: peopleCount || 1,
       requestSupply: requestSupply || [],
-      requestMedia: [],
+      requestMedia: mediaArray,
     });
 
     const uploadedFiles = [];
