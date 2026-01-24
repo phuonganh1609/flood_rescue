@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { requestService } from "./request.service.js";
 import { addRequestSchema, updateRequestStatusSchema } from "./request.validation.js";
 
@@ -44,6 +45,10 @@ export const addRequest = async (req, res) => {
 export const getRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(requestId)) {
+      return res.status(400).json({ message: "Invalid request ID" });
+    }
 
     const request = await requestService.getRequestById(requestId);
 
@@ -97,6 +102,10 @@ export const updateRequestStatus = async (req, res) => {
   try {
     const { requestId } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(requestId)) {
+      return res.status(400).json({ message: "Invalid request ID" });
+    }
+
     // Validate request data
     const { error, value } = updateRequestStatusSchema.validate(req.body, {
       abortEarly: false,
@@ -126,6 +135,41 @@ export const updateRequestStatus = async (req, res) => {
       message: "Request status updated successfully",
       data: updatedRequest,
     });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+/**
+ * Get requests of current user
+ * GET /requests/my
+ */
+export const getMyRequests = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+
+    const status = req.query.status;
+    const type = req.query.type;
+    const incidentType = req.query.incidentType;
+    const priority = req.query.priority;
+
+    const filter = {};
+    if (status) filter.status = status;
+    if (type) filter.type = type;
+    if (incidentType) filter.incidentType = incidentType;
+    if (priority) filter.priority = priority;
+
+    const result = await requestService.getRequestsByUser(
+      req.user.id,
+      filter,
+      {
+        page,
+        limit,
+      }
+    );
+
+    res.json(result);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

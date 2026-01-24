@@ -35,18 +35,29 @@
 ### Create Rescue / Relief Request
 
 - **Method:** POST
-- **Endpoint:** `/api/requests`
-- **Description:** Gửi yêu cầu cứu hộ / cứu trợ
-- **Request:** `{ type, lat, lng, description, media }`
-- **Response:** `{ requestId }`
+- **Endpoint:** `/api/requests/addRequest`
+- **Description:** Gửi yêu cầu cứu hộ / cứu trợ với URL ảnh từ Frontend
+- **Request:** `{ type, latitude, longitude, description, imageUrls[], priority, peopleCount, requestSupply[] }`
+- **Response:** `{ requestId, requestMedia[] }`
 - **Auth:** Không
+- **Note:** Frontend upload files trước, gửi URLs. Backend chỉ lưu URLs.
+
+### Get All Requests
+
+- **Method:** GET
+- **Endpoint:** `/api/requests`
+- **Description:** Danh sách tất cả requests (hỗ trợ filter, pagination)
+- **Query Params:** `status, type, incidentType, priority, userName, page, limit`
+- **Response:** `{ data: Request[], total, page, limit, totalPages }`
+- **Auth:** Coordinator, RescueTeam
 
 ### Get My Requests
 
 - **Method:** GET
 - **Endpoint:** `/api/requests/my`
 - **Description:** Citizen xem yêu cầu của mình
-- **Response:** `Request[]`
+- **Query Params:** `status, type, incidentType, priority, page, limit`
+- **Response:** `{ data: Request[], total, page, limit, totalPages }`
 - **Auth:** Citizen
 
 ### Get Request Detail
@@ -56,31 +67,15 @@
 - **Description:** Xem chi tiết yêu cầu
 - **Response:** `Request`
 - **Auth:** Citizen, Coordinator, RescueTeam
-
-### List Pending Requests
-
-- **Method:** GET
-- **Endpoint:** `/api/requests?status=Pending`
-- **Description:** Danh sách SOS chờ xử lý
-- **Response:** `Request[]`
-- **Auth:** Coordinator
-
-### Verify Request
+Update Request Status
 
 - **Method:** PATCH
-- **Endpoint:** `/api/requests/{id}/verify`
-- **Description:** Xác minh / đánh dấu spam
+- **Endpoint:** `/api/requests/:requestId/status`
+- **Description:** Cập nhật trạng thái request
 - **Request:** `{ status }`
-- **Response:** `{ success }`
+- **Response:** `{ message, data }`
 - **Auth:** Coordinator
-
-### Set Request Priority
-
-- **Method:** PATCH
-- **Endpoint:** `/api/requests/{id}/priority`
-- **Description:** Đặt mức độ khẩn cấp
-- **Request:** `{ priority }`
-- **Response:** `{ success }`
+- **Status Values:** `Pending | In Progress | Completed | Cancelled`success }`
 - **Auth:** Coordinator
 
 ### Citizen Confirm Safe / Received

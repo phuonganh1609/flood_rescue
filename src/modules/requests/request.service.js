@@ -74,6 +74,23 @@ class RequestService {
   }
 
   /**
+   * Get requests created by specific user
+   * @param {string} userId
+   * @param {{page:number,limit:number}} pagination
+   */
+  async getRequestsByUser(
+    userId,
+    filter = {},
+    pagination = { page: 1, limit: 10 }
+  ) {
+    return await requestRepository.findRequestsByUser(
+      userId,
+      filter,
+      pagination
+    );
+  }
+
+  /**
    * Update request status
    * @param {string} requestId - Request ID
    * @param {string} status - New status

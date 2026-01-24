@@ -54,6 +54,38 @@ class RequestRepository {
   }
 
   /**
+   * Find requests by user with pagination
+   * @param {string} userId
+   * @param {Object} pagination
+   */
+  async findRequestsByUser(
+    userId,
+    filter = {},
+    pagination = { page: 1, limit: 10 }
+  ) {
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit;
+
+    const criteria = { userId, ...filter };
+
+    const requests = await RequestMission.find(criteria)
+      .populate("userId", "displayName userName email phoneNumber")
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 });
+
+    const total = await RequestMission.countDocuments(criteria);
+
+    return {
+      data: requests,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
    * Update request
    * @param {string} requestId
    * @param {Object} updateData
