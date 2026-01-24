@@ -1,5 +1,5 @@
 import { requestService } from "./request.service.js";
-import { addRequestSchema } from "./request.validation.js";
+import { addRequestSchema, updateRequestStatusSchema } from "./request.validation.js";
 
 /**
  * Controller for Request operations
@@ -28,13 +28,8 @@ export const addRequest = async (req, res) => {
     }
 
     const userId = req.user.id;
-    const files = req.files || [];
 
-    const result = await requestService.createRequest(
-      userId,
-      value,
-      files
-    );
+    const result = await requestService.createRequest(userId, value);
 
     res.status(201).json(result);
   } catch (err) {
@@ -72,10 +67,16 @@ export const getAllRequests = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const status = req.query.status;
     const type = req.query.type;
+    const incidentType = req.query.incidentType;
+    const priority = req.query.priority;
+    const userName = req.query.userName;
 
     const filter = {};
     if (status) filter.status = status;
     if (type) filter.type = type;
+    if (incidentType) filter.incidentType = incidentType;
+    if (priority) filter.priority = priority;
+    if (userName) filter.userName = new RegExp(userName, "i");
 
     const result = await requestService.getAllRequests(filter, {
       page,
@@ -95,15 +96,26 @@ export const getAllRequests = async (req, res) => {
 export const updateRequestStatus = async (req, res) => {
   try {
     const { requestId } = req.params;
-    const { status } = req.body;
 
-    if (!status) {
-      return res.status(400).json({ message: "Status is required" });
+    // Validate request data
+    const { error, value } = updateRequestStatusSchema.validate(req.body, {
+      abortEarly: false,
+    });
+
+    if (error) {
+      const errors = error.details.map((detail) => ({
+        field: detail.path.join("."),
+        message: detail.message,
+      }));
+      return res.status(400).json({
+        message: "Validation failed",
+        errors,
+      });
     }
 
     const updatedRequest = await requestService.updateRequestStatus(
       requestId,
-      status
+      value.status
     );
 
     if (!updatedRequest) {

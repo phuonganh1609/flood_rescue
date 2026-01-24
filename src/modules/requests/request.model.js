@@ -1,6 +1,24 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+// Schema for request media files
+const MediaSchema = new Schema(
+  {
+    imageUrl: {
+      type: String,
+      required: true,
+    },
+    description: {
+      type: String,
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const RequestMissionSchema = new Schema(
   {
     userName: {
@@ -66,7 +84,7 @@ const RequestMissionSchema = new Schema(
     },
 
     requestMedia: {
-      type: [Object],
+      type: [MediaSchema],
       default: [],
     },
   },

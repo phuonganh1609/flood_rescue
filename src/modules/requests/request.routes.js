@@ -1,6 +1,5 @@
 import express from "express";
 import { authenticate } from "../../middlewares/authMiddleware.js";
-import { uploadRequestMedia } from "../../middlewares/uploadMidleware.js";
 import {
   addRequest,
   getRequest,
@@ -10,11 +9,10 @@ import {
 
 const router = express.Router();
 
-// Create a new request with file uploads
+// Create a new request
 router.post(
   "/addRequest",
   authenticate,
-  uploadRequestMedia.array("images", 5),
   addRequest
 );
 

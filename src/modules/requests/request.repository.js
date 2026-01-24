@@ -87,50 +87,6 @@ class RequestRepository {
       { new: true }
     ).populate("userId", "displayName userName email phoneNumber");
   }
-
-  /**
-   * Find requests by status
-   * @param {string} status
-   * @returns {Promise<Array>}
-   */
-  async findRequestsByStatus(status) {
-    return await RequestMission.find({ status })
-      .populate("userId", "displayName userName email phoneNumber")
-      .sort({ createdAt: -1 });
-  }
-
-  /**
-   * Find requests by user name
-   * @param {string} userName
-   * @returns {Promise<Array>}
-   */
-  async findRequestsByUserName(userName) {
-    return await RequestMission.find({ userName })
-      .populate("userId", "displayName userName email phoneNumber")
-      .sort({ createdAt: -1 });
-  }
-
-  /**
-   * Find requests by type (Rescue/Relief)
-   * @param {string} type
-   * @returns {Promise<Array>}
-   */
-  async findRequestsByType(type) {
-    return await RequestMission.find({ type })
-      .populate("userId", "displayName userName email phoneNumber")
-      .sort({ createdAt: -1 });
-  }
-
-  /**
-   * Find requests by incident type
-   * @param {string} incidentType
-   * @returns {Promise<Array>}
-   */
-  async findRequestsByIncidentType(incidentType) {
-    return await RequestMission.find({ incidentType })
-      .populate("userId", "displayName userName email phoneNumber")
-      .sort({ createdAt: -1 });
-  }
 }
 
 const requestRepository = new RequestRepository();

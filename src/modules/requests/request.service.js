@@ -1,6 +1,5 @@
 import { authRepository } from "../auth/auth.repository.js";
 import { requestRepository } from "./request.repository.js";
-import { uploadFileForUser } from "../../middlewares/uploadMidleware.js";
 
 /**
  * Service for Request operations
@@ -13,7 +12,7 @@ class RequestService {
    * @param {Array} files - Uploaded files
    * @returns {Promise<Object>}
    */
-  async createRequest(userId, requestData, files) {
+  async createRequest(userId, requestData) {
     const user = await authRepository.findUserById(userId);
     if (!user) throw new Error("User does not exist");
 
@@ -24,15 +23,16 @@ class RequestService {
       longitude,
       description,
       peopleCount,
+      priority,
       requestSupply,
-      media,
+      imageUrls,
     } = requestData;
 
-    // Xử lý media - convert string thành array nếu cần
-    let mediaArray = [];
-    if (media) {
-      mediaArray = Array.isArray(media) ? media : [media];
-    }
+    // Map imageUrls to requestMedia format
+    const requestMedia = (imageUrls || []).map((url) => ({
+      imageUrl: url,
+      uploadedAt: new Date(),
+    }));
 
     const newRequest = await requestRepository.createRequest({
       userId,
@@ -43,35 +43,10 @@ class RequestService {
       longitude,
       description,
       peopleCount: peopleCount || 1,
+      priority: priority || "Normal",
       requestSupply: requestSupply || [],
-      requestMedia: mediaArray,
+      requestMedia,
     });
-
-    const uploadedFiles = [];
-
-    if (files && files.length > 0) {
-      for (const file of files) {
-        const media = await uploadFileForUser({
-          userId,
-          scope: "requests",
-          refId: newRequest._id,
-          file,
-        });
-
-        uploadedFiles.push(media);
-      }
-
-      // Update request with media files
-      const updatedRequest = await requestRepository.updateRequest(
-        newRequest._id,
-        { requestMedia: uploadedFiles }
-      );
-
-      return {
-        message: "Request created successfully",
-        data: updatedRequest,
-      };
-    }
 
     return {
       message: "Request created successfully",

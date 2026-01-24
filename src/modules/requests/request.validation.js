@@ -71,26 +71,43 @@ const addRequestSchema = Joi.object({
       "array.base": "Request supply must be an array",
     }),
 
-  userID: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
-    .optional()
+  priority: Joi.string()
+    .valid("Critical", "High", "Normal")
+    .default("Normal")
     .messages({
-      "string.pattern.base": "userID must be a valid MongoDB ObjectId",
+      "any.only": "Priority must be either Critical, High, or Normal",
     }),
 
-  media: Joi.alternatives()
-    .try(
-      Joi.string().min(1).messages({
-        "string.empty": "media must be a valid file path",
-      }),
-      Joi.array().items(Joi.string().min(1)).messages({
-        "array.base": "media must be a string or array of strings",
-      })
+  imageUrls: Joi.array()
+    .items(
+      Joi.string()
+        .uri()
+        .required()
+        .messages({
+          "string.uri": "Each image URL must be a valid HTTP/HTTPS URL",
+          "string.empty": "Image URL cannot be empty",
+        })
     )
+    .max(5)
     .optional()
     .messages({
-      "alternatives.match": "media must be a string or array of strings",
+      "array.base": "imageUrls must be an array",
+      "array.max": "Maximum 5 images allowed",
     }),
 });
 
-export { addRequestSchema };
+/**
+ * Validation schema for updating request status
+ */
+const updateRequestStatusSchema = Joi.object({
+  status: Joi.string()
+    .valid("Pending", "In Progress", "Completed", "Cancelled")
+    .required()
+    .messages({
+      "string.empty": "Status is required",
+      "any.only": "Status must be either Pending, In Progress, Completed, or Cancelled",
+      "any.required": "Status is required",
+    }),
+});
+
+export { addRequestSchema, updateRequestStatusSchema };
