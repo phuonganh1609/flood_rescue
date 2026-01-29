@@ -2,6 +2,17 @@
 
 ## 🔐 Auth
 
+### Register
+| Property | Value |
+|----------|-------|
+| **Method** | `POST` |
+| **Endpoint** | `/api/auth/register` |
+| **Description** | Đăng ký tài khoản |
+| **Request** | `{ userName, displayName, email, phoneNumber?, password, role? }` |
+| **Response** | `{ message, userId }` |
+| **Auth** | ❌ Không |
+| **Note** | `role` mặc định là "Citizen". Các giá trị hợp lệ: Citizen, Rescue Team, Rescue Coordinator, Admin, Manager |
+
 ### Login
 | Property | Value |
 |----------|-------|
@@ -11,15 +22,16 @@
 | **Request** | `{ email, password }` |
 | **Response** | `{ accessToken, user }` |
 | **Auth** | ❌ Không |
+| **Note** | Refresh token được lưu trong HTTP-only cookie |
 
-### Register
+### Refresh Token
 | Property | Value |
 |----------|-------|
 | **Method** | `POST` |
-| **Endpoint** | `/api/auth/register` |
-| **Description** | Đăng ký tài khoản (Citizen) |
-| **Request** | `{ fullname, phone, email, password }` |
-| **Response** | `{ userId }` |
+| **Endpoint** | `/api/auth/refresh` |
+| **Description** | Làm mới access token |
+| **Request** | Refresh token từ cookie |
+| **Response** | `{ accessToken, user }` |
 | **Auth** | ❌ Không |
 
 ### Get Current User
@@ -30,6 +42,17 @@
 | **Description** | Lấy thông tin user hiện tại |
 | **Response** | `{ user, role }` |
 | **Auth** | ✅ Citizen, RescueTeam, Coordinator, Manager, Admin |
+
+### Logout
+| Property | Value |
+|----------|-------|
+| **Method** | `POST` |
+| **Endpoint** | `/api/auth/logout` |
+| **Description** | Đăng xuất khỏi hệ thống |
+| **Request** | Refresh token từ cookie |
+| **Response** | `204 No Content` |
+| **Auth** | ✅ Citizen, RescueTeam, Coordinator, Manager, Admin |
+| **Note** | Xóa refresh token khỏi database và cookie |
 
 
 
