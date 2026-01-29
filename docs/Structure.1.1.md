@@ -64,11 +64,11 @@ flood_rescue/
 │   │   │   └── user.model.js       # ✓ Di chuyển từ model/user.js
 │   │   │
 │   │   ├── requests/               # ✓ Đã có
-│   │   │   ├── request.controller.js   # + Thêm
-│   │   │   ├── request.service.js      # + Thêm
-│   │   │   ├── request.repository.js   # + Thêm
-│   │   │   ├── request.routes.js       # + Thêm
-│   │   │   ├── request.validation.js   # + Thêm
+│   │   │   ├── request.controller.js   # ✓ Đã có
+│   │   │   ├── request.service.js      # ✓ Đã có
+│   │   │   ├── request.repository.js   # ✓ Đã có
+│   │   │   ├── request.routes.js       # ✓ Đã có
+│   │   │   ├── request.validation.js   # ✓ Đã có
 │   │   │   └── request.model.js        # ✓ Di chuyển từ model/request.js
 │   │   │
 │   │   ├── missions/               # ✓ Đã có (folder rỗng)
