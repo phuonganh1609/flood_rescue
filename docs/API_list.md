@@ -14,7 +14,6 @@
 | **Note** | `role` mặc định là "Citizen". Các giá trị hợp lệ: Citizen, Rescue Team, Rescue Coordinator, Admin, Manager |
 
 ### Login
-<<<<<<< HEAD
 - **Method:**  `POST` 
 - **Endpoint:**  `/api/auth/login` 
 - **Description:**  Đăng nhập hệ thống 
@@ -29,27 +28,6 @@
 - **Request:**  `{ fullname, phone, email, password }` 
 - **Response:**  `{ userId }` 
 - **Auth:**  ❌ Không
-=======
-| Property | Value |
-|----------|-------|
-| **Method** | `POST` |
-| **Endpoint** | `/api/auth/login` |
-| **Description** | Đăng nhập hệ thống |
-| **Request** | `{ email, password }` |
-| **Response** | `{ accessToken, user }` |
-| **Auth** | ❌ Không |
-| **Note** | Refresh token được lưu trong HTTP-only cookie |
-
-### Refresh Token
-| Property | Value |
-|----------|-------|
-| **Method** | `POST` |
-| **Endpoint** | `/api/auth/refresh` |
-| **Description** | Làm mới access token |
-| **Request** | Refresh token từ cookie |
-| **Response** | `{ accessToken, user }` |
-| **Auth** | ❌ Không |
->>>>>>> 67de4415e5a2784fd34d297dd283ed301ff38473
 
 ### Get Current User
 - **Method:**  `GET` 
