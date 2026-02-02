@@ -37,6 +37,8 @@ app.use(
 
 // CORS configuration
 const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
@@ -48,7 +50,8 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error("Not allowed by CORS"));
+      console.log("CORS blocked origin:", origin);
+      callback(null, false);
     }
   },
   credentials: true, // Allow cookies and credentials
