@@ -23,7 +23,6 @@ class RequestService {
       longitude,
       description,
       peopleCount,
-      priority,
       requestSupply,
       imageUrls,
     } = requestData;
@@ -43,7 +42,6 @@ class RequestService {
       longitude,
       description,
       peopleCount: peopleCount || 1,
-      priority: priority || "Normal",
       requestSupply: requestSupply || [],
       requestMedia,
     });

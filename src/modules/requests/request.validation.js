@@ -71,13 +71,6 @@ const addRequestSchema = Joi.object({
       "array.base": "Request supply must be an array",
     }),
 
-  priority: Joi.string()
-    .valid("Critical", "High", "Normal")
-    .default("Normal")
-    .messages({
-      "any.only": "Priority must be either Critical, High, or Normal",
-    }),
-
   imageUrls: Joi.array()
     .items(
       Joi.string()

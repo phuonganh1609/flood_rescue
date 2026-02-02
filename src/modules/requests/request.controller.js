@@ -73,7 +73,6 @@ export const getAllRequests = async (req, res) => {
     const status = req.query.status;
     const type = req.query.type;
     const incidentType = req.query.incidentType;
-    const priority = req.query.priority;
     const userName = req.query.userName;
 
     const filter = {};
