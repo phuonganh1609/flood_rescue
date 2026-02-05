@@ -47,6 +47,10 @@ const UserSchema = new Schema(
         "Manager",
       ],
     },
+    address: {
+      type: String,
+      trim: true,
+    },
   },
   { timestamps: true },
 );
