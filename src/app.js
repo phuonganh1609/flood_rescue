@@ -8,6 +8,8 @@ import { fileURLToPath } from "url";
 
 import authRoute from "./modules/auth/auth.routes.js";
 import requestRoute from "./modules/requests/request.routes.js";
+import notificationRoute from "./modules/notifications/notification.routes.js";
+import "./modules/notifications/notify.listener.js"; // Initialize event listeners
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -72,6 +74,22 @@ app.get("/ping", (req, res) => {
 // Routes
 app.use("/api/auth", authRoute);
 app.use("/api/requests", requestRoute);
+app.use("/api/notifications", notificationRoute);
+
+// Endpoint to send notifications to all connected clients
+app.use(express.json());
+app.post('/notify', (req, res) => {
+  const { message } = req.body;
+
+  // Broadcast the message to all connected WebSocket clients
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+
+  res.send('Notification sent');
+});
 
 // Error handling middlewares (must be after all routes)
 app.use(notFound);

@@ -94,11 +94,11 @@ const addRequestSchema = Joi.object({
  */
 const updateRequestStatusSchema = Joi.object({
   status: Joi.string()
-    .valid("Pending", "In Progress", "Completed", "Cancelled")
+    .valid("Submitted", "Accepted", "Rejected", "In Progress", "Completed", "Cancelled")
     .required()
     .messages({
       "string.empty": "Status is required",
-      "any.only": "Status must be either Pending, In Progress, Completed, or Cancelled",
+      "any.only": "Status must be either Submitted, Accepted, Rejected, In Progress, Completed, or Cancelled",
       "any.required": "Status is required",
     }),
 });

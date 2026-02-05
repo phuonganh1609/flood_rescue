@@ -150,6 +150,20 @@ class AuthService {
     return user;
   }
 
+/**
+   * Lấy thông tin user hiện tại
+   * @param {string} userId
+   * @returns {Promise<Object>}
+   */
+  async getCurrentUsersByRole(role) {
+    const users = await authRepository.findUsersByRole(role);
+    if (!users || users.length === 0) {
+      console.warn(`No users found with role: ${role}`);
+      return [];
+    }
+    return users;
+  }
+
   /**
    * Đăng xuất - xóa session
    * @param {string} refreshToken

@@ -1,5 +1,6 @@
 import { authRepository } from "../auth/auth.repository.js";
 import { requestRepository } from "./request.repository.js";
+import { eventBus } from '../../utils/events.js';
 
 /**
  * Service for Request operations
@@ -46,6 +47,11 @@ class RequestService {
       requestMedia,
     });
 
+    // Emit event to notify coordinators
+    eventBus.emit('REQUEST_SUBMITTED', {
+      requestId: newRequest._id,
+      userId
+    });
     return {
       message: "Request created successfully",
       data: newRequest,
