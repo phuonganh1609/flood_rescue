@@ -2,19 +2,7 @@
 
 ## 🔐 Auth
 
-### Register
-| Property | Value |
-|----------|-------|
-| **Method** | `POST` |
-| **Endpoint** | `/api/auth/register` |
-| **Description** | Đăng ký tài khoản |
-| **Request** | `{ userName, displayName, email, phoneNumber?, password, role? }` |
-| **Response** | `{ message, userId }` |
-| **Auth** | ❌ Không |
-| **Note** | `role` mặc định là "Citizen". Các giá trị hợp lệ: Citizen, Rescue Team, Rescue Coordinator, Admin, Manager |
-
 ### Login
-<<<<<<< HEAD
 - **Method:**  `POST` 
 - **Endpoint:**  `/api/auth/login` 
 - **Description:**  Đăng nhập hệ thống 
@@ -29,27 +17,6 @@
 - **Request:**  `{ fullname, phone, email, password }` 
 - **Response:**  `{ userId }` 
 - **Auth:**  ❌ Không
-=======
-| Property | Value |
-|----------|-------|
-| **Method** | `POST` |
-| **Endpoint** | `/api/auth/login` |
-| **Description** | Đăng nhập hệ thống |
-| **Request** | `{ email, password }` |
-| **Response** | `{ accessToken, user }` |
-| **Auth** | ❌ Không |
-| **Note** | Refresh token được lưu trong HTTP-only cookie |
-
-### Refresh Token
-| Property | Value |
-|----------|-------|
-| **Method** | `POST` |
-| **Endpoint** | `/api/auth/refresh` |
-| **Description** | Làm mới access token |
-| **Request** | Refresh token từ cookie |
-| **Response** | `{ accessToken, user }` |
-| **Auth** | ❌ Không |
->>>>>>> 67de4415e5a2784fd34d297dd283ed301ff38473
 
 ### Get Current User
 - **Method:**  `GET` 
@@ -57,17 +24,6 @@
 - **Description:**  Lấy thông tin user hiện tại 
 - **Response:**  `{ user, role }` 
 - **Auth:**  ✅ Citizen, RescueTeam, Coordinator, Manager, Admin
-
-### Logout
-| Property | Value |
-|----------|-------|
-| **Method** | `POST` |
-| **Endpoint** | `/api/auth/logout` |
-| **Description** | Đăng xuất khỏi hệ thống |
-| **Request** | Refresh token từ cookie |
-| **Response** | `204 No Content` |
-| **Auth** | ✅ Citizen, RescueTeam, Coordinator, Manager, Admin |
-| **Note** | Xóa refresh token khỏi database và cookie |
 
 
 
@@ -527,7 +483,7 @@
 - **Response:**  `{ positions[] }` 
 - **Auth:**  Rescue Coordinator
 
-### View Mission Report
+### View Mission Report  
 - **Method:**  `GET` 
 - **Endpoint:**  `/api/coordinator/missions/{id}/report` 
 - **Description:**  Xem báo cáo kết quả cứu hộ 
