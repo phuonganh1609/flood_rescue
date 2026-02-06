@@ -151,6 +151,20 @@ class AuthService {
   }
 
   /**
+   * Lấy thông tin user theo role
+   * @param {string} role
+   * @returns {Promise<Object>}
+   */
+  async getCurrentUsersByRole(role) {
+    const users = await authRepository.findUsersByRole(role);
+    if (!users || users.length === 0) {
+      console.warn(`No users found with role: ${role}`);
+      return [];
+    }
+    return users;
+  }
+
+  /**
    * Đăng xuất - xóa session
    * @param {string} refreshToken
    * @returns {Promise<Object>}
@@ -184,8 +198,9 @@ class AuthService {
     }
 
     // Tìm session trong db theo refresh token
-    const session = await sessionRepository.findSessionByRefreshToken(refreshToken);
-    
+    const session =
+      await sessionRepository.findSessionByRefreshToken(refreshToken);
+
     if (!session) {
       throw new Error("Refresh token không hợp lệ");
     }
@@ -198,7 +213,7 @@ class AuthService {
 
     // Lấy thông tin user
     const user = await authRepository.findUserById(session.userId);
-    
+
     if (!user) {
       throw new Error("Người dùng không tồn tại");
     }

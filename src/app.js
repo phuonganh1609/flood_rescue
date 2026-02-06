@@ -8,6 +8,8 @@ import { fileURLToPath } from "url";
 
 import authRoute from "./modules/auth/auth.routes.js";
 import requestRoute from "./modules/requests/request.routes.js";
+import notificationRoute from "./modules/notifications/notification.routes.js";
+import "./modules/notifications/notify.listener.js"; // Initialize event listeners
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -46,7 +48,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -72,6 +74,7 @@ app.get("/ping", (req, res) => {
 // Routes
 app.use("/api/auth", authRoute);
 app.use("/api/requests", requestRoute);
+app.use("/api/notifications", notificationRoute);
 
 // Error handling middlewares (must be after all routes)
 app.use(notFound);

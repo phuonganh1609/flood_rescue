@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 import { requestService } from "./request.service.js";
-import { addRequestSchema, updateRequestStatusSchema } from "./request.validation.js";
+import {
+  addRequestSchema,
+  updateRequestStatusSchema,
+} from "./request.validation.js";
 
 /**
  * Controller for Request operations
@@ -123,7 +126,8 @@ export const updateRequestStatus = async (req, res) => {
 
     const updatedRequest = await requestService.updateRequestStatus(
       requestId,
-      value.status
+      value.status,
+      value.reason,
     );
 
     if (!updatedRequest) {
@@ -159,14 +163,10 @@ export const getMyRequests = async (req, res) => {
     if (incidentType) filter.incidentType = incidentType;
     if (priority) filter.priority = priority;
 
-    const result = await requestService.getRequestsByUser(
-      req.user.id,
-      filter,
-      {
-        page,
-        limit,
-      }
-    );
+    const result = await requestService.getRequestsByUser(req.user.id, filter, {
+      page,
+      limit,
+    });
 
     res.json(result);
   } catch (err) {

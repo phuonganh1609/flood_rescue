@@ -32,6 +32,7 @@ class RescueService {
   /**
    * Create mission and assign team if status is In Progress
    * @param {string} requestId - Request ID
+   * @param {string} status - New status
    * @returns {Promise<Object|null>}
    */
   async createMissionAndAssignTeam(requestId, status) {

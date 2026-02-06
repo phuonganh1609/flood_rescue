@@ -44,6 +44,15 @@ class AuthRepository {
   }
 
   /**
+   * Tìm user theo role
+   * @param {string} role
+   * @returns {Promise<Array>}
+   */
+  async findUsersByRole(role) {
+    return await User.find({ role }).select("-hashedPassword");
+  } 
+
+  /**
    * Tạo user mới
    * @param {Object} userData
    * @returns {Promise<Object>}

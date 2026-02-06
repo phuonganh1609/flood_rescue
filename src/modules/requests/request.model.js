@@ -70,12 +70,12 @@ const RequestMissionSchema = new Schema(
       type: String,
       enum: ["Critical", "High", "Normal"],
       default: "Normal",
-    },
+    }, // chỉ hiện trong phần cordinator
 
     status: {
       type: String,
-      enum: ["Pending", "In Progress", "Completed", "Cancelled"],
-      default: "Pending",
+      enum: ["Submitted","Accepted", "Rejected", "In Progress", "Completed", "Cancelled"],
+      default: "Submitted",
     },
 
     requestSupply: {
