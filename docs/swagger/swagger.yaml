@@ -251,7 +251,9 @@ paths:
           schema:
             type: string
             enum:
-              - Pending
+              - Submitted
+              - Accepted
+              - Rejected
               - In Progress
               - Completed
               - Cancelled
@@ -351,7 +353,9 @@ paths:
           schema:
             type: string
             enum:
-              - Pending
+              - Submitted
+              - Accepted
+              - Rejected
               - In Progress
               - Completed
               - Cancelled
@@ -414,21 +418,21 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Request'
+                      $ref: "#/components/schemas/Request"
                   pagination:
-                    $ref: '#/components/schemas/Pagination'
+                    $ref: "#/components/schemas/Pagination"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /api/requests/addRequest:
     post:
@@ -445,7 +449,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateRequestInput'
+              $ref: "#/components/schemas/CreateRequestInput"
       responses:
         "201":
           description: Request created successfully
@@ -458,7 +462,7 @@ paths:
                     type: string
                     example: Request created successfully
                   data:
-                    $ref: '#/components/schemas/Request'
+                    $ref: "#/components/schemas/Request"
         "400":
           description: Invalid input or validation failed
           content:
@@ -483,13 +487,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /api/requests/{requestId}:
     get:
@@ -538,7 +542,15 @@ paths:
       tags:
         - Requests
       summary: Update request status
-      description: Update the status of a request
+      description: |
+        Update the status of a request with state machine validation.
+
+        **Allowed transitions:**
+        - Submitted → Accepted | Rejected
+        - Accepted → In Progress
+        - In Progress → Completed | Cancelled
+
+        ⚠️ Backward transitions are NOT allowed.
       operationId: updateRequestStatus
       security:
         - bearerAuth: []
@@ -550,7 +562,7 @@ paths:
           schema:
             type: string
       requestBody:
-        description: New status for the request
+        description: New status and optional reason for rejection/cancellation
         required: true
         content:
           application/json:
@@ -561,8 +573,20 @@ paths:
               properties:
                 status:
                   type: string
-                  enum: [Pending, In Progress, Completed, Cancelled]
+                  enum:
+                    [
+                      Submitted,
+                      Accepted,
+                      Rejected,
+                      In Progress,
+                      Completed,
+                      Cancelled,
+                    ]
                   description: The new status for the request
+                reason:
+                  type: string
+                  maxLength: 200
+                  description: Reason for rejection or cancellation (optional)
       responses:
         "200":
           description: Request status updated successfully
@@ -575,7 +599,7 @@ paths:
                     type: string
                     example: Request status updated successfully
                   data:
-                    $ref: '#/components/schemas/Request'
+                    $ref: "#/components/schemas/Request"
         "400":
           description: Invalid input or validation failed
           content:
@@ -599,19 +623,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /api/missions:
     post:
@@ -1799,7 +1823,8 @@ components:
             format: uri
           maxItems: 5
           description: URLs of images showing the situation (max 5)
-          example: ["https://example.com/image1.jpg", "https://example.com/image2.jpg"]
+          example:
+            ["https://example.com/image1.jpg", "https://example.com/image2.jpg"]
 
     Request:
       type: object

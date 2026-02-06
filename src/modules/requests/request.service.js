@@ -1,6 +1,6 @@
 import { authRepository } from "../auth/auth.repository.js";
 import { requestRepository } from "./request.repository.js";
-import { eventBus } from '../../utils/events.js';
+import { eventBus } from "../../utils/events.js";
 
 /**
  * Service for Request operations
@@ -48,9 +48,9 @@ class RequestService {
     });
 
     // Emit event to notify coordinators
-    eventBus.emit('REQUEST_SUBMITTED', {
+    eventBus.emit("REQUEST_SUBMITTED", {
       requestId: newRequest._id,
-      userId
+      userId,
     });
     return {
       message: "Request created successfully",
@@ -85,27 +85,118 @@ class RequestService {
   async getRequestsByUser(
     userId,
     filter = {},
-    pagination = { page: 1, limit: 10 }
+    pagination = { page: 1, limit: 10 },
   ) {
     return await requestRepository.findRequestsByUser(
       userId,
       filter,
-      pagination
+      pagination,
     );
   }
 
   /**
-   * Update request status
+   * Update request status with state machine validation
    * @param {string} requestId - Request ID
-   * @param {string} status - New status
+   * @param {string} newStatus - New status
+   * @param {string} [reason] - Reason for rejection/cancellation
    * @returns {Promise<Object|null>}
+   *
+   * State transitions allowed:
+   * - Submitted → Accepted | Rejected
+   * - Accepted → In Progress (via mission assignment, but can be set manually)
+   * - In Progress → Completed | Cancelled
+   * - No backward transitions allowed
    */
-  async updateRequestStatus(requestId, status) {
-    const validStatuses = ["Pending", "In Progress", "Completed", "Cancelled"];
-    if (!validStatuses.includes(status)) {
-      throw new Error("Invalid status");
+  async updateRequestStatus(requestId, newStatus, reason = null) {
+    const validStatuses = [
+      "Submitted",
+      "Accepted",
+      "Rejected",
+      "In Progress",
+      "Completed",
+      "Cancelled",
+    ];
+    if (!validStatuses.includes(newStatus)) {
+      throw new Error(`Invalid status: ${newStatus}`);
     }
-    return await requestRepository.updateRequestStatus(requestId, status);
+
+    // Get current request to validate transition
+    const request = await requestRepository.findRequestById(requestId);
+    if (!request) {
+      return null;
+    }
+
+    const currentStatus = request.status;
+
+    // Define allowed transitions
+    const allowedTransitions = {
+      Submitted: ["Accepted", "Rejected"],
+      Accepted: ["In Progress"],
+      "In Progress": ["Completed", "Cancelled"],
+      // Terminal states - no transitions allowed
+      Rejected: [],
+      Completed: [],
+      Cancelled: [],
+    };
+
+    // Validate transition
+    if (!allowedTransitions[currentStatus]?.includes(newStatus)) {
+      throw new Error(
+        `Invalid status transition: ${currentStatus} → ${newStatus}. Allowed: ${allowedTransitions[currentStatus]?.join(", ") || "none"}`,
+      );
+    }
+
+    // Update status in DB
+    const updatedRequest = await requestRepository.updateRequestStatus(
+      requestId,
+      newStatus,
+    );
+
+    // Emit events based on status change
+    if (updatedRequest) {
+      const citizenId = request.userId.toString();
+
+      switch (newStatus) {
+        case "Accepted":
+          eventBus.emit("REQUEST_VERIFIED", {
+            requestId,
+            citizenId,
+          });
+          break;
+
+        case "Rejected":
+          eventBus.emit("REQUEST_REJECTED", {
+            requestId,
+            citizenId,
+            reason: reason || "Yêu cầu không hợp lệ hoặc sai thông tin",
+          });
+          break;
+
+        case "In Progress":
+          // Typically set by system when mission is assigned
+          // MISSION_ASSIGNED event will be emitted from missions module
+          break;
+
+        case "Completed":
+          eventBus.emit("MISSION_COMPLETED", {
+            requestId,
+            citizenId,
+            missionId: requestId, // Temporary until missions module exists
+          });
+          break;
+
+        case "Cancelled":
+          eventBus.emit("MISSION_FAILED", {
+            requestId,
+            citizenId,
+            missionId: requestId,
+            reason: reason || "Không thể hoàn thành nhiệm vụ",
+          });
+          break;
+      }
+    }
+
+    return updatedRequest;
   }
 }
 

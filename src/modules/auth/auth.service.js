@@ -150,9 +150,9 @@ class AuthService {
     return user;
   }
 
-/**
-   * Lấy thông tin user hiện tại
-   * @param {string} userId
+  /**
+   * Lấy thông tin user theo role
+   * @param {string} role
    * @returns {Promise<Object>}
    */
   async getCurrentUsersByRole(role) {
@@ -198,8 +198,9 @@ class AuthService {
     }
 
     // Tìm session trong db theo refresh token
-    const session = await sessionRepository.findSessionByRefreshToken(refreshToken);
-    
+    const session =
+      await sessionRepository.findSessionByRefreshToken(refreshToken);
+
     if (!session) {
       throw new Error("Refresh token không hợp lệ");
     }
@@ -212,7 +213,7 @@ class AuthService {
 
     // Lấy thông tin user
     const user = await authRepository.findUserById(session.userId);
-    
+
     if (!user) {
       throw new Error("Người dùng không tồn tại");
     }

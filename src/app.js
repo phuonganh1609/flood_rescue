@@ -48,7 +48,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -75,21 +75,6 @@ app.get("/ping", (req, res) => {
 app.use("/api/auth", authRoute);
 app.use("/api/requests", requestRoute);
 app.use("/api/notifications", notificationRoute);
-
-// Endpoint to send notifications to all connected clients
-app.use(express.json());
-app.post('/notify', (req, res) => {
-  const { message } = req.body;
-
-  // Broadcast the message to all connected WebSocket clients
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(message);
-    }
-  });
-
-  res.send('Notification sent');
-});
 
 // Error handling middlewares (must be after all routes)
 app.use(notFound);

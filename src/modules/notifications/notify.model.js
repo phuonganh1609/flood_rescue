@@ -11,7 +11,14 @@ const NotifySchema = new Schema(
     type: {
       type: String,
       required: true,
-      enum: ["SUBMITTED", "ACCEPTED", "ONGOING", "COMPLETED", "CANCELLED"],
+      enum: [
+        "SUBMITTED",
+        "ACCEPTED",
+        "REJECTED",
+        "IN_PROGRESS",
+        "COMPLETED",
+        "CANCELLED",
+      ],
     },
     role: {
       type: String,
