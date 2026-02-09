@@ -23,7 +23,7 @@ export const login = async (req, res) => {
     res.cookie("refreshToken", result.refreshToken, {
       httpOnly: true, // Không thể truy cập qua JavaScript
       secure: process.env.NODE_ENV === "production", // Chỉ gửi qua HTTPS trong production
-      sameSite: "strict", // Chống CSRF
+      sameSite: "none", // Chống CSRF thì dùng 'strict' hoặc 'lax', nhưng nếu cần chia sẻ cookie giữa các site thì dùng 'none'
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
     });
 
@@ -68,7 +68,7 @@ export const logout = async (req, res) => {
     res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "none",
     });
 
     return res.sendStatus(204);
