@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import { requestService} from "../requests/request.service.js";
-import { updateRequestStatusSchema } from "../requests/request.validation.js";
+import { requestService } from "../requests/request.service.js";
+import { verifyRequestSchema } from "../requests/request.validation.js";
 import { rescueService } from "./rescue.service.js";
 /**
  * Get all requests
@@ -13,6 +13,7 @@ export const getAllRequests = async (req, res) => {
     const status = req.query.status;
     const type = req.query.type;
     const incidentType = req.query.incidentType;
+    const priority = req.query.priority;
     const userName = req.query.userName;
 
     const filter = {};
@@ -46,7 +47,7 @@ export const updateRequestStatus = async (req, res) => {
     }
 
     // Validate request data
-    const { error, value } = updateRequestStatusSchema.validate(req.body, {
+    const { error, value } = verifyRequestSchema.validate(req.body, {
       abortEarly: false,
     });
 
@@ -61,10 +62,7 @@ export const updateRequestStatus = async (req, res) => {
       });
     }
 
-    const updatedRequest = await requestService.updateRequestStatus(
-      requestId,
-      value.status
-    );
+    const updatedRequest = await requestService.verifyRequest(requestId, value);
 
     if (!updatedRequest) {
       return res.status(404).json({ message: "Request not found" });
@@ -77,32 +75,35 @@ export const updateRequestStatus = async (req, res) => {
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
-
-
 };
 
 /**Create mission and assign team if status is In Progress
  *
- * 
+ *
  */
-  export const createMissionAndAssignTeam = async (req, res) => {
-    //check if status is in progress
-    if (req.body.status === "In Progress") {
-        try {
-            const { requestId } = req.params;
-            if (!mongoose.Types.ObjectId.isValid(requestId)) {
-                return res.status(400).json({ message: "Invalid request ID" });
-            }
-            const mission = await rescueService.createMissionAndAssignTeam(requestId, value.status);
-            if (!mission) {
-                return res.status(404).json({ message: "Mission could not be created" });
-            }
-            res.json({
-                message: "Request status updated successfully",
-                data: updatedRequest,
-            });
-        }catch (err) {
-            res.status(400).json({ message: err.message });
-        };
-  };
-    };
+export const createMissionAndAssignTeam = async (req, res) => {
+  //check if status is in progress
+  if (req.body.status === "In Progress") {
+    try {
+      const { requestId } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(requestId)) {
+        return res.status(400).json({ message: "Invalid request ID" });
+      }
+      const mission = await rescueService.createMissionAndAssignTeam(
+        requestId,
+        value.status,
+      );
+      if (!mission) {
+        return res
+          .status(404)
+          .json({ message: "Mission could not be created" });
+      }
+      res.json({
+        message: "Request status updated successfully",
+        data: updatedRequest,
+      });
+    } catch (err) {
+      res.status(400).json({ message: err.message });
+    }
+  }
+};

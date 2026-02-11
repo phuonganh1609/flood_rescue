@@ -2,174 +2,277 @@ import mongoose from "mongoose";
 import { requestService } from "./request.service.js";
 import {
   addRequestSchema,
-  updateRequestStatusSchema,
+  verifyRequestSchema,
+  cancelRequestSchema,
+  markDuplicateSchema,
+  updateLocationSchema,
+  updatePrioritySchema,
 } from "./request.validation.js";
 
-/**
- * Controller for Request operations
- */
+// ─── Helpers ──────────────────────────────────────────────
+
+function validateObjectId(id, res) {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({ message: "Invalid request ID" });
+    return false;
+  }
+  return true;
+}
+
+function validateBody(schema, body, res) {
+  const { error, value } = schema.validate(body, { abortEarly: false });
+  if (error) {
+    const errors = error.details.map((d) => ({
+      field: d.path.join("."),
+      message: d.message,
+    }));
+    res.status(400).json({ message: "Validation failed", errors });
+    return null;
+  }
+  return value;
+}
+
+function handleError(err, res) {
+  const status = err.statusCode || 400;
+  res.status(status).json({ message: err.message });
+}
+
+// ─── Create ───────────────────────────────────────────────
 
 /**
- * Create a new request
- * POST /requests/addRequest
+ * POST /requests
+ * Actor: Citizen / Coordinator
  */
 export const addRequest = async (req, res) => {
   try {
-    // Validate request data
-    const { error, value } = addRequestSchema.validate(req.body, {
-      abortEarly: false,
-    });
+    const value = validateBody(addRequestSchema, req.body, res);
+    if (!value) return;
 
-    if (error) {
-      const errors = error.details.map((detail) => ({
-        field: detail.path.join("."),
-        message: detail.message,
-      }));
-      return res.status(400).json({
-        message: "Validation failed",
-        errors,
-      });
-    }
-
-    const userId = req.user.id;
-
-    const result = await requestService.createRequest(userId, value);
-
+    const result = await requestService.createRequest(req.user.id, value);
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    handleError(err, res);
   }
 };
 
+// ─── Read ─────────────────────────────────────────────────
+
 /**
- * Get request by ID
  * GET /requests/:requestId
  */
 export const getRequest = async (req, res) => {
   try {
-    const { requestId } = req.params;
+    if (!validateObjectId(req.params.requestId, res)) return;
 
-    if (!mongoose.Types.ObjectId.isValid(requestId)) {
-      return res.status(400).json({ message: "Invalid request ID" });
-    }
-
-    const request = await requestService.getRequestById(requestId);
-
-    if (!request) {
-      return res.status(404).json({ message: "Request not found" });
-    }
+    const request = await requestService.getRequestById(req.params.requestId);
+    if (!request) return res.status(404).json({ message: "Request not found" });
 
     res.json(request);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    handleError(err, res);
   }
 };
 
 /**
- * Get all requests
  * GET /requests
+ * Coordinator/Team: returns all requests with priority sorting
  */
 export const getAllRequests = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const status = req.query.status;
-    const type = req.query.type;
-    const incidentType = req.query.incidentType;
-    const userName = req.query.userName;
 
     const filter = {};
-    if (status) filter.status = status;
-    if (type) filter.type = type;
-    if (incidentType) filter.incidentType = incidentType;
-    if (priority) filter.priority = priority;
-    if (userName) filter.userName = new RegExp(userName, "i");
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.type) filter.type = req.query.type;
+    if (req.query.incidentType) filter.incidentType = req.query.incidentType;
+    if (req.query.priority) filter.priority = req.query.priority;
+    if (req.query.userName)
+      filter.userName = new RegExp(req.query.userName, "i");
 
-    const result = await requestService.getAllRequests(filter, {
+    // Use priority-sorted query for coordinators
+    const result = await requestService.getAllRequestsPrioritized(filter, {
       page,
       limit,
     });
 
     res.json(result);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    handleError(err, res);
   }
 };
 
 /**
- * Update request status
- * PATCH /requests/:requestId/status
- */
-export const updateRequestStatus = async (req, res) => {
-  try {
-    const { requestId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(requestId)) {
-      return res.status(400).json({ message: "Invalid request ID" });
-    }
-
-    // Validate request data
-    const { error, value } = updateRequestStatusSchema.validate(req.body, {
-      abortEarly: false,
-    });
-
-    if (error) {
-      const errors = error.details.map((detail) => ({
-        field: detail.path.join("."),
-        message: detail.message,
-      }));
-      return res.status(400).json({
-        message: "Validation failed",
-        errors,
-      });
-    }
-
-    const updatedRequest = await requestService.updateRequestStatus(
-      requestId,
-      value.status,
-      value.reason,
-    );
-
-    if (!updatedRequest) {
-      return res.status(404).json({ message: "Request not found" });
-    }
-
-    res.json({
-      message: "Request status updated successfully",
-      data: updatedRequest,
-    });
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
-};
-
-/**
- * Get requests of current user
  * GET /requests/my
+ * Citizen: returns their own requests
  */
 export const getMyRequests = async (req, res) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
 
-    const status = req.query.status;
-    const type = req.query.type;
-    const incidentType = req.query.incidentType;
-    const priority = req.query.priority;
-
     const filter = {};
-    if (status) filter.status = status;
-    if (type) filter.type = type;
-    if (incidentType) filter.incidentType = incidentType;
-    if (priority) filter.priority = priority;
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.type) filter.type = req.query.type;
+    if (req.query.incidentType) filter.incidentType = req.query.incidentType;
+    if (req.query.priority) filter.priority = req.query.priority;
 
     const result = await requestService.getRequestsByUser(req.user.id, filter, {
       page,
       limit,
     });
-
     res.json(result);
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    handleError(err, res);
+  }
+};
+
+// ─── Verify / Reject ─────────────────────────────────────
+
+/**
+ * PATCH /requests/:requestId/verify
+ * Actor: Coordinator
+ * Body: { approved: true/false, priority?: string, reason?: string }
+ */
+export const verifyRequest = async (req, res) => {
+  try {
+    if (!validateObjectId(req.params.requestId, res)) return;
+    const value = validateBody(verifyRequestSchema, req.body, res);
+    if (!value) return;
+
+    const updated = await requestService.verifyRequest(
+      req.params.requestId,
+      value,
+    );
+    const action = value.approved ? "verified" : "rejected";
+
+    res.json({
+      message: `Request ${action} successfully`,
+      data: updated,
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+// ─── Close ────────────────────────────────────────────────
+
+/**
+ * PATCH /requests/:requestId/close
+ * Actor: Coordinator
+ */
+export const closeRequest = async (req, res) => {
+  try {
+    if (!validateObjectId(req.params.requestId, res)) return;
+
+    const updated = await requestService.closeRequest(req.params.requestId);
+    res.json({ message: "Request closed successfully", data: updated });
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+// ─── Cancel ───────────────────────────────────────────────
+
+/**
+ * PATCH /requests/:requestId/cancel
+ * Actor: Citizen (own request) or Coordinator
+ */
+export const cancelRequest = async (req, res) => {
+  try {
+    if (!validateObjectId(req.params.requestId, res)) return;
+    const value = validateBody(cancelRequestSchema, req.body, res);
+    if (!value) return;
+
+    const updated = await requestService.cancelRequest(req.params.requestId, {
+      reason: value.reason,
+      userId: req.user.id,
+      userRole: req.user.role,
+    });
+
+    res.json({ message: "Request cancelled successfully", data: updated });
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+// ─── Duplicate ────────────────────────────────────────────
+
+/**
+ * PATCH /requests/:requestId/duplicate
+ * Actor: Coordinator
+ * Body: { duplicatedOfRequestId: string }
+ */
+export const markDuplicate = async (req, res) => {
+  try {
+    if (!validateObjectId(req.params.requestId, res)) return;
+    const value = validateBody(markDuplicateSchema, req.body, res);
+    if (!value) return;
+
+    const updated = await requestService.markAsDuplicate(
+      req.params.requestId,
+      value.duplicatedOfRequestId,
+    );
+
+    res.json({
+      message: "Request marked as duplicate successfully",
+      data: updated,
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+// ─── Location ─────────────────────────────────────────────
+
+/**
+ * PATCH /requests/:requestId/location
+ * Actor: Coordinator
+ * Body: { location: { type: "Point", coordinates: [lng, lat] }, isLocationVerified?: boolean }
+ */
+export const updateLocation = async (req, res) => {
+  try {
+    if (!validateObjectId(req.params.requestId, res)) return;
+    const value = validateBody(updateLocationSchema, req.body, res);
+    if (!value) return;
+
+    const updated = await requestService.updateLocation(
+      req.params.requestId,
+      value,
+    );
+
+    res.json({
+      message: "Request location updated successfully",
+      data: updated,
+    });
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+// ─── Priority ─────────────────────────────────────────────
+
+/**
+ * PATCH /requests/:requestId/priority
+ * Actor: Coordinator
+ * Body: { priority: "Critical" | "High" | "Normal" }
+ */
+export const updatePriority = async (req, res) => {
+  try {
+    if (!validateObjectId(req.params.requestId, res)) return;
+    const value = validateBody(updatePrioritySchema, req.body, res);
+    if (!value) return;
+
+    const updated = await requestService.updatePriority(
+      req.params.requestId,
+      value.priority,
+    );
+
+    res.json({
+      message: "Request priority updated successfully",
+      data: updated,
+    });
+  } catch (err) {
+    handleError(err, res);
   }
 };

@@ -1,8 +1,33 @@
 import Joi from "joi";
 
-/**
- * Validation schema for creating a request
- */
+// --- Reusable schemas ---
+const locationSchema = Joi.object({
+  type: Joi.string().valid("Point").default("Point"),
+  coordinates: Joi.array()
+    .ordered(
+      Joi.number().min(-180).max(180).required(), // longitude
+      Joi.number().min(-90).max(90).required(), // latitude
+    )
+    .length(2)
+    .required()
+    .messages({
+      "array.length": "Coordinates must be [longitude, latitude]",
+    }),
+}).required();
+
+const requestSupplyItemSchema = Joi.object({
+  supplyId: Joi.string()
+    .pattern(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "supplyId must be a valid ObjectId",
+    }),
+  requestedQty: Joi.number().integer().min(1).required().messages({
+    "number.min": "Requested quantity must be at least 1",
+  }),
+});
+
+// --- Create Request ---
 const addRequestSchema = Joi.object({
   type: Joi.string().valid("Rescue", "Relief").required().messages({
     "string.empty": "Request type is required",
@@ -17,18 +42,8 @@ const addRequestSchema = Joi.object({
       "any.only": "Invalid incident type",
     }),
 
-  latitude: Joi.number().min(-90).max(90).required().messages({
-    "number.base": "Latitude must be a number",
-    "number.min": "Latitude must be between -90 and 90",
-    "number.max": "Latitude must be between -90 and 90",
-    "any.required": "Latitude is required",
-  }),
-
-  longitude: Joi.number().min(-180).max(180).required().messages({
-    "number.base": "Longitude must be a number",
-    "number.min": "Longitude must be between -180 and 180",
-    "number.max": "Longitude must be between -180 and 180",
-    "any.required": "Longitude is required",
+  location: locationSchema.messages({
+    "any.required": "Location is required",
   }),
 
   description: Joi.string().min(10).max(500).required().messages({
@@ -44,9 +59,12 @@ const addRequestSchema = Joi.object({
     "number.max": "People count cannot exceed 100",
   }),
 
-  requestSupply: Joi.array().items(Joi.string()).default([]).messages({
-    "array.base": "Request supply must be an array",
-  }),
+  requestSupplies: Joi.array()
+    .items(requestSupplyItemSchema)
+    .default([])
+    .messages({
+      "array.base": "requestSupplies must be an array",
+    }),
 
   imageUrls: Joi.array()
     .items(
@@ -63,29 +81,76 @@ const addRequestSchema = Joi.object({
     }),
 });
 
-/**
- * Validation schema for updating request status
- */
-const updateRequestStatusSchema = Joi.object({
-  status: Joi.string()
-    .valid(
-      "Submitted",
-      "Accepted",
-      "Rejected",
-      "In Progress",
-      "Completed",
-      "Cancelled",
-    )
-    .required()
+// --- Verify / Reject Request ---
+const verifyRequestSchema = Joi.object({
+  approved: Joi.boolean().required().messages({
+    "any.required": "approved (true/false) is required",
+  }),
+  priority: Joi.string()
+    .valid("Critical", "High", "Normal")
+    .when("approved", {
+      is: true,
+      then: Joi.optional().default("Normal"),
+      otherwise: Joi.forbidden(),
+    })
     .messages({
-      "string.empty": "Status is required",
-      "any.only":
-        "Status must be one of: Submitted, Accepted, Rejected, In Progress, Completed, Cancelled",
-      "any.required": "Status is required",
+      "any.only": "Priority must be Critical, High, or Normal",
     }),
-  reason: Joi.string().max(200).optional().messages({
-    "string.max": "Reason cannot exceed 200 characters",
+  reason: Joi.string()
+    .max(500)
+    .when("approved", {
+      is: false,
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    })
+    .messages({
+      "any.required": "Reason is required when rejecting a request",
+      "string.max": "Reason cannot exceed 500 characters",
+    }),
+});
+
+// --- Cancel Request ---
+const cancelRequestSchema = Joi.object({
+  reason: Joi.string().max(500).optional().messages({
+    "string.max": "Reason cannot exceed 500 characters",
   }),
 });
 
-export { addRequestSchema, updateRequestStatusSchema };
+// --- Mark Duplicate ---
+const markDuplicateSchema = Joi.object({
+  duplicatedOfRequestId: Joi.string()
+    .pattern(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "duplicatedOfRequestId must be a valid ObjectId",
+      "any.required": "duplicatedOfRequestId is required",
+    }),
+});
+
+// --- Update Location ---
+const updateLocationSchema = Joi.object({
+  location: locationSchema.messages({
+    "any.required": "Location is required",
+  }),
+  isLocationVerified: Joi.boolean().default(true),
+});
+
+// --- Update Priority ---
+const updatePrioritySchema = Joi.object({
+  priority: Joi.string()
+    .valid("Critical", "High", "Normal")
+    .required()
+    .messages({
+      "any.only": "Priority must be Critical, High, or Normal",
+      "any.required": "Priority is required",
+    }),
+});
+
+export {
+  addRequestSchema,
+  verifyRequestSchema,
+  cancelRequestSchema,
+  markDuplicateSchema,
+  updateLocationSchema,
+  updatePrioritySchema,
+};

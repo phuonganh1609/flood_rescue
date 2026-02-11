@@ -1,6 +1,6 @@
 # 📋 TodoList - Flood Rescue System
 
-> **Last Updated:** 2026-02-10
+> **Last Updated:** 2026-02-12
 >
 > Theo dõi tiến độ implementation dựa trên [ERD.md](./ERD.md), [Rescue_flow_2.2.md](./flows/Rescue_flow_2.2.md), [Relief_flow_1.1.md](./flows/Relief_flow_1.1.md), và [Supply_management.md](./Supply_management.md).
 
@@ -8,17 +8,15 @@
 
 ## 📊 Trạng thái tổng quan
 
-| Module             | Trạng thái         | Ghi chú                              |
-| ------------------ | ------------------ | ------------------------------------ |
-| Authentication     | ✅ Hoàn thành      | Login, Register, JWT, Session        |
-| Request Management | 🔄 Đang phát triển | Thiếu nhiều status theo unified flow |
-| Mission & Timeline | ❌ Chưa bắt đầu    | Core feature chưa implement          |
-| Team Management    | 🔄 Đang phát triển | Có model, thiếu full CRUD            |
-| Supply Management  | ❌ Chưa bắt đầu    | Chỉ có model cơ bản                  |
-| Notification       | ✅ Hoàn thành      | WebSocket + REST API                 |
-| Position Tracking  | ❌ Chưa bắt đầu    | GPS tracking chưa implement          |
-
-**Legend:** ✅ Hoàn thành | 🔄 Đang phát triển | ❌ Chưa bắt đầu | 🔴 Blocked
+| Module             | Tiến độ | Ghi chú                                   |
+| ------------------ | ------- | ----------------------------------------- |
+| Authentication     | ~85%    | Login, Register, JWT, Session             |
+| Request Management | ~90%    | Unified Flow 2.2, 10 endpoints            |
+| Mission & Timeline | 0%      | Core feature chưa implement               |
+| Team Management    | ~25%    | Có model, thiếu full CRUD                 |
+| Supply Management  | ~5%     | Chỉ có model cơ bản                       |
+| Notification       | ~80%    | WebSocket + REST API, thiếu một số events |
+| Position Tracking  | 0%      | GPS tracking chưa implement               |
 
 ---
 
@@ -47,45 +45,33 @@
 
 ### Implemented ✅
 
-- [x] Request model với GeoJSON location
-- [x] Create request (`POST /api/requests/addRequest`)
-- [x] Get all requests với pagination + filter
-- [x] Get my requests (Citizen)
-- [x] Get request by ID
-- [x] Update request status với state machine validation
-- [x] Event emission khi status change
+- [x] Request model (`Request`) với GeoJSON location, 2dsphere index
+- [x] Status enum Unified Flow 2.2: `SUBMITTED`, `VERIFIED`, `REJECTED`, `IN_PROGRESS`, `PARTIALLY_FULFILLED`, `FULFILLED`, `CLOSED`, `CANCELLED`
+- [x] State machine validation cho tất cả status transitions
+- [x] `requestSupplies` structured format `[{supplyId, requestedQty}]`
+- [x] Fields: `isDuplicated`, `duplicatedOfRequestId`, `isLocationVerified`
+- [x] Validate 1 active request per Citizen (terminal: CLOSED/CANCELLED/REJECTED)
+- [x] Auto-prioritization sorting (priority → peopleCount → createdAt)
+- [x] Event emission cho tất cả status changes
 
-### Partially Implemented 🔄
+**Endpoints:**
 
-> [!WARNING]
-> Request statuses hiện tại **CHƯA đồng bộ** với Unified Flow 2.2. Cần cập nhật.
-
-**Status hiện tại:**
-
-- `Submitted`, `Accepted`, `Rejected`, `In Progress`, `Completed`, `Cancelled`
-
-**Status theo Unified Flow 2.2 (cần update):**
-
-- `SUBMITTED`, `VERIFIED`, `REJECTED`, `IN_PROGRESS`, `PARTIALLY_FULFILLED`, `FULFILLED`, `CLOSED`, `CANCELLED`
+- [x] `POST /api/requests` - Citizen tạo request (1 active limit)
+- [x] `GET /api/requests` - Coordinator/Team xem tất cả (priority sorted)
+- [x] `GET /api/requests/my` - Citizen xem request của mình
+- [x] `GET /api/requests/:id` - Xem chi tiết request
+- [x] `PATCH /api/requests/:id/verify` - Coordinator verify/reject → `VERIFIED`/`REJECTED`
+- [x] `PATCH /api/requests/:id/close` - Coordinator close → `CLOSED`
+- [x] `PATCH /api/requests/:id/cancel` - Citizen/Coordinator cancel → `CANCELLED` (chỉ khi SUBMITTED)
+- [x] `PATCH /api/requests/:id/duplicate` - Coordinator mark duplicate (sync status/priority từ gốc, chỉ trước IN_PROGRESS, không chain)
+- [x] `PATCH /api/requests/:id/location` - Coordinator update location & verify
+- [x] `PATCH /api/requests/:id/priority` - Coordinator đổi priority (chỉ VERIFIED, không cho duplicate)
 
 ### Not Implemented ❌
 
-- [ ] `PATCH /requests/{id}/verify` - Coordinator verify request -> `VERIFIED`
-- [ ] `PATCH /requests/{id}/close` - Coordinator close request -> `CLOSED`
-- [ ] `PATCH /requests/{id}/cancel` - Citizen/Coordinator cancel request
-- [ ] `PATCH /requests/{id}/duplicate` - Coordinator mark request as duplicate
-- [ ] `PATCH /requests/{id}/location` - Coordinator update location & verify
-- [ ] `requestSupplies` field tracking theo ERD mới
 - [ ] Derivation logic: Auto-update status dựa trên Timeline results
-- [ ] **New Request Fields:**
-  - [ ] `isDuplicated` field (Boolean)
-  - [ ] `duplicatedOfRequestId` field (ObjectId)
-  - [ ] `isLocationVerified` field (Boolean)
-- [ ] **Validation & Business Rules:**
-  - [ ] Validate 1 active request per Citizen (terminal states: CLOSED/CANCELLED)
-  - [ ] Request creation on behalf of Citizen (Coordinator with their userId)
-  - [ ] Auto-prioritization sorting (priority → peopleCount → createdAt)
-  - [ ] Duplicate detection algorithm (location + time + citizen) - Future enhancement
+- [ ] Request creation on behalf of Citizen (Coordinator with their userId)
+- [ ] Duplicate detection algorithm (location + time + citizen) - Future enhancement
 
 ---
 
@@ -294,9 +280,11 @@
 
 ## 📝 Notes
 
-- **Request status naming**: Docs dùng UPPER_CASE (`VERIFIED`), code dùng Title Case (`Accepted`). Cần thống nhất.
-- **Unified Flow**: Rescue và Relief dùng chung model, khác nhau ở `requestType`.
+- **Request status naming**: Đã thống nhất dùng UPPER_CASE (`SUBMITTED`, `VERIFIED`, v.v.)
+- **Unified Flow**: Rescue và Relief dùng chung model, khác nhau ở `type` field.
 - **Multi-timeline**: 1 Request có thể có nhiều Timelines (reassignment, scale-out).
+- **Cancel rule**: Chỉ SUBMITTED mới được cancel (cả Citizen và Coordinator).
+- **Duplicate rule**: Sau khi mark duplicate → sync status/priority từ gốc. Không chain duplicate.
 
 ---
 

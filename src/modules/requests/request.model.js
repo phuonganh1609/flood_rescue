@@ -1,30 +1,56 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-// Schema for request media files
+// --- Enums ---
+export const REQUEST_STATUS = {
+  SUBMITTED: "SUBMITTED",
+  VERIFIED: "VERIFIED",
+  REJECTED: "REJECTED",
+  IN_PROGRESS: "IN_PROGRESS",
+  PARTIALLY_FULFILLED: "PARTIALLY_FULFILLED",
+  FULFILLED: "FULFILLED",
+  CLOSED: "CLOSED",
+  CANCELLED: "CANCELLED",
+};
+
+export const REQUEST_PRIORITY = {
+  CRITICAL: "Critical",
+  HIGH: "High",
+  NORMAL: "Normal",
+};
+
+export const TERMINAL_STATUSES = [
+  REQUEST_STATUS.CLOSED,
+  REQUEST_STATUS.CANCELLED,
+  REQUEST_STATUS.REJECTED,
+];
+
+// --- Sub-schemas ---
 const MediaSchema = new Schema(
   {
-    imageUrl: {
-      type: String,
-      required: true,
-    },
-    description: {
-      type: String,
-    },
-    uploadedAt: {
-      type: Date,
-      default: Date.now,
-    },
+    imageUrl: { type: String, required: true },
+    description: { type: String },
+    uploadedAt: { type: Date, default: Date.now },
   },
-  { _id: false }
+  { _id: false },
 );
 
-const RequestMissionSchema = new Schema(
+const RequestSupplySchema = new Schema(
   {
-    userName: {
-      type: String,
+    supplyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Supply",
       required: true,
     },
+    requestedQty: { type: Number, required: true, min: 1 },
+  },
+  { _id: false },
+);
+
+// --- Main schema ---
+const RequestSchema = new Schema(
+  {
+    userName: { type: String, required: true },
 
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -44,20 +70,20 @@ const RequestMissionSchema = new Schema(
       default: "Other",
     },
 
-    latitude: {
-      type: mongoose.Decimal128,
-      required: true,
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        required: true,
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        required: true,
+      },
     },
 
-    longitude: {
-      type: mongoose.Decimal128,
-      required: true,
-    },
-
-    description: {
-      type: String,
-      required: true,
-    },
+    description: { type: String, required: true },
 
     peopleCount: {
       type: Number,
@@ -68,27 +94,44 @@ const RequestMissionSchema = new Schema(
 
     priority: {
       type: String,
-      enum: ["Critical", "High", "Normal"],
-      default: "Normal",
-    }, // chỉ hiện trong phần cordinator
+      enum: Object.values(REQUEST_PRIORITY),
+      default: REQUEST_PRIORITY.NORMAL,
+    },
 
     status: {
       type: String,
-      enum: ["Submitted","Accepted", "Rejected", "In Progress", "Completed", "Cancelled"],
-      default: "Submitted",
+      enum: Object.values(REQUEST_STATUS),
+      default: REQUEST_STATUS.SUBMITTED,
     },
 
-    requestSupply: {
-      type: [String],
+    requestSupplies: {
+      type: [RequestSupplySchema],
       default: [],
     },
 
-    requestMedia: {
+    media: {
       type: [MediaSchema],
       default: [],
     },
+
+    // Duplicate detection
+    isDuplicated: { type: Boolean, default: false },
+    duplicatedOfRequestId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Request",
+      default: null,
+    },
+
+    // Location verification
+    isLocationVerified: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
 
-export default mongoose.model("RequestMission", RequestMissionSchema);
+// GeoJSON index for spatial queries
+RequestSchema.index({ location: "2dsphere" });
+
+// Priority sorting index (for coordinator dashboard)
+RequestSchema.index({ status: 1, priority: 1, peopleCount: -1, createdAt: 1 });
+
+export default mongoose.model("Request", RequestSchema);

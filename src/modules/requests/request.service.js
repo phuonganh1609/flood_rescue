@@ -1,6 +1,52 @@
 import { authRepository } from "../auth/auth.repository.js";
 import { requestRepository } from "./request.repository.js";
+import { REQUEST_STATUS, TERMINAL_STATUSES } from "./request.model.js";
 import { eventBus } from "../../utils/events.js";
+
+/**
+ * Allowed state transitions for the Request state machine (Unified Flow 2.2)
+ *
+ * Note: Some transitions (VERIFIED → IN_PROGRESS, IN_PROGRESS → FULFILLED, etc.)
+ * will be triggered by the Timeline/Mission modules in the future.
+ * They are defined here so the state machine is complete.
+ */
+const ALLOWED_TRANSITIONS = {
+  [REQUEST_STATUS.SUBMITTED]: [
+    REQUEST_STATUS.VERIFIED,
+    REQUEST_STATUS.REJECTED,
+    REQUEST_STATUS.CANCELLED,
+  ],
+  [REQUEST_STATUS.VERIFIED]: [REQUEST_STATUS.IN_PROGRESS],
+  [REQUEST_STATUS.IN_PROGRESS]: [
+    REQUEST_STATUS.PARTIALLY_FULFILLED,
+    REQUEST_STATUS.FULFILLED,
+  ],
+  [REQUEST_STATUS.PARTIALLY_FULFILLED]: [
+    REQUEST_STATUS.IN_PROGRESS,
+    REQUEST_STATUS.CLOSED,
+  ],
+  [REQUEST_STATUS.FULFILLED]: [REQUEST_STATUS.CLOSED],
+  // Terminal states
+  [REQUEST_STATUS.REJECTED]: [],
+  [REQUEST_STATUS.CLOSED]: [],
+  [REQUEST_STATUS.CANCELLED]: [],
+};
+
+/**
+ * Validate a status transition
+ * @throws {Error} if transition is invalid
+ */
+function assertTransition(currentStatus, newStatus) {
+  const allowed = ALLOWED_TRANSITIONS[currentStatus];
+  if (!allowed || !allowed.includes(newStatus)) {
+    const err = new Error(
+      `Invalid status transition: ${currentStatus} → ${newStatus}. ` +
+        `Allowed: ${allowed?.join(", ") || "none"}`,
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+}
 
 /**
  * Service for Request operations
@@ -8,28 +54,39 @@ import { eventBus } from "../../utils/events.js";
 class RequestService {
   /**
    * Create a new request
-   * @param {string} userId - User ID
-   * @param {Object} requestData - Request data
-   * @param {Array} files - Uploaded files
-   * @returns {Promise<Object>}
+   * Validates: 1 active request per Citizen
    */
   async createRequest(userId, requestData) {
     const user = await authRepository.findUserById(userId);
-    if (!user) throw new Error("User does not exist");
+    if (!user) {
+      const err = new Error("User does not exist");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Business rule: 1 active request per citizen
+    const activeRequest = await requestRepository.findActiveRequest(userId);
+    if (activeRequest) {
+      const err = new Error(
+        "You already have an active request. " +
+          "Please wait until it is closed or cancelled before creating a new one.",
+      );
+      err.statusCode = 400;
+      throw err;
+    }
 
     const {
       type,
       incidentType,
-      latitude,
-      longitude,
+      location,
       description,
       peopleCount,
-      requestSupply,
+      requestSupplies,
       imageUrls,
     } = requestData;
 
-    // Map imageUrls to requestMedia format
-    const requestMedia = (imageUrls || []).map((url) => ({
+    // Map imageUrls to media format
+    const media = (imageUrls || []).map((url) => ({
       imageUrl: url,
       uploadedAt: new Date(),
     }));
@@ -39,49 +96,47 @@ class RequestService {
       userName: user.displayName || user.userName,
       type,
       incidentType: incidentType || "Other",
-      latitude,
-      longitude,
+      location,
       description,
       peopleCount: peopleCount || 1,
-      requestSupply: requestSupply || [],
-      requestMedia,
+      requestSupplies: requestSupplies || [],
+      media,
     });
 
-    // Emit event to notify coordinators
     eventBus.emit("REQUEST_SUBMITTED", {
       requestId: newRequest._id,
       userId,
     });
+
     return {
       message: "Request created successfully",
       data: newRequest,
     };
   }
 
-  /**
-   * Get request by ID
-   * @param {string} requestId - Request ID
-   * @returns {Promise<Object|null>}
-   */
+  // ─── Read ───────────────────────────────────────────────
+
   async getRequestById(requestId) {
     return await requestRepository.findRequestById(requestId);
   }
 
-  /**
-   * Get all requests with pagination
-   * @param {Object} filter - Filter criteria
-   * @param {Object} pagination - Pagination info
-   * @returns {Promise<Object>}
-   */
   async getAllRequests(filter = {}, pagination = { page: 1, limit: 10 }) {
     return await requestRepository.findAllRequests(filter, pagination);
   }
 
   /**
-   * Get requests created by specific user
-   * @param {string} userId
-   * @param {{page:number,limit:number}} pagination
+   * Get all requests sorted by priority (for coordinator dashboard)
    */
+  async getAllRequestsPrioritized(
+    filter = {},
+    pagination = { page: 1, limit: 10 },
+  ) {
+    return await requestRepository.findAllRequestsPrioritized(
+      filter,
+      pagination,
+    );
+  }
+
   async getRequestsByUser(
     userId,
     filter = {},
@@ -94,109 +149,237 @@ class RequestService {
     );
   }
 
+  // ─── Verify / Reject ───────────────────────────────────
+
   /**
-   * Update request status with state machine validation
-   * @param {string} requestId - Request ID
-   * @param {string} newStatus - New status
-   * @param {string} [reason] - Reason for rejection/cancellation
-   * @returns {Promise<Object|null>}
-   *
-   * State transitions allowed:
-   * - Submitted → Accepted | Rejected
-   * - Accepted → In Progress (via mission assignment, but can be set manually)
-   * - In Progress → Completed | Cancelled
-   * - No backward transitions allowed
+   * Coordinator verifies or rejects a request
+   * SUBMITTED → VERIFIED (approved=true)  or  SUBMITTED → REJECTED (approved=false)
    */
-  async updateRequestStatus(requestId, newStatus, reason = null) {
-    const validStatuses = [
-      "Submitted",
-      "Accepted",
-      "Rejected",
-      "In Progress",
-      "Completed",
-      "Cancelled",
-    ];
-    if (!validStatuses.includes(newStatus)) {
-      throw new Error(`Invalid status: ${newStatus}`);
+  async verifyRequest(requestId, { approved, priority, reason }) {
+    const request = await this._getRequestOrThrow(requestId);
+
+    const newStatus =
+      approved ? REQUEST_STATUS.VERIFIED : REQUEST_STATUS.REJECTED;
+    assertTransition(request.status, newStatus);
+
+    const updated = await requestRepository.verifyRequest(requestId, {
+      status: newStatus,
+      priority: approved ? priority || request.priority : request.priority,
+      reason: !approved ? reason : undefined,
+    });
+
+    const citizenId =
+      request.userId._id ?
+        request.userId._id.toString()
+      : request.userId.toString();
+
+    if (approved) {
+      eventBus.emit("REQUEST_VERIFIED", { requestId, citizenId });
+    } else {
+      eventBus.emit("REQUEST_REJECTED", {
+        requestId,
+        citizenId,
+        reason: reason || "Yêu cầu không hợp lệ",
+      });
     }
 
-    // Get current request to validate transition
-    const request = await requestRepository.findRequestById(requestId);
-    if (!request) {
-      return null;
-    }
+    return updated;
+  }
 
-    const currentStatus = request.status;
+  // ─── Close ──────────────────────────────────────────────
 
-    // Define allowed transitions
-    const allowedTransitions = {
-      Submitted: ["Accepted", "Rejected"],
-      Accepted: ["In Progress"],
-      "In Progress": ["Completed", "Cancelled"],
-      // Terminal states - no transitions allowed
-      Rejected: [],
-      Completed: [],
-      Cancelled: [],
-    };
+  /**
+   * Coordinator closes a request (FULFILLED → CLOSED or PARTIALLY_FULFILLED → CLOSED)
+   */
+  async closeRequest(requestId) {
+    const request = await this._getRequestOrThrow(requestId);
+    assertTransition(request.status, REQUEST_STATUS.CLOSED);
 
-    // Validate transition
-    if (!allowedTransitions[currentStatus]?.includes(newStatus)) {
-      throw new Error(
-        `Invalid status transition: ${currentStatus} → ${newStatus}. Allowed: ${allowedTransitions[currentStatus]?.join(", ") || "none"}`,
-      );
-    }
-
-    // Update status in DB
-    const updatedRequest = await requestRepository.updateRequestStatus(
+    const updated = await requestRepository.updateRequestStatus(
       requestId,
-      newStatus,
+      REQUEST_STATUS.CLOSED,
     );
 
-    // Emit events based on status change
-    if (updatedRequest) {
-      const citizenId = request.userId.toString();
+    eventBus.emit("REQUEST_CLOSED", { requestId });
+    return updated;
+  }
 
-      switch (newStatus) {
-        case "Accepted":
-          eventBus.emit("REQUEST_VERIFIED", {
-            requestId,
-            citizenId,
-          });
-          break;
+  // ─── Cancel ─────────────────────────────────────────────
 
-        case "Rejected":
-          eventBus.emit("REQUEST_REJECTED", {
-            requestId,
-            citizenId,
-            reason: reason || "Yêu cầu không hợp lệ hoặc sai thông tin",
-          });
-          break;
+  /**
+   * Cancel a request
+   * - Citizen can cancel their own SUBMITTED request
+   * - Coordinator can cancel any SUBMITTED request
+   * Only requests in SUBMITTED status can be cancelled.
+   */
+  async cancelRequest(requestId, { reason, userId, userRole }) {
+    const request = await this._getRequestOrThrow(requestId);
 
-        case "In Progress":
-          // Typically set by system when mission is assigned
-          // MISSION_ASSIGNED event will be emitted from missions module
-          break;
+    // Citizen can only cancel their own request
+    const requestOwnerId =
+      request.userId._id ?
+        request.userId._id.toString()
+      : request.userId.toString();
 
-        case "Completed":
-          eventBus.emit("MISSION_COMPLETED", {
-            requestId,
-            citizenId,
-            missionId: requestId, // Temporary until missions module exists
-          });
-          break;
-
-        case "Cancelled":
-          eventBus.emit("MISSION_FAILED", {
-            requestId,
-            citizenId,
-            missionId: requestId,
-            reason: reason || "Không thể hoàn thành nhiệm vụ",
-          });
-          break;
-      }
+    if (userRole !== "Rescue Coordinator" && requestOwnerId !== userId) {
+      const err = new Error("You can only cancel your own request");
+      err.statusCode = 403;
+      throw err;
     }
 
-    return updatedRequest;
+    // Only SUBMITTED requests can be cancelled
+    if (request.status !== REQUEST_STATUS.SUBMITTED) {
+      const err = new Error(
+        `Cannot cancel request in ${request.status} status. Only SUBMITTED requests can be cancelled.`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    assertTransition(request.status, REQUEST_STATUS.CANCELLED);
+
+    const updated = await requestRepository.updateRequestStatus(
+      requestId,
+      REQUEST_STATUS.CANCELLED,
+    );
+
+    const citizenId = requestOwnerId;
+    eventBus.emit("REQUEST_CANCELLED", {
+      requestId,
+      citizenId,
+      reason: reason || "Request cancelled",
+    });
+
+    return updated;
+  }
+
+  // ─── Duplicate ──────────────────────────────────────────
+
+  /**
+   * Coordinator marks a request as duplicate of another request
+   * Rules:
+   * - Only before IN_PROGRESS (SUBMITTED or VERIFIED)
+   * - Original must have isDuplicated: false (no chaining)
+   * - Syncs status and priority from the original request
+   */
+  async markAsDuplicate(requestId, duplicatedOfRequestId) {
+    const request = await this._getRequestOrThrow(requestId);
+
+    // Only SUBMITTED or VERIFIED can be marked as duplicate
+    const allowedStatuses = [REQUEST_STATUS.SUBMITTED, REQUEST_STATUS.VERIFIED];
+    if (!allowedStatuses.includes(request.status)) {
+      const err = new Error(
+        `Cannot mark as duplicate in ${request.status} status. Only SUBMITTED or VERIFIED requests can be marked.`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Validate the original request exists
+    const original = await requestRepository.findRequestById(
+      duplicatedOfRequestId,
+    );
+    if (!original) {
+      const err = new Error("Original request not found");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Cannot mark itself as duplicate
+    if (requestId === duplicatedOfRequestId) {
+      const err = new Error("Cannot mark a request as duplicate of itself");
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Original must NOT be a duplicate itself (no chaining)
+    if (original.isDuplicated) {
+      const err = new Error(
+        "Cannot link to a request that is itself a duplicate. Link to the original request instead.",
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Sync status and priority from original
+    const updated = await requestRepository.markAsDuplicate(
+      requestId,
+      duplicatedOfRequestId,
+      {
+        status: original.status,
+        priority: original.priority,
+      },
+    );
+
+    eventBus.emit("REQUEST_MARKED_DUPLICATE", {
+      requestId,
+      duplicatedOfRequestId,
+    });
+
+    return updated;
+  }
+
+  // ─── Priority ───────────────────────────────────────────
+
+  /**
+   * Coordinator updates priority of a request
+   * Rules:
+   * - Only when status is VERIFIED
+   * - Cannot change priority of a duplicate request (change the original instead)
+   */
+  async updatePriority(requestId, priority) {
+    const request = await this._getRequestOrThrow(requestId);
+
+    // Only VERIFIED requests can have their priority changed
+    if (request.status !== REQUEST_STATUS.VERIFIED) {
+      const err = new Error(
+        `Cannot change priority in ${request.status} status. Only VERIFIED requests can have their priority updated.`,
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Duplicate requests cannot have their priority changed directly
+    if (request.isDuplicated) {
+      const err = new Error(
+        "Cannot change priority of a duplicate request. Change the priority of the original request instead.",
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    return await requestRepository.updatePriority(requestId, priority);
+  }
+
+  // ─── Location ───────────────────────────────────────────
+
+  /**
+   * Coordinator updates location and verification flag
+   */
+  async updateLocation(requestId, { location, isLocationVerified }) {
+    await this._getRequestOrThrow(requestId);
+
+    return await requestRepository.updateLocation(
+      requestId,
+      location,
+      isLocationVerified ?? true,
+    );
+  }
+
+  // ─── Helpers ────────────────────────────────────────────
+
+  /**
+   * Get request or throw 404
+   * @private
+   */
+  async _getRequestOrThrow(requestId) {
+    const request = await requestRepository.findRequestById(requestId);
+    if (!request) {
+      const err = new Error("Request not found");
+      err.statusCode = 404;
+      throw err;
+    }
+    return request;
   }
 }
 
