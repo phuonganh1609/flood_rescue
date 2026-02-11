@@ -16,9 +16,10 @@
 - **Method:** `POST`
 - **Endpoint:** `/api/auth/register`
 - **Description:** Đăng ký tài khoản (Citizen)
-- **Request:** `{ fullname, phone, email, password }`
+- **Request:** `{ userName, displayName, email, phoneNumber, password, role? }`
 - **Response:** `{ userId }`
 - **Auth:** ❌ Không
+- **Note:** `phoneNumber` là bắt buộc (10-11 chữ số)
 
 ### Get Current User
 
@@ -35,19 +36,45 @@
 ### Create Rescue / Relief Request
 
 - **Method:** `POST`
-- **Endpoint:** `/api/requests/addRequest`
-- **Description:** Gửi yêu cầu cứu hộ / cứu trợ với URL ảnh từ Frontend
-- **Request:** `{ type, latitude, longitude, description, imageUrls[], priority, peopleCount, requestSupply[] }`
-- **Response:** `{ requestId, requestMedia[] }`
-- **Auth:** ❌ Không
-- **Note:** Frontend upload files trước, gửi URLs. Backend chỉ lưu URLs.
+- **Endpoint:** `/api/requests`
+- **Description:** Citizen tạo yêu cầu cứu hộ / cứu trợ (1 active request limit)
+- **Request:** `{ type, location: {type, coordinates}, description, incidentType?, peopleCount?, requestSupplies?, imageUrls[] }`
+- **Response:** `{ message, data: Request }`
+- **Auth:** ✅ Citizen
+- **Note:** `createdBy` = userId, `source` = `CITIZEN`, `phoneNumber` lấy từ User profile
+
+### Create Request On Behalf
+
+- **Method:** `POST`
+- **Endpoint:** `/api/requests/on-behalf`
+- **Description:** Coordinator tạo yêu cầu hộ citizen (qua hotline, v.v.)
+- **Request (citizen có tài khoản):** `{ citizenId, type, location, description, ... }`
+- **Request (citizen chưa có tài khoản):** `{ userName, phoneNumber, type, location, description, ... }`
+- **Response:** `{ message, data: Request }`
+- **Auth:** ✅ Coordinator
+- **Rules:**
+  - Nếu có `citizenId`: validate user tồn tại, check 1 active request
+  - Nếu không có `citizenId`: require `userName` + `phoneNumber`
+  - Status tự động = `VERIFIED`, `source` = `COORDINATOR`
+  - `createdBy` = Coordinator ID
+  - Coordinator có thể set `priority` ngay khi tạo
+
+### Search Citizens
+
+- **Method:** `GET`
+- **Endpoint:** `/api/requests/search-citizens?q=keyword`
+- **Description:** Coordinator tìm citizen theo tên hoặc SĐT (cho on-behalf)
+- **Query Params:** `q` (min 2 ký tự)
+- **Response:** `{ data: [{ _id, displayName, userName, phoneNumber, email }] }`
+- **Auth:** ✅ Coordinator
+- **Note:** Chỉ tìm user có role = Citizen, isActive = true. Limit 10 kết quả.
 
 ### Get All Requests
 
 - **Method:** `GET`
-- **Endpoint:** `/api/requests/getAll`
-- **Description:** Danh sách tất cả requests (hỗ trợ filter, pagination)
-- **Query Params:** `status, type, incidentType, priority, userName, page, limit`
+- **Endpoint:** `/api/requests`
+- **Description:** Danh sách tất cả requests (priority sorted, hỗ trợ filter, pagination)
+- **Query Params:** `status, type, incidentType, priority, userName, source, createdBy, page, limit`
 - **Response:** `{ data: Request[], total, page, limit, totalPages }`
 - **Auth:** ✅ Coordinator, RescueTeam
 
@@ -68,28 +95,59 @@
 - **Response:** `Request`
 - **Auth:** ✅ Citizen, Coordinator, RescueTeam
 
-### Update Request Status
+### Verify / Reject Request
 
 - **Method:** `PATCH`
-- **Endpoint:** `/api/requests/:requestId/status`
-- **Description:** Cập nhật trạng thái request (có validation state machine)
-- **Request:** `{ status, reason? }`
+- **Endpoint:** `/api/requests/:requestId/verify`
+- **Description:** Coordinator verify hoặc reject request
+- **Request:** `{ action: "VERIFY" | "REJECT", reason? }`
 - **Response:** `{ message, data }`
-- **Status Values:** `Submitted | Accepted | Rejected | In Progress | Completed | Cancelled`
-- **State Transitions:**
-  - `Submitted` → `Accepted` hoặc `Rejected`
-  - `Accepted` → `In Progress`
-  - `In Progress` → `Completed` hoặc `Cancelled`
-  - ⚠️ Không được update ngược trạng thái
 - **Auth:** ✅ Coordinator
 
-### Citizen Confirm Safe / Received
+### Close Request
 
 - **Method:** `PATCH`
-- **Endpoint:** `/api/requests/{id}/confirm`
-- **Description:** Citizen xác nhận an toàn
-- **Response:** `{ success }`
-- **Auth:** ✅ Citizen
+- **Endpoint:** `/api/requests/:requestId/close`
+- **Description:** Coordinator đóng request
+- **Response:** `{ message, data }`
+- **Auth:** ✅ Coordinator
+
+### Cancel Request
+
+- **Method:** `PATCH`
+- **Endpoint:** `/api/requests/:requestId/cancel`
+- **Description:** Citizen hoặc Coordinator huỷ request (chỉ khi SUBMITTED)
+- **Request:** `{ reason? }`
+- **Response:** `{ message, data }`
+- **Auth:** ✅ Citizen (own), Coordinator (any)
+
+### Mark as Duplicate
+
+- **Method:** `PATCH`
+- **Endpoint:** `/api/requests/:requestId/duplicate`
+- **Description:** Coordinator đánh dấu request trùng lặp
+- **Request:** `{ originalRequestId }`
+- **Response:** `{ message, data }`
+- **Auth:** ✅ Coordinator
+- **Rules:** Chỉ trước IN_PROGRESS, không chain, sync status/priority từ gốc
+
+### Update Location
+
+- **Method:** `PATCH`
+- **Endpoint:** `/api/requests/:requestId/location`
+- **Description:** Coordinator cập nhật vị trí và verify
+- **Request:** `{ location: {type, coordinates} }`
+- **Response:** `{ message, data }`
+- **Auth:** ✅ Coordinator
+
+### Update Priority
+
+- **Method:** `PATCH`
+- **Endpoint:** `/api/requests/:requestId/priority`
+- **Description:** Coordinator đổi priority (chỉ VERIFIED, không cho duplicate)
+- **Request:** `{ priority }`
+- **Response:** `{ message, data }`
+- **Auth:** ✅ Coordinator
 
 ---
 

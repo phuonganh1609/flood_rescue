@@ -23,9 +23,10 @@ const registerSchema = Joi.object({
   }),
   phoneNumber: Joi.string()
     .pattern(/^[0-9]{10,11}$/)
-    .allow(null, "")
+    .required()
     .messages({
       "string.pattern.base": "Số điện thoại phải có 10-11 chữ số",
+      "any.required": "Số điện thoại là bắt buộc",
     }),
   password: Joi.string().min(6).max(100).required().messages({
     "string.empty": "Mật khẩu không được để trống",
@@ -56,4 +57,4 @@ const loginSchema = Joi.object({
   }),
 });
 
-export { registerSchema, loginSchema};
+export { registerSchema, loginSchema };

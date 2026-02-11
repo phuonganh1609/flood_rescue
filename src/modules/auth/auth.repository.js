@@ -50,7 +50,7 @@ class AuthRepository {
    */
   async findUsersByRole(role) {
     return await User.find({ role }).select("-hashedPassword");
-  } 
+  }
 
   /**
    * Tạo user mới
@@ -70,6 +70,22 @@ class AuthRepository {
    */
   async updateUser(userId, updateData) {
     return await User.findByIdAndUpdate(userId, updateData, { new: true });
+  }
+
+  /**
+   * Tìm kiếm citizen theo displayName hoặc phoneNumber
+   * @param {string} query - search keyword
+   * @returns {Promise<Array>}
+   */
+  async searchCitizens(query) {
+    const regex = new RegExp(query, "i");
+    return await User.find({
+      role: "Citizen",
+      isActive: true,
+      $or: [{ displayName: regex }, { phoneNumber: regex }],
+    })
+      .select("displayName userName phoneNumber email")
+      .limit(10);
   }
 }
 

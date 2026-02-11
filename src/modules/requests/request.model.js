@@ -55,8 +55,24 @@ const RequestSchema = new Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      default: null, // null for unregistered citizens
+    },
+
+    // Who actually created this request
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
     },
+
+    source: {
+      type: String,
+      enum: ["CITIZEN", "COORDINATOR"],
+      default: "CITIZEN",
+    },
+
+    // Phone number of the requester (from User or manual input)
+    phoneNumber: { type: String, default: null },
 
     type: {
       type: String,

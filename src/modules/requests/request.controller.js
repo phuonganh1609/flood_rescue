@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { requestService } from "./request.service.js";
+import { authRepository } from "../auth/auth.repository.js";
 import {
   addRequestSchema,
   verifyRequestSchema,
@@ -7,6 +8,7 @@ import {
   markDuplicateSchema,
   updateLocationSchema,
   updatePrioritySchema,
+  createRequestOnBehalfSchema,
 } from "./request.validation.js";
 
 // ─── Helpers ──────────────────────────────────────────────
@@ -89,6 +91,8 @@ export const getAllRequests = async (req, res) => {
     if (req.query.priority) filter.priority = req.query.priority;
     if (req.query.userName)
       filter.userName = new RegExp(req.query.userName, "i");
+    if (req.query.source) filter.source = req.query.source;
+    if (req.query.createdBy) filter.createdBy = req.query.createdBy;
 
     // Use priority-sorted query for coordinators
     const result = await requestService.getAllRequestsPrioritized(filter, {
@@ -272,6 +276,50 @@ export const updatePriority = async (req, res) => {
       message: "Request priority updated successfully",
       data: updated,
     });
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+// ─── On Behalf ───────────────────────────────────────────
+
+/**
+ * POST /requests/on-behalf
+ * Actor: Coordinator
+ */
+export const createRequestOnBehalf = async (req, res) => {
+  try {
+    const value = validateBody(createRequestOnBehalfSchema, req.body, res);
+    if (!value) return;
+
+    const result = await requestService.createRequestOnBehalf(
+      req.user.id,
+      value,
+    );
+
+    res.status(201).json(result);
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+// ─── Citizen Search ──────────────────────────────────────
+
+/**
+ * GET /requests/search-citizens?q=keyword
+ * Actor: Coordinator
+ */
+export const searchCitizens = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 2) {
+      return res
+        .status(400)
+        .json({ message: "Search query must be at least 2 characters" });
+    }
+
+    const citizens = await authRepository.searchCitizens(q.trim());
+    res.json({ data: citizens });
   } catch (err) {
     handleError(err, res);
   }

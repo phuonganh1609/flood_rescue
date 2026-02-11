@@ -70,7 +70,7 @@ class AuthService {
       email,
       hashedPassword,
       role: role || "Citizen",
-      phoneNumber: phoneNumber || null,
+      phoneNumber,
       isActive: true,
     });
 

@@ -11,6 +11,8 @@ import {
   markDuplicate,
   updateLocation,
   updatePriority,
+  createRequestOnBehalf,
+  searchCitizens,
 } from "./request.controller.js";
 
 const router = express.Router();
@@ -31,6 +33,22 @@ router.get(
   authenticate,
   authorize(["Rescue Coordinator", "Rescue Team"]),
   getAllRequests,
+);
+
+// Search citizens by name/phone (for on-behalf creation)
+router.get(
+  "/search-citizens",
+  authenticate,
+  authorize(["Rescue Coordinator"]),
+  searchCitizens,
+);
+
+// Create request on behalf of citizen
+router.post(
+  "/on-behalf",
+  authenticate,
+  authorize(["Rescue Coordinator"]),
+  createRequestOnBehalf,
 );
 
 // ─── Single Request ───────────────────────────────────────

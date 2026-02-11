@@ -13,7 +13,8 @@ const UserSchema = new Schema(
     },
     phoneNumber: {
       type: String,
-      sparse: true, //cho phép null values nhưng unique
+      required: true,
+      unique: true,
     },
     email: {
       type: String,

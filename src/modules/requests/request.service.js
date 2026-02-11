@@ -53,7 +53,7 @@ function assertTransition(currentStatus, newStatus) {
  */
 class RequestService {
   /**
-   * Create a new request
+   * Create a new request (Citizen self-service)
    * Validates: 1 active request per Citizen
    */
   async createRequest(userId, requestData) {
@@ -85,7 +85,6 @@ class RequestService {
       imageUrls,
     } = requestData;
 
-    // Map imageUrls to media format
     const media = (imageUrls || []).map((url) => ({
       imageUrl: url,
       uploadedAt: new Date(),
@@ -94,6 +93,9 @@ class RequestService {
     const newRequest = await requestRepository.createRequest({
       userId,
       userName: user.displayName || user.userName,
+      phoneNumber: user.phoneNumber,
+      createdBy: userId,
+      source: "CITIZEN",
       type,
       incidentType: incidentType || "Other",
       location,
@@ -110,6 +112,103 @@ class RequestService {
 
     return {
       message: "Request created successfully",
+      data: newRequest,
+    };
+  }
+
+  /**
+   * Create a request on behalf of a citizen (Coordinator only)
+   * - If citizenId provided: link to existing citizen, check active request
+   * - If no citizenId: use userName + phoneNumber from body, userId = null
+   * - Status auto-set to VERIFIED
+   */
+  async createRequestOnBehalf(coordinatorId, requestData) {
+    const {
+      citizenId,
+      userName: inputUserName,
+      phoneNumber: inputPhoneNumber,
+      type,
+      incidentType,
+      location,
+      description,
+      peopleCount,
+      priority,
+      requestSupplies,
+      imageUrls,
+    } = requestData;
+
+    let userId = null;
+    let userName;
+    let phoneNumber;
+
+    if (citizenId) {
+      // Registered citizen — validate and check active request
+      const citizen = await authRepository.findUserById(citizenId);
+      if (!citizen) {
+        const err = new Error("Citizen not found");
+        err.statusCode = 404;
+        throw err;
+      }
+      if (citizen.role !== "Citizen") {
+        const err = new Error("The specified user is not a Citizen");
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const activeRequest =
+        await requestRepository.findActiveRequest(citizenId);
+      if (activeRequest) {
+        const err = new Error(
+          "This citizen already has an active request. " +
+            "Cannot create another until the current one is closed or cancelled.",
+        );
+        err.statusCode = 400;
+        throw err;
+      }
+
+      userId = citizenId;
+      userName = citizen.displayName || citizen.userName;
+      phoneNumber = citizen.phoneNumber;
+    } else {
+      // Unregistered citizen — use body input
+      userName = inputUserName;
+      phoneNumber = inputPhoneNumber;
+    }
+
+    const media = (imageUrls || []).map((url) => ({
+      imageUrl: url,
+      uploadedAt: new Date(),
+    }));
+
+    const newRequest = await requestRepository.createRequest({
+      userId,
+      userName,
+      phoneNumber,
+      createdBy: coordinatorId,
+      source: "COORDINATOR",
+      type,
+      incidentType: incidentType || "Other",
+      location,
+      description,
+      peopleCount: peopleCount || 1,
+      priority: priority || "Normal",
+      status: REQUEST_STATUS.VERIFIED, // auto-verified
+      requestSupplies: requestSupplies || [],
+      media,
+    });
+
+    // Emit both events for consistency
+    eventBus.emit("REQUEST_SUBMITTED", {
+      requestId: newRequest._id,
+      userId: userId || coordinatorId,
+    });
+    eventBus.emit("REQUEST_VERIFIED", {
+      requestId: newRequest._id,
+      userId: userId || coordinatorId,
+    });
+
+    return {
+      message: "Request created on behalf successfully",
       data: newRequest,
     };
   }

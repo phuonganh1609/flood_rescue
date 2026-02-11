@@ -294,6 +294,21 @@ paths:
           required: false
           schema:
             type: string
+        - name: source
+          in: query
+          description: Filter by request source
+          required: false
+          schema:
+            type: string
+            enum:
+              - CITIZEN
+              - COORDINATOR
+        - name: createdBy
+          in: query
+          description: Filter by creator ID (ObjectId)
+          required: false
+          schema:
+            type: string
         - name: page
           in: query
           description: Page number for pagination
@@ -626,6 +641,142 @@ paths:
                 $ref: "#/components/schemas/Error"
         "401":
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/requests/on-behalf:
+    post:
+      tags:
+        - Requests
+      summary: Create request on behalf of citizen
+      description: |
+        Coordinator creates a request on behalf of a citizen.
+        - If `citizenId` is provided: links to existing citizen account, checks 1 active request rule.
+        - If `citizenId` is NOT provided: requires `userName` and `phoneNumber` for unregistered citizen.
+        - Status is automatically set to `VERIFIED`.
+        - `source` is set to `COORDINATOR`, `createdBy` = coordinator ID.
+      operationId: createRequestOnBehalf
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequestOnBehalfInput"
+      responses:
+        "201":
+          description: Request created on behalf successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Request created on behalf successfully
+                  data:
+                    $ref: "#/components/schemas/Request"
+        "400":
+          description: Validation failed or citizen has active request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Citizen not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/requests/search-citizens:
+    get:
+      tags:
+        - Requests
+      summary: Search citizens for on-behalf creation
+      description: |
+        Coordinator searches for citizens by display name or phone number.
+        Only returns active users with role = Citizen. Limited to 10 results.
+      operationId: searchCitizens
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Search keyword (min 2 characters)
+          required: true
+          schema:
+            type: string
+            minLength: 2
+      responses:
+        "200":
+          description: Citizens found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          example: "60d5ec49f1b2c8b1f8e4e1a1"
+                        displayName:
+                          type: string
+                          example: "Nguyen Van A"
+                        userName:
+                          type: string
+                          example: "nguyenvana"
+                        phoneNumber:
+                          type: string
+                          example: "0901234567"
+                        email:
+                          type: string
+                          example: "nguyenvana@example.com"
+        "400":
+          description: Search query too short
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Coordinator only
           content:
             application/json:
               schema:
@@ -1608,6 +1759,7 @@ components:
         - userName
         - displayName
         - email
+        - phoneNumber
         - password
       properties:
         userName:
@@ -1628,7 +1780,7 @@ components:
           type: string
           pattern: "^[0-9]{10,11}$"
           example: "0901234567"
-          description: "Optional phone number"
+          description: "Required phone number (10-11 digits)"
         password:
           type: string
           minLength: 6
@@ -1834,12 +1986,29 @@ components:
           example: "60d5ec49f1b2c8b1f8e4e1a3"
         userName:
           type: string
-          description: Name of the user who created the request
+          description: Name of the requester
           example: "Nguyen Van A"
         userId:
           type: string
-          description: ID of the user who created the request
+          nullable: true
+          description: ID of the citizen user (null for unregistered citizens)
           example: "60d5ec49f1b2c8b1f8e4e1a1"
+        createdBy:
+          type: string
+          description: ID of the user who created this request
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        source:
+          type: string
+          enum:
+            - CITIZEN
+            - COORDINATOR
+          description: Origin of the request
+          example: CITIZEN
+        phoneNumber:
+          type: string
+          nullable: true
+          description: Phone number of the requester
+          example: "0901234567"
         type:
           type: string
           enum:
@@ -1855,14 +2024,18 @@ components:
             - Landslide
             - Other
           example: Flood
-        latitude:
-          type: number
-          format: double
-          example: 10.762622
-        longitude:
-          type: number
-          format: double
-          example: 106.660172
+        location:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [Point]
+              example: Point
+            coordinates:
+              type: array
+              items:
+                type: number
+              example: [106.660172, 10.762622]
         description:
           type: string
           example: "Trapped in flooded house on second floor"
@@ -1881,17 +2054,26 @@ components:
         status:
           type: string
           enum:
-            - Pending
-            - In Progress
-            - Completed
-            - Cancelled
-          example: Pending
-        requestSupply:
+            - SUBMITTED
+            - VERIFIED
+            - REJECTED
+            - IN_PROGRESS
+            - PARTIALLY_FULFILLED
+            - FULFILLED
+            - CLOSED
+            - CANCELLED
+          example: SUBMITTED
+        requestSupplies:
           type: array
           items:
-            type: string
-          example: ["Food", "Water", "First aid kit"]
-        requestMedia:
+            type: object
+            properties:
+              supplyId:
+                type: string
+              requestedQty:
+                type: integer
+                minimum: 1
+        media:
           type: array
           items:
             type: object
@@ -1902,16 +2084,117 @@ components:
                 example: "https://example.com/image.jpg"
               description:
                 type: string
-                example: "Photo of flooded area"
               uploadedAt:
                 type: string
                 format: date-time
+        isDuplicated:
+          type: boolean
+          default: false
+        duplicatedOfRequestId:
+          type: string
+          nullable: true
+        isLocationVerified:
+          type: boolean
+          default: false
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+
+    CreateRequestOnBehalfInput:
+      type: object
+      required:
+        - type
+        - location
+        - description
+      properties:
+        citizenId:
+          type: string
+          description: ID of an existing citizen user. If provided, userName and phoneNumber are forbidden.
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        userName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          description: Required when citizenId is not provided
+          example: "Tran Van B"
+        phoneNumber:
+          type: string
+          pattern: "^[0-9]{10,11}$"
+          description: Required when citizenId is not provided
+          example: "0987654321"
+        type:
+          type: string
+          enum:
+            - Rescue
+            - Relief
+          example: Rescue
+        incidentType:
+          type: string
+          enum:
+            - Flood
+            - Trapped
+            - Injured
+            - Landslide
+            - Other
+          default: Other
+        location:
+          type: object
+          required:
+            - type
+            - coordinates
+          properties:
+            type:
+              type: string
+              enum: [Point]
+              default: Point
+            coordinates:
+              type: array
+              items:
+                type: number
+              minItems: 2
+              maxItems: 2
+              description: "[longitude, latitude]"
+              example: [106.660172, 10.762622]
+        description:
+          type: string
+          minLength: 10
+          maxLength: 500
+          example: "Citizen called via hotline, trapped on rooftop."
+        peopleCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 1
+        priority:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Normal
+          default: Normal
+          description: Coordinator can set priority at creation
+        requestSupplies:
+          type: array
+          items:
+            type: object
+            required:
+              - supplyId
+              - requestedQty
+            properties:
+              supplyId:
+                type: string
+              requestedQty:
+                type: integer
+                minimum: 1
+        imageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          maxItems: 5
 
     CreateMissionRequest:
       type: object

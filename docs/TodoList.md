@@ -8,15 +8,15 @@
 
 ## 📊 Trạng thái tổng quan
 
-| Module             | Tiến độ | Ghi chú                                   |
-| ------------------ | ------- | ----------------------------------------- |
-| Authentication     | ~85%    | Login, Register, JWT, Session             |
-| Request Management | ~90%    | Unified Flow 2.2, 10 endpoints            |
-| Mission & Timeline | 0%      | Core feature chưa implement               |
-| Team Management    | ~25%    | Có model, thiếu full CRUD                 |
-| Supply Management  | ~5%     | Chỉ có model cơ bản                       |
-| Notification       | ~80%    | WebSocket + REST API, thiếu một số events |
-| Position Tracking  | 0%      | GPS tracking chưa implement               |
+| Module             | Tiến độ | Ghi chú                                             |
+| ------------------ | ------- | --------------------------------------------------- |
+| Authentication     | ~85%    | Login, Register, JWT, Session, phoneNumber required |
+| Request Management | ~95%    | Unified Flow 2.2, 12 endpoints, on-behalf creation  |
+| Mission & Timeline | 0%      | Core feature chưa implement                         |
+| Team Management    | ~25%    | Có model, thiếu full CRUD                           |
+| Supply Management  | ~5%     | Chỉ có model cơ bản                                 |
+| Notification       | ~80%    | WebSocket + REST API, thiếu một số events           |
+| Position Tracking  | 0%      | GPS tracking chưa implement                         |
 
 ---
 
@@ -26,11 +26,12 @@
 
 - [x] User model với roles (Citizen, Rescue Team, Coordinator, Admin, Manager)
 - [x] Login API (`POST /api/auth/login`)
-- [x] Register API (`POST /api/auth/register`)
+- [x] Register API (`POST /api/auth/register`) — `phoneNumber` bắt buộc
 - [x] Get current user (`GET /api/auth/me`)
 - [x] JWT token generation & validation
 - [x] Session management với Refresh Token
 - [x] Password hashing (bcrypt)
+- [x] Citizen search (`searchCitizens` in auth.repository) — tìm theo displayName/phoneNumber
 
 ### Not Implemented ❌
 
@@ -50,27 +51,30 @@
 - [x] State machine validation cho tất cả status transitions
 - [x] `requestSupplies` structured format `[{supplyId, requestedQty}]`
 - [x] Fields: `isDuplicated`, `duplicatedOfRequestId`, `isLocationVerified`
+- [x] Fields: `createdBy`, `source` (`CITIZEN`/`COORDINATOR`), `phoneNumber`
+- [x] `userId` optional (null cho citizen chưa có tài khoản)
 - [x] Validate 1 active request per Citizen (terminal: CLOSED/CANCELLED/REJECTED)
 - [x] Auto-prioritization sorting (priority → peopleCount → createdAt)
 - [x] Event emission cho tất cả status changes
 
 **Endpoints:**
 
-- [x] `POST /api/requests` - Citizen tạo request (1 active limit)
-- [x] `GET /api/requests` - Coordinator/Team xem tất cả (priority sorted)
-- [x] `GET /api/requests/my` - Citizen xem request của mình
-- [x] `GET /api/requests/:id` - Xem chi tiết request
-- [x] `PATCH /api/requests/:id/verify` - Coordinator verify/reject → `VERIFIED`/`REJECTED`
-- [x] `PATCH /api/requests/:id/close` - Coordinator close → `CLOSED`
-- [x] `PATCH /api/requests/:id/cancel` - Citizen/Coordinator cancel → `CANCELLED` (chỉ khi SUBMITTED)
-- [x] `PATCH /api/requests/:id/duplicate` - Coordinator mark duplicate (sync status/priority từ gốc, chỉ trước IN_PROGRESS, không chain)
-- [x] `PATCH /api/requests/:id/location` - Coordinator update location & verify
-- [x] `PATCH /api/requests/:id/priority` - Coordinator đổi priority (chỉ VERIFIED, không cho duplicate)
+- [x] `POST /api/requests` — Citizen tạo request (1 active limit, source=CITIZEN)
+- [x] `POST /api/requests/on-behalf` — Coordinator tạo hộ citizen (auto-VERIFIED, source=COORDINATOR)
+- [x] `GET /api/requests/search-citizens?q=` — Coordinator tìm citizen theo tên/SĐT
+- [x] `GET /api/requests` — Coordinator/Team xem tất cả (priority sorted, filter: source, createdBy)
+- [x] `GET /api/requests/my` — Citizen xem request của mình
+- [x] `GET /api/requests/:id` — Xem chi tiết request
+- [x] `PATCH /api/requests/:id/verify` — Coordinator verify/reject → `VERIFIED`/`REJECTED`
+- [x] `PATCH /api/requests/:id/close` — Coordinator close → `CLOSED`
+- [x] `PATCH /api/requests/:id/cancel` — Citizen/Coordinator cancel → `CANCELLED` (chỉ khi SUBMITTED)
+- [x] `PATCH /api/requests/:id/duplicate` — Coordinator mark duplicate (sync status/priority từ gốc, chỉ trước IN_PROGRESS, không chain)
+- [x] `PATCH /api/requests/:id/location` — Coordinator update location & verify
+- [x] `PATCH /api/requests/:id/priority` — Coordinator đổi priority (chỉ VERIFIED, không cho duplicate)
 
 ### Not Implemented ❌
 
 - [ ] Derivation logic: Auto-update status dựa trên Timeline results
-- [ ] Request creation on behalf of Citizen (Coordinator with their userId)
 - [ ] Duplicate detection algorithm (location + time + citizen) - Future enhancement
 
 ---
@@ -285,6 +289,8 @@
 - **Multi-timeline**: 1 Request có thể có nhiều Timelines (reassignment, scale-out).
 - **Cancel rule**: Chỉ SUBMITTED mới được cancel (cả Citizen và Coordinator).
 - **Duplicate rule**: Sau khi mark duplicate → sync status/priority từ gốc. Không chain duplicate.
+- **On-behalf creation**: Coordinator có thể tạo hộ citizen (có/không tài khoản). Auto-VERIFIED, source=COORDINATOR.
+- **phoneNumber**: Bắt buộc khi đăng ký. Lưu trên cả User và Request.
 
 ---
 
