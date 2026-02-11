@@ -80,7 +80,7 @@ stateDiagram-v2
 
     ON_SITE --> COMPLETED : done full
     ON_SITE --> PARTIAL : done partial
-    ON_SITE --> FAILED : failed to disturb
+    ON_SITE --> FAILED : failed to distribute
 
     ASSIGNED --> CANCELLED : coordinator cancels
 
@@ -138,9 +138,114 @@ stateDiagram-v2
 - **Request = PARTIALLY_FULFILLED** khi `Sum(...) < Request.need_amount` và hết timeline chạy.
 - **Tracking**: Relief Team cũng gửi tọa độ GPS liên tục khi `EN_ROUTE` để Citizen theo dõi.
 
+### Supply Tracking Rules
+
+Relief Flow sử dụng Supply Management giống Rescue Flow:
+
+| Phase            | Timing                   | Action                                 |
+| ---------------- | ------------------------ | -------------------------------------- |
+| **Planning**     | Coordinator assigns team | Reserve supplies từ Warehouse          |
+| **Carrying**     | Team accepts             | Deduct inventory, confirm `carriedQty` |
+| **Distribution** | Team completes           | Report `distributedQty`, return unused |
+
+> Chi tiết xem [Supply_management.md](../Supply_management.md)
+
 ---
 
-## 5. References
+## 5. Request Priority Rules
+
+Khi Coordinator có nhiều Requests cần xử lý cùng lúc, ưu tiên theo thứ tự:
+
+1. **Mức độ khẩn cấp (priority)** - _Coordinator gắn flag thủ công khi verify_
+   - `CRITICAL` (High): Nguy hiểm tính mạng ngay lập tức
+   - `HIGH` (Medium): Nguy cơ cao, chưa khẩn cấp tức thì
+   - `NORMAL` (Low): Hỗ trợ khi có điều kiện
+
+2. **Số người bị ảnh hưởng (peopleCount)**
+   - Ưu tiên request có nhiều người hơn
+
+3. **Thời gian tạo yêu cầu (createdAt)**
+   - First-come-first-served nếu priority và peopleCount bằng nhau
+
+---
+
+## 6. Validation & Duplicate Detection
+
+### Request Creation Validation
+
+**Rule:** Một Citizen chỉ được tạo Request mới khi request hiện tại đã ở terminal states (`CLOSED` hoặc `CANCELLED`).
+
+```mermaid
+sequenceDiagram
+    participant Citizen
+    participant API
+
+    Citizen->>API: POST /requests
+    API->>API: Check active requests
+
+    alt Has active request (not CLOSED/CANCELLED)
+        API-->>Citizen: 400 Bad Request - Already has active request
+    else No active request
+        API->>API: Create Request (status=SUBMITTED)
+        API-->>Citizen: 201 Created
+    end
+```
+
+### Duplicate Detection
+
+Coordinator đánh dấu duplicate thủ công. _Future: Hệ thống đề xuất duplicate dựa trên location + time + citizen._
+
+```mermaid
+sequenceDiagram
+    participant Coordinator
+    participant API
+    participant Noti
+
+    Coordinator->>API: PATCH /requests/{id}/duplicate
+    Note right of Coordinator: {duplicatedOfRequestId}
+
+    API->>API: isDuplicated = true
+    API->>API: duplicatedOfRequestId = originalId
+    Note right of API: Request giữ status hiện tại
+    API->>Noti: emit RequestMarkedDuplicate
+    API-->>Coordinator: 200 OK
+```
+
+> **Note:** Request được đánh dấu duplicate vẫn được xử lý bình thường và có thể chuyển qua các status như request thông thường, nhưng sẽ được link với request gốc để tracking.
+
+### Location Verification
+
+Coordinator có thể cập nhật location và đánh dấu verified.
+
+```mermaid
+sequenceDiagram
+    participant Coordinator
+    participant API
+
+    Coordinator->>API: PATCH /requests/{id}/location
+    Note right of Coordinator: {location, isLocationVerified}
+
+    API->>API: Update location
+    API->>API: isLocationVerified = true
+    API-->>Coordinator: 200 OK
+```
+
+---
+
+## 7. API Endpoints Summary
+
+| Method  | Endpoint                   | Actor               | Description                                       |
+| :------ | :------------------------- | :------------------ | :------------------------------------------------ |
+| `POST`  | `/requests`                | Citizen/Coordinator | Create request (validates 1 active request limit) |
+| `PATCH` | `/requests/{id}/verify`    | Coordinator         | Verify request → `VERIFIED` / `REJECTED`          |
+| `PATCH` | `/requests/{id}/duplicate` | Coordinator         | Mark as duplicate                                 |
+| `PATCH` | `/requests/{id}/location`  | Coordinator         | Update location & verify                          |
+| `PATCH` | `/timelines/{id}/complete` | Team                | Report completion → `COMPLETED` / `PARTIAL`       |
+
+---
+
+## 8. References
 
 - [rules.md](./rules.md) - Rules chính thức.
 - [Rescue_flow_2.2.md](./Rescue_flow_2.2.md) - Flow cứu hộ tương ứng.
+- [Supply_management.md](../Supply_management.md) - Supply tracking 3-phase.

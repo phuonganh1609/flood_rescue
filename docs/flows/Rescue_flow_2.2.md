@@ -85,6 +85,7 @@ sequenceDiagram
     participant Coordinator as Coordinator Dashboard
     participant Team as Rescue Team App
     participant API as API Server
+    participant Inv as Inventory
     participant Noti as Notification Service
 
     %% -----------------------------
@@ -110,7 +111,7 @@ sequenceDiagram
     end
 
     %% -----------------------------
-    %% Create Mission & Assign (Multi-timeline capability)
+    %% Create Mission & Assign + Plan Supplies
     %% -----------------------------
     Coordinator ->> API: POST /missions (requestId)
     API ->> API: create Mission (status=PLANNED)
@@ -121,12 +122,23 @@ sequenceDiagram
     API ->> Noti: emit MissionAssigned
     Noti ->> Team: New mission assigned
 
+    %% Supply Planning Phase
+    Note over Coordinator,Inv: Supply Planning Phase
+    Coordinator ->> API: POST /timelines/{id}/supplies/plan
+    Note right of Coordinator: [{supplyId, warehouseId, plannedQty}]
+    API ->> Inv: Reserve quantity
+    Inv -->> API: reservedQuantity += plannedQty
+
     %% -----------------------------
-    %% Team Execution (GPS Tracking)
+    %% Team Execution (GPS Tracking + Supply Carry)
     %% -----------------------------
+    %% Supply Carrying Phase
+    Note over Team,Inv: Supply Carrying Phase
     Team ->> API: PATCH /timelines/{id}/accept
-    API ->> API: Timeline = EN_ROUTE
-    API ->> API: Mission = IN_PROGRESS
+    Note right of Team: {supplies: [{supplyId, carriedQty}]}
+    API ->> Inv: Deduct inventory
+    Inv -->> API: quantity -= carriedQty, reservedQuantity -= plannedQty
+    API ->> API: Timeline = EN_ROUTE, Mission = IN_PROGRESS
     API ->> Citizen: Push "Team is on the way"
 
     loop GPS Updates
@@ -139,12 +151,15 @@ sequenceDiagram
     API ->> Citizen: Push "Team has arrived"
 
     %% -----------------------------
-    %% Completion & Partial Logic
+    %% Completion & Supply Report
     %% -----------------------------
+    %% Supply Distribution & Return Phase
+    Note over Team,Inv: Supply Distribution & Return Phase
     alt Rescue Full Success
         Team ->> API: PATCH /timelines/{id}/complete
+        Note right of Team: {rescued: 5, supplies: [{distributedQty, returnedQty}]}
         API ->> API: Timeline = COMPLETED
-        API ->> API: Check Request Total vs Need
+        API ->> Inv: Return unused: quantity += returnedQty
         API ->> API: Request = FULFILLED
         API ->> Noti: emit RescueCompleted
         Noti ->> Citizen: All rescued!
@@ -153,8 +168,9 @@ sequenceDiagram
         API ->> API: Request = CLOSED
     else Rescue Partial / Failed
         Team ->> API: PATCH /timelines/{id}/complete (or fail)
-        Note over Team: Report: Rescued 2/5 people
+        Note over Team: Report: Rescued 2/5, supplies used + returned
         API ->> API: Timeline = PARTIAL
+        API ->> Inv: Return unused supplies
         API ->> API: Request = PARTIALLY_FULFILLED
 
         Note over Coordinator: Need more teams for remaining 3 people
@@ -268,16 +284,99 @@ _(Tham chiếu đầy đủ xem tại [rules.md](./rules.md))_
 
 ---
 
+## Request Priority Rules
+
+Khi Coordinator có nhiều Requests cần xử lý cùng lúc, ưu tiên theo thứ tự:
+
+1. **Mức độ khẩn cấp (priority)** - _Coordinator gắn flag thủ công khi verify_
+   - `CRITICAL` (High): Nguy hiểm tính mạng ngay lập tức
+   - `HIGH` (Medium): Nguy cơ cao, chưa khẩn cấp tức thì
+   - `NORMAL` (Low): Hỗ trợ khi có điều kiện
+
+2. **Số người bị ảnh hưởng (peopleCount)**
+   - Ưu tiên request có nhiều người hơn
+
+3. **Thời gian tạo yêu cầu (createdAt)**
+   - First-come-first-served nếu priority và peopleCount bằng nhau
+
+---
+
+## Validation & Duplicate Detection
+
+### Request Creation Validation
+
+**Rule:** Một Citizen chỉ được tạo Request mới khi request hiện tại đã ở terminal states (`CLOSED` hoặc `CANCELLED`).
+
+```mermaid
+sequenceDiagram
+    participant Citizen
+    participant API
+
+    Citizen->>API: POST /requests
+    API->>API: Check active requests
+
+    alt Has active request (not CLOSED/CANCELLED)
+        API-->>Citizen: 400 Bad Request - Already has active request
+    else No active request
+        API->>API: Create Request (status=SUBMITTED)
+        API-->>Citizen: 201 Created
+    end
+```
+
+### Duplicate Detection
+
+Coordinator đánh dấu duplicate thủ công. _Future: Hệ thống đề xuất duplicate dựa trên location + time + citizen._
+
+```mermaid
+sequenceDiagram
+    participant Coordinator
+    participant API
+    participant Noti
+
+    Coordinator->>API: PATCH /requests/{id}/duplicate
+    Note right of Coordinator: {duplicatedOfRequestId}
+
+    API->>API: isDuplicated = true
+    API->>API: duplicatedOfRequestId = originalId
+    Note right of API: Request giữ status hiện tại
+    API->>Noti: emit RequestMarkedDuplicate
+    API-->>Coordinator: 200 OK
+```
+
+> **Note:** Request được đánh dấu duplicate vẫn được xử lý bình thường và có thể chuyển qua các status như request thông thường, nhưng sẽ được link với request gốc để tracking.
+
+### Location Verification
+
+Coordinator có thể cập nhật location và đánh dấu verified.
+
+```mermaid
+sequenceDiagram
+    participant Coordinator
+    participant API
+
+    Coordinator->>API: PATCH /requests/{id}/location
+    Note right of Coordinator: {location, isLocationVerified}
+
+    API->>API: Update location
+    API->>API: isLocationVerified = true
+    API-->>Coordinator: 200 OK
+```
+
+---
+
 ## API Endpoints Summary
 
-| Method  | Endpoint                   | Actor       | Description                                     |
-| :------ | :------------------------- | :---------- | :---------------------------------------------- |
-| `PATCH` | `/requests/{id}/verify`    | Coordinator | Verify request -> `VERIFIED` / `REJECTED`       |
-| `PATCH` | `/requests/{id}/close`     | Coordinator | Close valid request -> `CLOSED`                 |
-| `PATCH` | `/missions/{id}/assign`    | Coordinator | Assign team -> Create new Timeline (`ASSIGNED`) |
-| `PATCH` | `/timelines/{id}/accept`   | Team        | Accept -> `EN_ROUTE`                            |
-| `PATCH` | `/timelines/{id}/arrive`   | Team        | Arrive -> `ON_SITE`                             |
-| `PATCH` | `/timelines/{id}/complete` | Team        | Finish -> `COMPLETED` / `PARTIAL`               |
+| Method  | Endpoint                   | Actor               | Description                                       |
+| :------ | :------------------------- | :------------------ | :------------------------------------------------ |
+| `POST`  | `/requests`                | Citizen/Coordinator | Create request (validates 1 active request limit) |
+| `PATCH` | `/requests/{id}/verify`    | Coordinator         | Verify request → `VERIFIED` / `REJECTED`          |
+| `PATCH` | `/requests/{id}/close`     | Coordinator         | Close valid request → `CLOSED`                    |
+| `PATCH` | `/requests/{id}/duplicate` | Coordinator         | Mark as duplicate                                 |
+| `PATCH` | `/requests/{id}/location`  | Coordinator         | Update location & verify                          |
+| `PATCH` | `/missions/{id}/assign`    | Coordinator         | Assign team → Create new Timeline (`ASSIGNED`)    |
+| `PATCH` | `/timelines/{id}/accept`   | Team                | Accept → `EN_ROUTE`                               |
+| `PATCH` | `/timelines/{id}/arrive`   | Team                | Arrive → `ON_SITE`                                |
+| `PATCH` | `/timelines/{id}/complete` | Team                | Finish → `COMPLETED` / `PARTIAL`                  |
 
 ---
 

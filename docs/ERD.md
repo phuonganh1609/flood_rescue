@@ -18,6 +18,11 @@ erDiagram
     Mission ||--o{ Timeline : "has"
     Team ||--o{ Timeline : "assigned to"
     Timeline ||--o{ Position : "tracks"
+    Timeline ||--o{ TimelineSupply : "tracks supplies"
+
+    Supply ||--o{ InventoryItem : "stored as"
+    Supply ||--o{ TimelineSupply : "referenced by"
+    Warehouse ||--o{ InventoryItem : "contains"
 
     User {
         ObjectId _id PK
@@ -57,6 +62,9 @@ erDiagram
         String status
         Array requestSupplies
         Array media
+        Boolean isDuplicated
+        ObjectId duplicatedOfRequestId FK
+        Boolean isLocationVerified
         DateTime createdAt
         DateTime updatedAt
     }
@@ -93,6 +101,50 @@ erDiagram
         GeoJSON location
         DateTime timestamp
         DateTime createdAt
+    }
+
+    Supply {
+        ObjectId _id PK
+        String name UK
+        String category
+        String unit
+        Number unitWeight
+        String description
+        Boolean isActive
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    Warehouse {
+        ObjectId _id PK
+        String name UK
+        GeoJSON location
+        String status
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    InventoryItem {
+        ObjectId _id PK
+        ObjectId warehouseId FK
+        ObjectId supplyId FK
+        Number quantity
+        Number reservedQuantity
+        DateTime lastUpdated
+    }
+
+    TimelineSupply {
+        ObjectId _id PK
+        ObjectId timelineId FK
+        ObjectId supplyId FK
+        ObjectId warehouseId FK
+        Number plannedQty
+        Number carriedQty
+        Number distributedQty
+        Number returnedQty
+        String note
+        DateTime createdAt
+        DateTime updatedAt
     }
 
     Session {
@@ -152,26 +204,50 @@ Người dùng hệ thống với các roles: Citizen, Rescue Team, Coordinator,
 | `leaderId` | ObjectId | FK → User (team leader) |
 | `status`   | Enum     | AVAILABLE, BUSY         |
 
+> [!NOTE]
+> **Team Capacity:** Một Rescue Team có thể xử lý nhiều nhiệm vụ song song tùy theo điều phối của Rescue Coordinator. Hệ thống không giới hạn số lượng Timeline active per Team.
+
 ---
 
 #### Request
 
 Yêu cầu cứu hộ từ Citizen.
 
-| Field             | Type          | Description                                                      |
-| ----------------- | ------------- | ---------------------------------------------------------------- |
-| `_id`             | ObjectId      | Primary key                                                      |
-| `userId`          | ObjectId      | FK → User (citizen)                                              |
-| `userName`        | String        | Tên người gửi                                                    |
-| `requestType`     | Enum          | Rescue, Relief                                                   |
-| `incidentType`    | Enum          | Flood, Trapped, Injured, Landslide, Other                        |
-| `location`        | GeoJSON Point | `{ type: "Point", coordinates: [lng, lat] }`                     |
-| `description`     | String        | Mô tả tình huống                                                 |
-| `peopleCount`     | Number        | Số người cần cứu (1-100)                                         |
-| `priority`        | Enum          | Critical, High, Normal                                           |
-| `status`          | Enum          | Submitted, Accepted, Rejected, In Progress, Completed, Cancelled |
-| `requestSupplies` | String[]      | Danh sách supplies cần thiết                                     |
-| `media`           | String[]      | Danh sách URL hình ảnh                                           |
+| Field                   | Type          | Description                                                      |
+| ----------------------- | ------------- | ---------------------------------------------------------------- |
+| `_id`                   | ObjectId      | Primary key                                                      |
+| `userId`                | ObjectId      | FK → User (Citizen hoặc Coordinator nếu tạo thay mặt)            |
+| `userName`              | String        | Tên người gửi                                                    |
+| `requestType`           | Enum          | Rescue, Relief                                                   |
+| `incidentType`          | Enum          | Flood, Trapped, Injured, Landslide, Other                        |
+| `location`              | GeoJSON Point | `{ type: "Point", coordinates: [lng, lat] }`                     |
+| `description`           | String        | Mô tả tình huống                                                 |
+| `peopleCount`           | Number        | Số người cần cứu (1-100)                                         |
+| `priority`              | Enum          | Critical, High, Normal                                           |
+| `status`                | Enum          | Submitted, Accepted, Rejected, In Progress, Completed, Cancelled |
+| `requestSupplies`       | Array         | `[{ supplyId: ObjectId, requestedQty: Number }]` - Supplies cần  |
+| `media`                 | String[]      | Danh sách URL hình ảnh                                           |
+| `isDuplicated`          | Boolean       | Coordinator đánh dấu nếu request trùng (default: false)          |
+| `duplicatedOfRequestId` | ObjectId?     | FK → Request (request gốc nếu là duplicate)                      |
+| `isLocationVerified`    | Boolean       | Coordinator verify location chính xác (default: false)           |
+
+**Business Rules:**
+
+> [!IMPORTANT]
+> **Request Limit:** Một Citizen chỉ được tạo Request mới khi request hiện tại đã ở terminal states (`CLOSED` hoặc `CANCELLED`). Hệ thống validate và reject request mới nếu vi phạm.
+
+> [!NOTE]
+> **Priority Assignment:** Priority flag được Coordinator gắn thủ công khi verify request. Thứ tự ưu tiên xử lý:
+>
+> 1. Mức độ khẩn cấp (priority)
+> 2. Số người bị ảnh hưởng (peopleCount)
+> 3. Thời gian tạo (createdAt)
+
+> [!NOTE]
+> **Duplicate Detection:** Coordinator đánh dấu duplicate thủ công (`isDuplicated = true`). Request duplicate vẫn được verify và có status giống request chính. _Future enhancement: Hệ thống đề xuất duplicate dựa trên location + time + citizen._
+
+> [!NOTE]
+> **On Behalf Creation:** Coordinator có thể tạo Request thay mặt Citizen. Request này có `userId` của Coordinator và flow verify giống Request thường.
 
 ---
 
@@ -227,6 +303,72 @@ Vị trí theo thời gian thực của Team trong quá trình thực hiện Tim
 
 ---
 
+### Supply Management Entities
+
+#### Supply
+
+Danh mục supplies chuẩn của hệ thống.
+
+| Field         | Type     | Description                                      |
+| ------------- | -------- | ------------------------------------------------ |
+| `_id`         | ObjectId | Primary key                                      |
+| `name`        | String   | Tên supply (unique)                              |
+| `category`    | Enum     | FOOD, WATER, MEDICAL, CLOTHING, EQUIPMENT, OTHER |
+| `unit`        | String   | Đơn vị tính (chai, thùng, kg, cái...)            |
+| `unitWeight`  | Number?  | Trọng lượng/đơn vị (kg)                          |
+| `description` | String   | Mô tả                                            |
+| `isActive`    | Boolean  | Còn sử dụng không                                |
+
+---
+
+#### Warehouse
+
+Kho hàng cứu trợ.
+
+| Field      | Type          | Description      |
+| ---------- | ------------- | ---------------- |
+| `_id`      | ObjectId      | Primary key      |
+| `name`     | String        | Tên kho (unique) |
+| `location` | GeoJSON Point | Vị trí kho       |
+| `status`   | Enum          | ACTIVE, INACTIVE |
+
+---
+
+#### InventoryItem
+
+Tồn kho của từng supply tại warehouse.
+
+| Field              | Type     | Description                |
+| ------------------ | -------- | -------------------------- |
+| `_id`              | ObjectId | Primary key                |
+| `warehouseId`      | ObjectId | FK → Warehouse             |
+| `supplyId`         | ObjectId | FK → Supply                |
+| `quantity`         | Number   | Số lượng hiện có           |
+| `reservedQuantity` | Number   | Số lượng đã đặt (chờ xuất) |
+| `lastUpdated`      | DateTime | Lần cập nhật cuối          |
+
+> **Available = quantity - reservedQuantity**
+
+---
+
+#### TimelineSupply
+
+Tracking supplies cho mỗi Timeline qua 3 giai đoạn.
+
+| Field            | Type     | Description                               |
+| ---------------- | -------- | ----------------------------------------- |
+| `_id`            | ObjectId | Primary key                               |
+| `timelineId`     | ObjectId | FK → Timeline                             |
+| `supplyId`       | ObjectId | FK → Supply                               |
+| `warehouseId`    | ObjectId | FK → Warehouse (nguồn xuất)               |
+| `plannedQty`     | Number   | Số lượng dự định (Coordinator plan)       |
+| `carriedQty`     | Number   | Số lượng thực tế mang theo (Team confirm) |
+| `distributedQty` | Number   | Số lượng đã phát/sử dụng (Team report)    |
+| `returnedQty`    | Number   | Số lượng trả về kho                       |
+| `note`           | String?  | Ghi chú                                   |
+
+---
+
 ### Supporting Entities
 
 #### Session
@@ -259,17 +401,21 @@ Thông báo hệ thống.
 
 ## Relationships Summary
 
-| Relationship         | Cardinality | Description                               |
-| -------------------- | ----------- | ----------------------------------------- |
-| User → Team          | N:1         | User thuộc 0-1 team                       |
-| Team → User (leader) | 1:1         | Team có 1 leader                          |
-| User → Request       | 1:N         | Citizen tạo nhiều requests                |
-| Request → Timeline   | 1:N         | Request có nhiều timelines (reassignment) |
-| Mission → Timeline   | 1:N         | Mission có nhiều timelines                |
-| Team → Timeline      | 1:N         | Team được assign nhiều timelines          |
-| Timeline → Position  | 1:N         | Timeline có nhiều positions               |
-| User → Session       | 1:N         | User có nhiều sessions                    |
-| User → Notification  | 1:N         | User nhận nhiều notifications             |
+| Relationship              | Cardinality | Description                               |
+| ------------------------- | ----------- | ----------------------------------------- |
+| User → Team               | N:1         | User thuộc 0-1 team                       |
+| Team → User (leader)      | 1:1         | Team có 1 leader                          |
+| User → Request            | 1:N         | Citizen tạo nhiều requests                |
+| Request → Timeline        | 1:N         | Request có nhiều timelines (reassignment) |
+| Mission → Timeline        | 1:N         | Mission có nhiều timelines                |
+| Team → Timeline           | 1:N         | Team được assign nhiều timelines          |
+| Timeline → Position       | 1:N         | Timeline có nhiều positions               |
+| Timeline → TimelineSupply | 1:N         | Timeline có nhiều supplies được track     |
+| Supply → TimelineSupply   | 1:N         | Supply được track trong nhiều timelines   |
+| Supply → InventoryItem    | 1:N         | Supply có inventory tại nhiều warehouses  |
+| Warehouse → InventoryItem | 1:N         | Warehouse chứa nhiều inventory items      |
+| User → Session            | 1:N         | User có nhiều sessions                    |
+| User → Notification       | 1:N         | User nhận nhiều notifications             |
 
 ---
 
