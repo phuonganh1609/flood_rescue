@@ -48,6 +48,11 @@ const UserSchema = new Schema(
         "Manager",
       ],
     },
+    teamId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Team",
+      default: null,
+    },
     address: {
       type: String,
       trim: true,

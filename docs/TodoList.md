@@ -13,7 +13,7 @@
 | Authentication     | ~85%    | Login, Register, JWT, Session, phoneNumber required |
 | Request Management | ~95%    | Unified Flow 2.2, 12 endpoints, on-behalf creation  |
 | Mission & Timeline | 0%      | Core feature chưa implement                         |
-| Team Management    | ~25%    | Có model, thiếu full CRUD                           |
+| Team Management    | ~60%    | Model + CRUD skeleton, 7 endpoints                  |
 | Supply Management  | ~5%     | Chỉ có model cơ bản                                 |
 | Notification       | ~80%    | WebSocket + REST API, thiếu một số events           |
 | Position Tracking  | 0%      | GPS tracking chưa implement                         |
@@ -76,6 +76,9 @@
 
 - [ ] Derivation logic: Auto-update status dựa trên Timeline results
 - [ ] Duplicate detection algorithm (location + time + citizen) - Future enhancement
+- [ ] Thêm supply vào request: requestSupplies
+- [ ] Citizen chỉnh sửa request: các field có thể chỉnh sửa như location, peopleCount, description, requestSupplies, media.
+- [ ] Citizen chỉnh sửa request: chỉ khi SUBMITTED và chưa được verify.
 
 ---
 
@@ -96,6 +99,7 @@
 - [ ] `PATCH /missions/{id}/abort` - Abort mission
 - [ ] `GET /missions/{id}/supplies` - Get aggregated supplies
 - [ ] Mission status derivation từ Timelines
+- [ ] Mission report: tổng hợp các timeline và request thuộc mission.
 
 ---
 
@@ -123,20 +127,27 @@
 
 ### Implemented ✅
 
-- [x] Team model với leader reference
-- [x] TeamMember model
-- [x] Mission model (basic)
-- [x] Basic controller & service structure
+- [x] Team model theo ERD (`name`, `leaderId`, `status: AVAILABLE/BUSY`)
+- [x] Team CRUD skeleton (controller, service, repository, validation, routes)
+- [x] `User.teamId` FK cho team membership (thay thế TeamMember model)
+- [x] Routes registered at `/api/teams`
+- [x] Joi validation schemas
+- [x] `PATCH /api/teams/:teamId/leader` — Change team leader
+
+### Endpoints (Skeleton) ✅
+
+- [x] `GET /api/teams` — List all teams (Coordinator/Admin)
+- [x] `POST /api/teams` — Create team (Coordinator/Admin)
+- [x] `GET /api/teams/:teamId` — Get team detail with members
+- [x] `PATCH /api/teams/:teamId` — Update team (Coordinator/Admin)
+- [x] `DELETE /api/teams/:teamId` — Delete team (Coordinator/Admin)
+- [x] `POST /api/teams/:teamId/members` — Add member (Coordinator/Admin)
+- [x] `DELETE /api/teams/:teamId/members/:userId` — Remove member (Coordinator/Admin)
+- [x] `PATCH /api/teams/:teamId/leader` — Change leader (Coordinator/Admin)
 
 ### Not Implemented ❌
 
-- [ ] `GET /teams` - List all teams
-- [ ] `POST /teams` - Create team
-- [ ] `PATCH /teams/{id}` - Update team
-- [ ] `DELETE /teams/{id}` - Delete team
-- [ ] `POST /teams/{id}/members` - Add member
-- [ ] `DELETE /teams/{id}/members/{userId}` - Remove member
-- [ ] Team status management (`AVAILABLE`, `BUSY`)
+- [ ] Team status management (`AVAILABLE` ↔ `BUSY`)
 - [ ] Auto-update team status khi có Timeline active
 
 ---

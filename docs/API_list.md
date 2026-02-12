@@ -290,7 +290,20 @@
 - **Response:** `Notification[]`
 - **Auth:** ✅ Citizen, RescueTeam, Coordinator, Manager, Admin
 
-### Mark Notification As Read
+### 5. Team Management
+
+| Method   | Endpoint                         | Description                       | Auth             |
+| :------- | :------------------------------- | :-------------------------------- | :--------------- |
+| `GET`    | `/api/teams`                     | List all teams (filter by status) | Coord/Admin      |
+| `POST`   | `/api/teams`                     | Create new team                   | Coord/Admin      |
+| `GET`    | `/api/teams/:id`                 | Get team details & members        | Coord/Admin/Team |
+| `PATCH`  | `/api/teams/:id`                 | Update team info                  | Coord/Admin      |
+| `DELETE` | `/api/teams/:id`                 | Delete team                       | Coord/Admin      |
+| `PATCH`  | `/api/teams/:id/leader`          | Change team leader                | Coord/Admin      |
+| `POST`   | `/api/teams/:id/members`         | Add member to team                | Coord/Admin      |
+| `DELETE` | `/api/teams/:id/members/:userId` | Remove member                     | Coord/Admin      |
+
+### 6. Notification Managementad
 
 - **Method:** `PATCH`
 - **Endpoint:** `/api/notifications/{id}/read`

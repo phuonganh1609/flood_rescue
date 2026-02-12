@@ -1751,6 +1751,194 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/teams:
+    get:
+      tags:
+        - Teams
+      summary: List all teams
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [AVAILABLE, BUSY]
+      responses:
+        "200":
+          description: Successful operation
+    post:
+      tags:
+        - Teams
+      summary: Create a new team
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - leaderId
+              properties:
+                name:
+                  type: string
+                leaderId:
+                  type: string
+      responses:
+        "201":
+          description: Team created successfully
+
+  /api/teams/{teamId}:
+    get:
+      tags:
+        - Teams
+      summary: Get team details
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful operation
+    patch:
+      tags:
+        - Teams
+      summary: Update team details
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                leaderId:
+                  type: string
+                status:
+                  type: string
+                  enum: [AVAILABLE, BUSY]
+      responses:
+        "200":
+          description: Team updated successfully
+    delete:
+      tags:
+        - Teams
+      summary: Delete team
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team deleted successfully
+
+  /api/teams/{teamId}/leader:
+    patch:
+      tags:
+        - Teams
+      summary: Change team leader
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newLeaderId
+              properties:
+                newLeaderId:
+                  type: string
+      responses:
+        "200":
+          description: Team leader updated successfully
+
+  /api/teams/{teamId}/members:
+    post:
+      tags:
+        - Teams
+      summary: Add member to team
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+      responses:
+        "201":
+          description: Member added successfully
+
+  /api/teams/{teamId}/members/{userId}:
+    delete:
+      tags:
+        - Teams
+      summary: Remove member from team
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Member removed successfully
+
 components:
   schemas:
     RegisterRequest:
