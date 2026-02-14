@@ -255,10 +255,10 @@ Yêu cầu cứu hộ từ Citizen.
 
 Nhiệm vụ cứu hộ được tạo bởi Coordinator.
 
-| Field    | Type     | Description                                      |
-| -------- | -------- | ------------------------------------------------ |
-| `_id`    | ObjectId | Primary key                                      |
-| `status` | Enum     | PLANNED, IN_PROGRESS, PAUSED, COMPLETED, ABORTED |
+| Field    | Type     | Description                                               |
+| -------- | -------- | --------------------------------------------------------- |
+| `_id`    | ObjectId | Primary key                                               |
+| `status` | Enum     | PLANNED, IN_PROGRESS, PAUSED, PARTIAL, COMPLETED, ABORTED |
 
 ---
 

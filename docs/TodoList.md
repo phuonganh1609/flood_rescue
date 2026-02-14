@@ -26,8 +26,8 @@
 | **Request Management** | ~98%    | Unified Flow 2.2, 12 endpoints. Refactored response format.   |
 | **Team Management**    | ~70%    | CRUD skeleton, Member management. Refactored response format. |
 | **Notification**       | ~85%    | WebSocket + REST API. Refactored response format.             |
-| **Mission**            | 0%      | Core feature chưa implement                                   |
-| **Timeline**           | 0%      | Core feature chưa implement                                   |
+| **Mission**            | ~80%    | Core CRUD & Lifecycle implemented. Verified.                  |
+| **Timeline**           | ~10%    | Minimal model & create service only.                          |
 | **Supply Management**  | ~5%     | Chỉ có model cơ bản                                           |
 | **Position Tracking**  | 0%      | GPS tracking chưa implement                                   |
 
@@ -95,19 +95,23 @@
 
 ## 3. 🚀 Mission Module
 
-> [!CAUTION]
-> **CORE FEATURE - Chưa implement**
+### Implemented ✅
+
+- [x] Mission model theo ERD (`PLANNED`, `IN_PROGRESS`, `PAUSED`, `PARTIAL`, `COMPLETED`, `ABORTED`)
+- [x] `POST /missions` - Create mission (Auto-code `MS-DDMMYY-SEQ`)
+- [x] `GET /missions` - List all missions (Filter by status, type, code)
+- [x] `GET /missions/{id}` - Get mission detail
+- [x] `PATCH /missions/{id}` - Update mission details (name, description, priority)
+- [x] `DELETE /missions/{id}` - Delete mission (Guard: No active timelines)
+- [x] `PATCH /missions/{id}/assign` - Assign team (create Timeline)
+- [x] `PATCH /missions/{id}/pause` - Pause mission
+- [x] `PATCH /missions/{id}/resume` - Resume mission
+- [x] `PATCH /missions/{id}/abort` - Abort mission
+- [x] Security: `authorize(["Rescue Coordinator", "Admin"])`
+- [x] Validation: Joi schemas (ObjectId, limits, source params)
 
 ### Not Implemented ❌
 
-- [ ] Mission model theo ERD (`PLANNED`, `IN_PROGRESS`, `PAUSED`, `PARTIAL`, `COMPLETED`, `ABORTED`)
-- [ ] `POST /missions` - Create mission
-- [ ] `GET /missions` - List all missions
-- [ ] `GET /missions/{id}` - Get mission detail
-- [ ] `PATCH /missions/{id}/assign` - Assign team (create Timeline)
-- [ ] `PATCH /missions/{id}/pause` - Pause mission
-- [ ] `PATCH /missions/{id}/resume` - Resume mission
-- [ ] `PATCH /missions/{id}/abort` - Abort mission
 - [ ] `GET /missions/{id}/supplies` - Get aggregated supplies
 - [ ] Mission status derivation từ Timelines
 - [ ] Mission report: tổng hợp các timeline và request thuộc mission.
@@ -116,13 +120,15 @@
 
 ## 4. ⏱️ Timeline Module
 
-> [!CAUTION]
-> **CORE FEATURE - Chưa implement**
+### Implemented ✅ (Minimal)
+
+- [x] Timeline model theo ERD (Basic fields)
+- [x] `createTimeline` service method (Support for Mission Assignment)
 
 ### Not Implemented ❌
 
-- [ ] Timeline model theo ERD
-- [ ] Timeline statuses: `ASSIGNED`, `EN_ROUTE`, `ON_SITE`, `COMPLETED`, `PARTIAL`, `FAILED`, `WITHDRAWN`, `CANCELLED`
+- [ ] Full Timeline CRUD
+- [ ] Timeline statuses state machine
 - [ ] `PATCH /timelines/{id}/accept` - Team accept -> `EN_ROUTE`
 - [ ] `PATCH /timelines/{id}/arrive` - Team arrive -> `ON_SITE`
 - [ ] `PATCH /timelines/{id}/complete` - Complete timeline -> `COMPLETED` / `PARTIAL`
