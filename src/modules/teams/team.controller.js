@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { teamService } from "./team.service.js";
+import response from "../../utils/response.js";
 import {
   createTeamSchema,
   updateTeamSchema,
@@ -41,9 +42,18 @@ export const getAllTeams = async (req, res) => {
     if (status) filter.status = status;
 
     const result = await teamService.getAllTeams(filter, { page, limit });
-    res.json(result);
+
+    const { data, ...pagination } = result;
+
+    return response.sendSuccess(res, {
+      data,
+      meta: pagination,
+    });
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
+    });
   }
 };
 
@@ -54,16 +64,25 @@ export const getTeam = async (req, res) => {
   try {
     const { teamId } = req.params;
     if (!isValidId(teamId)) {
-      return res.status(400).json({ message: "Invalid team ID" });
+      return response.sendError(res, {
+        message: "Invalid team ID",
+        statusCode: 400,
+      });
     }
 
     const team = await teamService.getTeamById(teamId);
-    res.json({ data: team });
+    return response.sendSuccess(res, { data: team });
   } catch (err) {
     if (err.message === "Team not found") {
-      return res.status(404).json({ message: err.message });
+      return response.sendError(res, {
+        message: err.message,
+        statusCode: 404,
+      });
     }
-    res.status(400).json({ message: err.message });
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
+    });
   }
 };
 
@@ -74,16 +93,24 @@ export const createTeam = async (req, res) => {
   try {
     const { errors, value } = validate(createTeamSchema, req.body);
     if (errors) {
-      return res.status(400).json({ message: "Validation failed", errors });
+      return response.sendError(res, {
+        message: "Validation failed",
+        statusCode: 400,
+        errors,
+      });
     }
 
     const team = await teamService.createTeam(value);
-    res.status(201).json({
-      message: "Team created successfully",
+    return response.sendSuccess(res, {
       data: team,
+      statusCode: 201,
+      message: "Team created successfully",
     });
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
+    });
   }
 };
 
@@ -94,24 +121,37 @@ export const updateTeam = async (req, res) => {
   try {
     const { teamId } = req.params;
     if (!isValidId(teamId)) {
-      return res.status(400).json({ message: "Invalid team ID" });
+      return response.sendError(res, {
+        message: "Invalid team ID",
+        statusCode: 400,
+      });
     }
 
     const { errors, value } = validate(updateTeamSchema, req.body);
     if (errors) {
-      return res.status(400).json({ message: "Validation failed", errors });
+      return response.sendError(res, {
+        message: "Validation failed",
+        statusCode: 400,
+        errors,
+      });
     }
 
     const team = await teamService.updateTeam(teamId, value);
-    res.json({
-      message: "Team updated successfully",
+    return response.sendSuccess(res, {
       data: team,
+      message: "Team updated successfully",
     });
   } catch (err) {
     if (err.message === "Team not found") {
-      return res.status(404).json({ message: err.message });
+      return response.sendError(res, {
+        message: err.message,
+        statusCode: 404,
+      });
     }
-    res.status(400).json({ message: err.message });
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
+    });
   }
 };
 
@@ -122,16 +162,27 @@ export const deleteTeam = async (req, res) => {
   try {
     const { teamId } = req.params;
     if (!isValidId(teamId)) {
-      return res.status(400).json({ message: "Invalid team ID" });
+      return response.sendError(res, {
+        message: "Invalid team ID",
+        statusCode: 400,
+      });
     }
 
     await teamService.deleteTeam(teamId);
-    res.json({ message: "Team deleted successfully" });
+    return response.sendSuccess(res, {
+      message: "Team deleted successfully",
+    });
   } catch (err) {
     if (err.message === "Team not found") {
-      return res.status(404).json({ message: err.message });
+      return response.sendError(res, {
+        message: err.message,
+        statusCode: 404,
+      });
     }
-    res.status(400).json({ message: err.message });
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
+    });
   }
 };
 
@@ -142,24 +193,38 @@ export const addMember = async (req, res) => {
   try {
     const { teamId } = req.params;
     if (!isValidId(teamId)) {
-      return res.status(400).json({ message: "Invalid team ID" });
+      return response.sendError(res, {
+        message: "Invalid team ID",
+        statusCode: 400,
+      });
     }
 
     const { errors, value } = validate(addMemberSchema, req.body);
     if (errors) {
-      return res.status(400).json({ message: "Validation failed", errors });
+      return response.sendError(res, {
+        message: "Validation failed",
+        statusCode: 400,
+        errors,
+      });
     }
 
     const member = await teamService.addMember(teamId, value.userId);
-    res.status(201).json({
-      message: "Member added successfully",
+    return response.sendSuccess(res, {
       data: member,
+      statusCode: 201,
+      message: "Member added successfully",
     });
   } catch (err) {
     if (err.message === "Team not found") {
-      return res.status(404).json({ message: err.message });
+      return response.sendError(res, {
+        message: err.message,
+        statusCode: 404,
+      });
     }
-    res.status(400).json({ message: err.message });
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
+    });
   }
 };
 
@@ -170,19 +235,28 @@ export const removeMember = async (req, res) => {
   try {
     const { teamId, userId } = req.params;
     if (!isValidId(teamId) || !isValidId(userId)) {
-      return res.status(400).json({ message: "Invalid team or user ID" });
+      return response.sendError(res, {
+        message: "Invalid team or user ID",
+        statusCode: 400,
+      });
     }
 
     const member = await teamService.removeMember(teamId, userId);
-    res.json({
-      message: "Member removed successfully",
+    return response.sendSuccess(res, {
       data: member,
+      message: "Member removed successfully",
     });
   } catch (err) {
     if (err.message === "Team not found") {
-      return res.status(404).json({ message: err.message });
+      return response.sendError(res, {
+        message: err.message,
+        statusCode: 404,
+      });
     }
-    res.status(400).json({ message: err.message });
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
+    });
   }
 };
 
@@ -193,23 +267,36 @@ export const changeLeader = async (req, res) => {
   try {
     const { teamId } = req.params;
     if (!isValidId(teamId)) {
-      return res.status(400).json({ message: "Invalid team ID" });
+      return response.sendError(res, {
+        message: "Invalid team ID",
+        statusCode: 400,
+      });
     }
 
     const { errors, value } = validate(changeLeaderSchema, req.body);
     if (errors) {
-      return res.status(400).json({ message: "Validation failed", errors });
+      return response.sendError(res, {
+        message: "Validation failed",
+        statusCode: 400,
+        errors,
+      });
     }
 
     const team = await teamService.changeLeader(teamId, value.newLeaderId);
-    res.json({
-      message: "Team leader updated successfully",
+    return response.sendSuccess(res, {
       data: team,
+      message: "Team leader updated successfully",
     });
   } catch (err) {
     if (err.message === "Team not found") {
-      return res.status(404).json({ message: err.message });
+      return response.sendError(res, {
+        message: err.message,
+        statusCode: 404,
+      });
     }
-    res.status(400).json({ message: err.message });
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
+    });
   }
 };

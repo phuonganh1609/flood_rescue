@@ -5,6 +5,7 @@ import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 import authRoute from "./modules/auth/auth.routes.js";
 import requestRoute from "./modules/requests/request.routes.js";
@@ -21,6 +22,12 @@ const swaggerDocument = YAML.load(
   path.join(__dirname, "../docs/swagger/swagger.yaml"),
 );
 
+// Load Custom CSS
+const customCss = fs.readFileSync(
+  path.join(__dirname, "../docs/swagger/swagger-custom.css"),
+  "utf8",
+);
+
 const app = express();
 
 // Swagger UI - served at /api-docs
@@ -35,6 +42,7 @@ app.use(
       showRequestHeaders: true,
       tryItOutEnabled: true,
     },
+    customCss: customCss,
   }),
 );
 

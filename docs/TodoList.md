@@ -6,19 +6,30 @@
 
 ---
 
-## 📊 Trạng thái tổng quan
+## � Phase Progress
 
-| Module             | Tiến độ | Ghi chú                                             |
-| ------------------ | ------- | --------------------------------------------------- |
-| Authentication     | ~85%    | Login, Register, JWT, Session, phoneNumber required |
-| Request Management | ~95%    | Unified Flow 2.2, 12 endpoints, on-behalf creation  |
-| Mission & Timeline | 0%      | Core feature chưa implement                         |
-| Team Management    | ~60%    | Model + CRUD skeleton, 7 endpoints                  |
-| Supply Management  | ~5%     | Chỉ có model cơ bản                                 |
-| Notification       | ~80%    | WebSocket + REST API, thiếu một số events           |
-| Position Tracking  | 0%      | GPS tracking chưa implement                         |
+| Phase       | Description                                                | Progress | Status         |
+| :---------- | :--------------------------------------------------------- | :------- | :------------- |
+| **Phase 1** | **Core Flow** (Mission + Timeline + Team modules)          | ~20%     | 🚧 In Progress |
+| **Phase 2** | **Supply Tracking** (Warehouse + Inventory + Planning)     | ~5%      | 🌑 Pending     |
+| **Phase 3** | **GPS Tracking** (Realtime position updates)               | 0%       | 🌑 Pending     |
+| **Phase 4** | **Role APIs** (Coordinator, Rescue Team, Manager specific) | 0%       | 🌑 Pending     |
+| **Phase 5** | **Admin & Reports** (System config, exports)               | 0%       | 🌑 Pending     |
 
 ---
+
+## 📊 Trạng thái tổng quan
+
+| Module                 | Tiến độ | Ghi chú                                                       |
+| :--------------------- | :------ | :------------------------------------------------------------ |
+| **Authentication**     | ~90%    | Login, Register, JWT, Session. Refactored response format.    |
+| **Request Management** | ~98%    | Unified Flow 2.2, 12 endpoints. Refactored response format.   |
+| **Team Management**    | ~70%    | CRUD skeleton, Member management. Refactored response format. |
+| **Notification**       | ~85%    | WebSocket + REST API. Refactored response format.             |
+| **Mission**            | 0%      | Core feature chưa implement                                   |
+| **Timeline**           | 0%      | Core feature chưa implement                                   |
+| **Supply Management**  | ~5%     | Chỉ có model cơ bản                                           |
+| **Position Tracking**  | 0%      | GPS tracking chưa implement                                   |
 
 ## 1. 🔐 Authentication Module
 
@@ -283,15 +294,12 @@
 
 ---
 
-## 🎯 Priority Order (Đề xuất)
+## 13. 📚 Documentation & UI
 
-1. **Phase 1 - Core Flow**: Mission + Timeline + Team modules
-2. **Phase 2 - Supply Tracking**: Supply + Warehouse + Inventory + TimelineSupply
-3. **Phase 3 - GPS Tracking**: Position module + realtime updates
-4. **Phase 4 - Role APIs**: Coordinator, Manager, Rescue Team specific endpoints
-5. **Phase 5 - Admin & Reports**: Admin module + reporting
+### Implemented ✅
 
----
+- [x] Customize Swagger UI Schema Layout (Grid View)
+- [x] Update API Documentation (Swagger YAML)
 
 ## 📝 Notes
 

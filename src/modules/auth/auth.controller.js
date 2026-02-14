@@ -1,5 +1,6 @@
 import e from "express";
 import { authService } from "./auth.service.js";
+import response from "../../utils/response.js";
 
 /**
  * Controller cho Authentication
@@ -7,10 +8,15 @@ import { authService } from "./auth.service.js";
 export const register = async (req, res) => {
   try {
     const result = await authService.register(req.body);
-    res.status(201).json(result);
+    return response.sendSuccess(res, {
+      data: result,
+      statusCode: 201,
+      message: "Đăng ký thành công",
+    });
   } catch (error) {
-    res.status(400).json({
+    return response.sendError(res, {
       message: error.message || "Lỗi khi đăng ký",
+      statusCode: 400,
     });
   }
 };
@@ -28,13 +34,17 @@ export const login = async (req, res) => {
     });
 
     // Chỉ trả accessToken và user info trong response body
-    res.json({
-      accessToken: result.accessToken,
-      user: result.user,
+    return response.sendSuccess(res, {
+      data: {
+        accessToken: result.accessToken,
+        user: result.user,
+      },
+      message: "Đăng nhập thành công",
     });
   } catch (error) {
-    res.status(400).json({
+    return response.sendError(res, {
       message: error.message || "Lỗi khi đăng nhập",
+      statusCode: 400,
     });
   }
 };
@@ -42,10 +52,11 @@ export const login = async (req, res) => {
 export const getUser = async (req, res) => {
   try {
     const user = await authService.getCurrentUser(req.user.id);
-    res.json(user);
+    return response.sendSuccess(res, { data: user });
   } catch (error) {
-    res.status(404).json({
+    return response.sendError(res, {
       message: error.message || "Lỗi khi lấy thông tin user",
+      statusCode: 404,
     });
   }
 };
@@ -56,8 +67,9 @@ export const logout = async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
-      return res.status(400).json({
+      return response.sendError(res, {
         message: "Không tìm thấy refresh token",
+        statusCode: 400,
       });
     }
 
@@ -71,10 +83,11 @@ export const logout = async (req, res) => {
       sameSite: "none",
     });
 
-    return res.sendStatus(204);
+    return res.status(204).send();
   } catch (error) {
-    return res.status(400).json({
+    return response.sendError(res, {
       message: error.message || "Lỗi khi đăng xuất",
+      statusCode: 400,
     });
   }
 };
@@ -85,8 +98,9 @@ export const refresh = async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
-      return res.status(401).json({
+      return response.sendError(res, {
         message: "Không tìm thấy refresh token",
+        statusCode: 401,
       });
     }
 
@@ -94,13 +108,18 @@ export const refresh = async (req, res) => {
     const result = await authService.refreshAccessToken(refreshToken);
 
     // Trả về access token mới và thông tin user
-    return res.json({
-      accessToken: result.accessToken,
-      user: result.user,
+    return response.sendSuccess(res, {
+      data: {
+        accessToken: result.accessToken,
+        user: result.user,
+      },
+      message: "Refresh token thành công",
     });
   } catch (error) {
-    return res.status(401).json({
+    return response.sendError(res, {
       message: error.message || "Lỗi khi refresh token",
+      statusCode: 401,
+      errorCode: "UNAUTHORIZED",
     });
   }
 };

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { requestService } from "./request.service.js";
 import { authRepository } from "../auth/auth.repository.js";
+import response from "../../utils/response.js";
 import {
   addRequestSchema,
   verifyRequestSchema,
@@ -15,7 +16,10 @@ import {
 
 function validateObjectId(id, res) {
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    res.status(400).json({ message: "Invalid request ID" });
+    response.sendError(res, {
+      message: "Invalid request ID",
+      statusCode: 400,
+    });
     return false;
   }
   return true;
@@ -28,7 +32,11 @@ function validateBody(schema, body, res) {
       field: d.path.join("."),
       message: d.message,
     }));
-    res.status(400).json({ message: "Validation failed", errors });
+    response.sendError(res, {
+      message: "Validation failed",
+      statusCode: 400,
+      errors,
+    });
     return null;
   }
   return value;
@@ -36,7 +44,10 @@ function validateBody(schema, body, res) {
 
 function handleError(err, res) {
   const status = err.statusCode || 400;
-  res.status(status).json({ message: err.message });
+  response.sendError(res, {
+    message: err.message,
+    statusCode: status,
+  });
 }
 
 // ─── Create ───────────────────────────────────────────────
@@ -51,7 +62,11 @@ export const addRequest = async (req, res) => {
     if (!value) return;
 
     const result = await requestService.createRequest(req.user.id, value);
-    res.status(201).json(result);
+    return response.sendSuccess(res, {
+      data: result.data,
+      statusCode: 201,
+      message: result.message,
+    });
   } catch (err) {
     handleError(err, res);
   }
@@ -67,9 +82,14 @@ export const getRequest = async (req, res) => {
     if (!validateObjectId(req.params.requestId, res)) return;
 
     const request = await requestService.getRequestById(req.params.requestId);
-    if (!request) return res.status(404).json({ message: "Request not found" });
+    if (!request) {
+      return response.sendError(res, {
+        message: "Request not found",
+        statusCode: 404,
+      });
+    }
 
-    res.json(request);
+    return response.sendSuccess(res, { data: request });
   } catch (err) {
     handleError(err, res);
   }
@@ -100,7 +120,12 @@ export const getAllRequests = async (req, res) => {
       limit,
     });
 
-    res.json(result);
+    const { data, ...pagination } = result;
+
+    return response.sendSuccess(res, {
+      data,
+      meta: pagination,
+    });
   } catch (err) {
     handleError(err, res);
   }
@@ -125,7 +150,13 @@ export const getMyRequests = async (req, res) => {
       page,
       limit,
     });
-    res.json(result);
+
+    const { data, ...pagination } = result;
+
+    return response.sendSuccess(res, {
+      data,
+      meta: pagination,
+    });
   } catch (err) {
     handleError(err, res);
   }
@@ -150,9 +181,9 @@ export const verifyRequest = async (req, res) => {
     );
     const action = value.approved ? "verified" : "rejected";
 
-    res.json({
-      message: `Request ${action} successfully`,
+    return response.sendSuccess(res, {
       data: updated,
+      message: `Request ${action} successfully`,
     });
   } catch (err) {
     handleError(err, res);
@@ -170,7 +201,10 @@ export const closeRequest = async (req, res) => {
     if (!validateObjectId(req.params.requestId, res)) return;
 
     const updated = await requestService.closeRequest(req.params.requestId);
-    res.json({ message: "Request closed successfully", data: updated });
+    return response.sendSuccess(res, {
+      data: updated,
+      message: "Request closed successfully",
+    });
   } catch (err) {
     handleError(err, res);
   }
@@ -194,7 +228,10 @@ export const cancelRequest = async (req, res) => {
       userRole: req.user.role,
     });
 
-    res.json({ message: "Request cancelled successfully", data: updated });
+    return response.sendSuccess(res, {
+      data: updated,
+      message: "Request cancelled successfully",
+    });
   } catch (err) {
     handleError(err, res);
   }
@@ -218,9 +255,9 @@ export const markDuplicate = async (req, res) => {
       value.duplicatedOfRequestId,
     );
 
-    res.json({
-      message: "Request marked as duplicate successfully",
+    return response.sendSuccess(res, {
       data: updated,
+      message: "Request marked as duplicate successfully",
     });
   } catch (err) {
     handleError(err, res);
@@ -245,9 +282,9 @@ export const updateLocation = async (req, res) => {
       value,
     );
 
-    res.json({
-      message: "Request location updated successfully",
+    return response.sendSuccess(res, {
       data: updated,
+      message: "Request location updated successfully",
     });
   } catch (err) {
     handleError(err, res);
@@ -272,9 +309,9 @@ export const updatePriority = async (req, res) => {
       value.priority,
     );
 
-    res.json({
-      message: "Request priority updated successfully",
+    return response.sendSuccess(res, {
       data: updated,
+      message: "Request priority updated successfully",
     });
   } catch (err) {
     handleError(err, res);
@@ -284,7 +321,7 @@ export const updatePriority = async (req, res) => {
 // ─── On Behalf ───────────────────────────────────────────
 
 /**
- * POST /requests/on-behalf
+ * PATCH /requests/on-behalf
  * Actor: Coordinator
  */
 export const createRequestOnBehalf = async (req, res) => {
@@ -297,7 +334,11 @@ export const createRequestOnBehalf = async (req, res) => {
       value,
     );
 
-    res.status(201).json(result);
+    return response.sendSuccess(res, {
+      data: result.data,
+      statusCode: 201,
+      message: result.message,
+    });
   } catch (err) {
     handleError(err, res);
   }
@@ -313,13 +354,14 @@ export const searchCitizens = async (req, res) => {
   try {
     const { q } = req.query;
     if (!q || q.trim().length < 2) {
-      return res
-        .status(400)
-        .json({ message: "Search query must be at least 2 characters" });
+      return response.sendError(res, {
+        message: "Search query must be at least 2 characters",
+        statusCode: 400,
+      });
     }
 
     const citizens = await authRepository.searchCitizens(q.trim());
-    res.json({ data: citizens });
+    return response.sendSuccess(res, { data: citizens });
   } catch (err) {
     handleError(err, res);
   }

@@ -1,4 +1,5 @@
-import { notificationService } from './notification.service.js';
+import { notificationService } from "./notification.service.js";
+import response from "../../utils/response.js";
 
 /**
  * Create a new notification
@@ -9,10 +10,17 @@ export const createNotification = async (req, res) => {
   try {
     const notificationData = req.body;
     const result = await notificationService.create(notificationData);
-    return res.status(201).json(result);
+    return response.sendSuccess(res, {
+      data: result,
+      statusCode: 201,
+      message: "Notification created successfully",
+    });
   } catch (error) {
-    console.error('Error creating notification:', error);
-    return res.status(500).json({ message: error.message });
+    console.error("Error creating notification:", error);
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+    });
   }
 };
 
@@ -28,11 +36,23 @@ export const getNotificationsByUser = async (req, res) => {
       page: parseInt(req.query.page) || 1,
       limit: parseInt(req.query.limit) || 10,
     };
-    const result = await notificationService.getNotificationsByUser(userId, pagination);
-    return res.status(200).json(result);
+    const result = await notificationService.getNotificationsByUser(
+      userId,
+      pagination,
+    );
+
+    // service returns { data, pagination }
+    return response.sendSuccess(res, {
+      data: result.data,
+      meta: result.pagination,
+      message: "Notifications fetched successfully",
+    });
   } catch (error) {
-    console.error('Error fetching notifications:', error);
-    return res.status(500).json({ message: error.message });
+    console.error("Error fetching notifications:", error);
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+    });
   }
 };
 
@@ -44,14 +64,21 @@ export const getNotificationsByUser = async (req, res) => {
 export const getNotificationById = async (req, res) => {
   try {
     const { notificationId } = req.params;
-    const notification = await notificationService.getNotificationById(notificationId);
+    const notification =
+      await notificationService.getNotificationById(notificationId);
     if (!notification) {
-      return res.status(404).json({ message: 'Notification not found' });
+      return response.sendError(res, {
+        message: "Notification not found",
+        statusCode: 404,
+      });
     }
-    return res.status(200).json({ data: notification });
+    return response.sendSuccess(res, { data: notification });
   } catch (error) {
-    console.error('Error fetching notification:', error);
-    return res.status(500).json({ message: error.message });
+    console.error("Error fetching notification:", error);
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+    });
   }
 };
 
@@ -65,12 +92,21 @@ export const markAsRead = async (req, res) => {
     const { notificationId } = req.params;
     const result = await notificationService.markAsRead(notificationId);
     if (!result) {
-      return res.status(404).json({ message: 'Notification not found' });
+      return response.sendError(res, {
+        message: "Notification not found",
+        statusCode: 404,
+      });
     }
-    return res.status(200).json({ message: 'Notification marked as read', data: result });
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Notification marked as read",
+    });
   } catch (error) {
-    console.error('Error marking notification as read:', error);
-    return res.status(500).json({ message: error.message });
+    console.error("Error marking notification as read:", error);
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+    });
   }
 };
 
@@ -84,12 +120,20 @@ export const deleteNotification = async (req, res) => {
     const { notificationId } = req.params;
     const result = await notificationService.deleteNotification(notificationId);
     if (!result) {
-      return res.status(404).json({ message: 'Notification not found' });
+      return response.sendError(res, {
+        message: "Notification not found",
+        statusCode: 404,
+      });
     }
-    return res.status(200).json({ message: 'Notification deleted successfully' });
+    return response.sendSuccess(res, {
+      message: "Notification deleted successfully",
+    });
   } catch (error) {
-    console.error('Error deleting notification:', error);
-    return res.status(500).json({ message: error.message });
+    console.error("Error deleting notification:", error);
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+    });
   }
 };
 
@@ -101,10 +145,17 @@ export const deleteNotification = async (req, res) => {
 export const deleteAllNotificationsByUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const result = await notificationService.deleteAllNotificationsByUser(userId);
-    return res.status(200).json(result);
+    const result =
+      await notificationService.deleteAllNotificationsByUser(userId);
+    return response.sendSuccess(res, {
+      data: result,
+      message: "All notifications deleted",
+    });
   } catch (error) {
-    console.error('Error deleting notifications:', error);
-    return res.status(500).json({ message: error.message });
+    console.error("Error deleting notifications:", error);
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+    });
   }
 };
