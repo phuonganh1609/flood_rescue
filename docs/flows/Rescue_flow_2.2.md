@@ -384,3 +384,16 @@ sequenceDiagram
 
 - [rules.md](./rules.md) - Unified Derivation Rules (Single Source of Truth)
 - [Rescue_flow_2.1.md](./Rescue_flow_2.1.md) - Previous version (Legacy)
+
+---
+
+## Phase 1 Implementation Notes (2026-02-15)
+
+- Timeline runtime status canon in backend: `ASSIGNED`, `EN_ROUTE`, `ON_SITE`, `COMPLETED`, `PARTIAL`, `FAILED`, `WITHDRAWN`, `CANCELLED`.
+- Timeline APIs implemented: `GET /api/timelines`, `GET /api/timelines/{id}`, and actions `accept/arrive/complete/fail/withdraw/cancel`.
+- Notification trigger points:
+  - `MISSION_ASSIGNED` on `PATCH /api/missions/{id}/assign`
+  - `MISSION_ACCEPTED` + `MISSION_APPROACHING` on timeline `accept` (`EN_ROUTE`)
+  - `MISSION_COMPLETED` on timeline `complete` (or when request becomes fulfilled)
+  - `MISSION_FAILED` on timeline `fail`
+- Phase 1 scope excludes GPS `Position` and TimelineSupply workflow.

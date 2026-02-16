@@ -1939,6 +1939,226 @@ paths:
         "200":
           description: Member removed successfully
 
+  /api/timelines:
+    get:
+      tags:
+        - Missions
+      summary: List timelines
+      description: List timelines with filters and pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: missionId
+          schema:
+            type: string
+        - in: query
+          name: requestId
+          schema:
+            type: string
+        - in: query
+          name: teamId
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - ASSIGNED
+              - EN_ROUTE
+              - ON_SITE
+              - COMPLETED
+              - PARTIAL
+              - FAILED
+              - WITHDRAWN
+              - CANCELLED
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Timelines retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Timeline"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+
+  /api/timelines/{id}:
+    get:
+      tags:
+        - Missions
+      summary: Get timeline detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Timeline"
+
+  /api/timelines/{id}/accept:
+    patch:
+      tags:
+        - Missions
+      summary: Team accepts assigned timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline accepted successfully
+
+  /api/timelines/{id}/arrive:
+    patch:
+      tags:
+        - Missions
+      summary: Team marks timeline as ON_SITE
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline marked ON_SITE successfully
+
+  /api/timelines/{id}/complete:
+    patch:
+      tags:
+        - Missions
+      summary: Complete timeline with outcome
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineCompleteInput"
+      responses:
+        "200":
+          description: Timeline completed successfully
+
+  /api/timelines/{id}/fail:
+    patch:
+      tags:
+        - Missions
+      summary: Mark timeline as FAILED
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineFailInput"
+      responses:
+        "200":
+          description: Timeline marked failed successfully
+
+  /api/timelines/{id}/withdraw:
+    patch:
+      tags:
+        - Missions
+      summary: Team withdraws assigned timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineWithdrawInput"
+      responses:
+        "200":
+          description: Timeline withdrawn successfully
+
+  /api/timelines/{id}/cancel:
+    patch:
+      tags:
+        - Missions
+      summary: Coordinator cancels assigned timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineCancelInput"
+      responses:
+        "200":
+          description: Timeline cancelled successfully
+
 components:
   schemas:
     RegisterRequest:
@@ -2580,6 +2800,113 @@ components:
         totalPages:
           type: integer
           example: 5
+
+    Timeline:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "65f1d2c3b4a5968776655443"
+        missionId:
+          type: string
+          example: "65f1d2c3b4a5968776655111"
+        requestId:
+          type: string
+          example: "65f1d2c3b4a5968776655222"
+        teamId:
+          type: string
+          example: "65f1d2c3b4a5968776655333"
+        status:
+          type: string
+          enum:
+            - ASSIGNED
+            - EN_ROUTE
+            - ON_SITE
+            - COMPLETED
+            - PARTIAL
+            - FAILED
+            - WITHDRAWN
+            - CANCELLED
+        assignedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        arrivedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        rescuedCount:
+          type: integer
+          minimum: 0
+          example: 4
+        failureReason:
+          type: string
+          nullable: true
+        withdrawalReason:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TimelineCompleteInput:
+      type: object
+      required:
+        - outcome
+      properties:
+        outcome:
+          type: string
+          enum:
+            - COMPLETED
+            - PARTIAL
+        note:
+          type: string
+          nullable: true
+        rescuedCount:
+          type: integer
+          minimum: 0
+
+    TimelineFailInput:
+      type: object
+      required:
+        - failureReason
+      properties:
+        failureReason:
+          type: string
+        note:
+          type: string
+          nullable: true
+
+    TimelineWithdrawInput:
+      type: object
+      required:
+        - withdrawalReason
+      properties:
+        withdrawalReason:
+          type: string
+        note:
+          type: string
+          nullable: true
+
+    TimelineCancelInput:
+      type: object
+      properties:
+        note:
+          type: string
+          nullable: true
 
     Error:
       type: object

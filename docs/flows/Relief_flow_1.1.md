@@ -249,3 +249,11 @@ sequenceDiagram
 - [rules.md](./rules.md) - Rules chính thức.
 - [Rescue_flow_2.2.md](./Rescue_flow_2.2.md) - Flow cứu hộ tương ứng.
 - [Supply_management.md](../Supply_management.md) - Supply tracking 3-phase.
+
+---
+
+## Phase 1 Implementation Notes (2026-02-15)
+
+- Core Timeline lifecycle APIs đã được implement theo Unified v2.2.
+- Request/Mission/Team status được derive/sync từ Timeline runtime status.
+- Trong Phase 1 chưa tích hợp GPS Position và TimelineSupply cho Relief execution.

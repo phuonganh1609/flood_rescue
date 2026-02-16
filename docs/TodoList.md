@@ -10,7 +10,7 @@
 
 | Phase       | Description                                                | Progress | Status         |
 | :---------- | :--------------------------------------------------------- | :------- | :------------- |
-| **Phase 1** | **Core Flow** (Mission + Timeline + Team modules)          | ~20%     | 🚧 In Progress |
+| **Phase 1** | **Core Flow** (Mission + Timeline + Team modules)          | ~80%     | 🚧 In Progress |
 | **Phase 2** | **Supply Tracking** (Warehouse + Inventory + Planning)     | ~5%      | 🌑 Pending     |
 | **Phase 3** | **GPS Tracking** (Realtime position updates)               | 0%       | 🌑 Pending     |
 | **Phase 4** | **Role APIs** (Coordinator, Rescue Team, Manager specific) | 0%       | 🌑 Pending     |
@@ -27,7 +27,7 @@
 | **Team Management**    | ~70%    | CRUD skeleton, Member management. Refactored response format. |
 | **Notification**       | ~85%    | WebSocket + REST API. Refactored response format.             |
 | **Mission**            | ~80%    | Core CRUD & Lifecycle implemented. Verified.                  |
-| **Timeline**           | ~10%    | Minimal model & create service only.                          |
+| **Timeline**           | ~90%    | Full core lifecycle API + status sync implemented (without GPS/Supply). |
 | **Supply Management**  | ~5%     | Chỉ có model cơ bản                                           |
 | **Position Tracking**  | 0%      | GPS tracking chưa implement                                   |
 
@@ -113,30 +113,35 @@
 ### Not Implemented ❌
 
 - [ ] `GET /missions/{id}/supplies` - Get aggregated supplies
-- [ ] Mission status derivation từ Timelines
 - [ ] Mission report: tổng hợp các timeline và request thuộc mission.
 
 ---
 
 ## 4. ⏱️ Timeline Module
 
-### Implemented ✅ (Minimal)
+### Implemented ✅
 
-- [x] Timeline model theo ERD (Basic fields)
-- [x] `createTimeline` service method (Support for Mission Assignment)
+- [x] Timeline model theo Unified v2.2 status canon
+- [x] Full Timeline lifecycle APIs:
+  - [x] `GET /api/timelines`
+  - [x] `GET /api/timelines/{id}`
+  - [x] `PATCH /api/timelines/{id}/accept`
+  - [x] `PATCH /api/timelines/{id}/arrive`
+  - [x] `PATCH /api/timelines/{id}/complete`
+  - [x] `PATCH /api/timelines/{id}/fail`
+  - [x] `PATCH /api/timelines/{id}/withdraw`
+  - [x] `PATCH /api/timelines/{id}/cancel`
+- [x] Timeline state machine validation
+- [x] Timeline → Request status sync logic
+- [x] Timeline → Mission status sync logic
+- [x] Team status auto-sync (`AVAILABLE`/`BUSY`) theo active timelines
+- [x] Mission assign flow tích hợp Timeline sync + notification events
 
 ### Not Implemented ❌
 
-- [ ] Full Timeline CRUD
-- [ ] Timeline statuses state machine
-- [ ] `PATCH /timelines/{id}/accept` - Team accept -> `EN_ROUTE`
-- [ ] `PATCH /timelines/{id}/arrive` - Team arrive -> `ON_SITE`
-- [ ] `PATCH /timelines/{id}/complete` - Complete timeline -> `COMPLETED` / `PARTIAL`
-- [ ] `PATCH /timelines/{id}/fail` - Fail timeline
-- [ ] `PATCH /timelines/{id}/withdraw` - Team withdraw
-- [ ] Timeline → Request status sync logic
-- [ ] Timeline → Mission status sync logic
 - [ ] `route` field (GeoJSON LineString từ Position)
+- [ ] GPS Position tracking integration
+- [ ] TimelineSupply (Planning/Carrying/Distribution) integration
 
 ---
 
@@ -164,8 +169,7 @@
 
 ### Not Implemented ❌
 
-- [ ] Team status management (`AVAILABLE` ↔ `BUSY`)
-- [ ] Auto-update team status khi có Timeline active
+- [ ] Team status management (`AVAILABLE` ↔ `BUSY`) API cho manual override (nếu cần)
 
 ---
 
@@ -316,6 +320,7 @@
 - **Duplicate rule**: Sau khi mark duplicate → sync status/priority từ gốc. Không chain duplicate.
 - **On-behalf creation**: Coordinator có thể tạo hộ citizen (có/không tài khoản). Auto-VERIFIED, source=COORDINATOR.
 - **phoneNumber**: Bắt buộc khi đăng ký. Lưu trên cả User và Request.
+- **Phase 1 Timeline Scope**: Chỉ implement core lifecycle + status sync. GPS/Position và Supply workflow để Phase sau.
 
 ---
 

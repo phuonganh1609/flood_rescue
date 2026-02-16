@@ -1,7 +1,7 @@
 # Derive Rules for Request, Mission, Mission_Timeline (Unified v2.2)
 
 > **Version 2.2** - Unified Model for both **Rescue** and **Relief**.
-> Áp dụng cho cả 2 luồng với cơ chế Multi-timeline và tracking chi tiết (`EN_ROUTE`, `ARRIVED`).
+> Áp dụng cho cả 2 luồng với cơ chế Multi-timeline và tracking chi tiết (`EN_ROUTE`, `ON_SITE`).
 
 > 🔑 **Timeline là SINGLE SOURCE OF TRUTH**
 > Timeline phản ánh **trạng thái thực thi (execution state)** duy nhất của hệ thống.

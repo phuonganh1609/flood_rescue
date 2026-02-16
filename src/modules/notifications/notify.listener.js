@@ -110,7 +110,8 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
     const { requestId, missionId, citizenId, teamLeaderId, teamName } = payload;
 
     // Notify Citizen
-    const citizenResult = await notificationService.create({
+    if (citizenId) {
+      const citizenResult = await notificationService.create({
       userId: citizenId,
       role: "CITIZEN",
       requestId,
@@ -118,15 +119,17 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
       message: `✅ Đội cứu hộ "${teamName}" đã được phân công đến hỗ trợ bạn`,
       isRead: false,
     });
-    emitToUser(
-      citizenId,
-      NOTIFICATION_EVENTS.MISSION_ASSIGNED,
-      citizenResult.data,
-    );
-    await emitUnreadCountForUser(citizenId);
+      emitToUser(
+        citizenId,
+        NOTIFICATION_EVENTS.MISSION_ASSIGNED,
+        citizenResult.data,
+      );
+      await emitUnreadCountForUser(citizenId);
+    }
 
     // Notify Team Leader
-    const teamResult = await notificationService.create({
+    if (teamLeaderId) {
+      const teamResult = await notificationService.create({
       userId: teamLeaderId,
       role: "TEAM_LEADER",
       requestId,
@@ -134,12 +137,13 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
       message: `📋 Bạn có nhiệm vụ cứu hộ mới - Mission #${missionId}`,
       isRead: false,
     });
-    emitToUser(
-      teamLeaderId,
-      NOTIFICATION_EVENTS.MISSION_ASSIGNED,
-      teamResult.data,
-    );
-    await emitUnreadCountForUser(teamLeaderId);
+      emitToUser(
+        teamLeaderId,
+        NOTIFICATION_EVENTS.MISSION_ASSIGNED,
+        teamResult.data,
+      );
+      await emitUnreadCountForUser(teamLeaderId);
+    }
   } catch (error) {
     console.error("Error in MISSION_ASSIGNED listener:", error);
   }
@@ -183,6 +187,7 @@ eventBus.on("MISSION_ACCEPTED", async (payload) => {
 eventBus.on("MISSION_APPROACHING", async (payload) => {
   try {
     const { requestId, citizenId, teamName } = payload;
+    if (!citizenId) return;
 
     const result = await notificationService.create({
       userId: citizenId,
@@ -209,7 +214,8 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
     const { requestId, missionId, citizenId } = payload;
 
     // Notify Citizen
-    const citizenResult = await notificationService.create({
+    if (citizenId) {
+      const citizenResult = await notificationService.create({
       userId: citizenId,
       role: "CITIZEN",
       requestId,
@@ -217,12 +223,13 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
       message: "🎉 Cứu hộ thành công! Cảm ơn bạn đã sử dụng dịch vụ",
       isRead: false,
     });
-    emitToUser(
-      citizenId,
-      NOTIFICATION_EVENTS.MISSION_COMPLETED,
-      citizenResult.data,
-    );
-    await emitUnreadCountForUser(citizenId);
+      emitToUser(
+        citizenId,
+        NOTIFICATION_EVENTS.MISSION_COMPLETED,
+        citizenResult.data,
+      );
+      await emitUnreadCountForUser(citizenId);
+    }
 
     // Notify Coordinators
     const coordinators =
@@ -256,7 +263,8 @@ eventBus.on("MISSION_FAILED", async (payload) => {
     const { requestId, missionId, citizenId, reason } = payload;
 
     // Notify Citizen
-    const citizenResult = await notificationService.create({
+    if (citizenId) {
+      const citizenResult = await notificationService.create({
       userId: citizenId,
       role: "CITIZEN",
       requestId,
@@ -264,12 +272,13 @@ eventBus.on("MISSION_FAILED", async (payload) => {
       message: `⚠️ Cứu hộ không thành công. ${reason ? `Lý do: ${reason}` : "Đang chờ phân công đội khác"}`,
       isRead: false,
     });
-    emitToUser(
-      citizenId,
-      NOTIFICATION_EVENTS.MISSION_FAILED,
-      citizenResult.data,
-    );
-    await emitUnreadCountForUser(citizenId);
+      emitToUser(
+        citizenId,
+        NOTIFICATION_EVENTS.MISSION_FAILED,
+        citizenResult.data,
+      );
+      await emitUnreadCountForUser(citizenId);
+    }
 
     // Notify Coordinators
     const coordinators =
