@@ -25,8 +25,8 @@ const missionSchema = new mongoose.Schema(
     },
     priority: {
       type: String,
-      enum: ["CRITICAL", "HIGH", "NORMAL"],
-      default: "NORMAL",
+      enum: ["Critical", "High", "Normal"],
+      default: "Normal",
     },
     type: {
       type: String,

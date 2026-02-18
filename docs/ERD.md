@@ -13,6 +13,7 @@ erDiagram
     User ||--o{ Request : "creates"
     User ||--o{ Session : "has"
     User ||--o{ Notification : "receives"
+    User ||--o{ Mission : "coordinates"
 
     Request ||--o{ Timeline : "has"
     Mission ||--o{ Timeline : "has"
@@ -71,7 +72,13 @@ erDiagram
 
     Mission {
         ObjectId _id PK
+        String name
+        String code UK
+        String description
         String status
+        String priority
+        String type
+        ObjectId coordinatorId FK
         DateTime createdAt
         DateTime updatedAt
     }
@@ -83,6 +90,7 @@ erDiagram
         ObjectId teamId FK
         String status
         GeoJSON route
+        Number rescuedCount
         DateTime assignedAt
         DateTime startedAt
         DateTime arrivedAt
@@ -213,23 +221,23 @@ Người dùng hệ thống với các roles: Citizen, Rescue Team, Coordinator,
 
 Yêu cầu cứu hộ từ Citizen.
 
-| Field                   | Type          | Description                                                      |
-| ----------------------- | ------------- | ---------------------------------------------------------------- |
-| `_id`                   | ObjectId      | Primary key                                                      |
-| `userId`                | ObjectId      | FK → User (Citizen hoặc Coordinator nếu tạo thay mặt)            |
-| `userName`              | String        | Tên người gửi                                                    |
-| `requestType`           | Enum          | Rescue, Relief                                                   |
-| `incidentType`          | Enum          | Flood, Trapped, Injured, Landslide, Other                        |
-| `location`              | GeoJSON Point | `{ type: "Point", coordinates: [lng, lat] }`                     |
-| `description`           | String        | Mô tả tình huống                                                 |
-| `peopleCount`           | Number        | Số người cần cứu (1-100)                                         |
-| `priority`              | Enum          | Critical, High, Normal                                           |
-| `status`                | Enum          | Submitted, Accepted, Rejected, In Progress, Completed, Cancelled |
-| `requestSupplies`       | Array         | `[{ supplyId: ObjectId, requestedQty: Number }]` - Supplies cần  |
-| `media`                 | String[]      | Danh sách URL hình ảnh                                           |
-| `isDuplicated`          | Boolean       | Coordinator đánh dấu nếu request trùng (default: false)          |
-| `duplicatedOfRequestId` | ObjectId?     | FK → Request (request gốc nếu là duplicate)                      |
-| `isLocationVerified`    | Boolean       | Coordinator verify location chính xác (default: false)           |
+| Field                   | Type          | Description                                                                                   |
+| ----------------------- | ------------- | --------------------------------------------------------------------------------------------- |
+| `_id`                   | ObjectId      | Primary key                                                                                   |
+| `userId`                | ObjectId      | FK → User (Citizen hoặc Coordinator nếu tạo thay mặt)                                         |
+| `userName`              | String        | Tên người gửi                                                                                 |
+| `requestType`           | Enum          | Rescue, Relief                                                                                |
+| `incidentType`          | Enum          | Flood, Trapped, Injured, Landslide, Other                                                     |
+| `location`              | GeoJSON Point | `{ type: "Point", coordinates: [lng, lat] }`                                                  |
+| `description`           | String        | Mô tả tình huống                                                                              |
+| `peopleCount`           | Number        | Số người cần cứu (1-100)                                                                      |
+| `priority`              | Enum          | Critical, High, Normal                                                                        |
+| `status`                | Enum          | SUBMITTED, VERIFIED, REJECTED, IN_PROGRESS, PARTIALLY_FULFILLED, FULFILLED, CLOSED, CANCELLED |
+| `requestSupplies`       | Array         | `[{ supplyId: ObjectId, requestedQty: Number }]` - Supplies cần                               |
+| `media`                 | String[]      | Danh sách URL hình ảnh                                                                        |
+| `isDuplicated`          | Boolean       | Coordinator đánh dấu nếu request trùng (default: false)                                       |
+| `duplicatedOfRequestId` | ObjectId?     | FK → Request (request gốc nếu là duplicate)                                                   |
+| `isLocationVerified`    | Boolean       | Coordinator verify location chính xác (default: false)                                        |
 
 **Business Rules:**
 
@@ -255,10 +263,16 @@ Yêu cầu cứu hộ từ Citizen.
 
 Nhiệm vụ cứu hộ được tạo bởi Coordinator.
 
-| Field    | Type     | Description                                               |
-| -------- | -------- | --------------------------------------------------------- |
-| `_id`    | ObjectId | Primary key                                               |
-| `status` | Enum     | PLANNED, IN_PROGRESS, PAUSED, PARTIAL, COMPLETED, ABORTED |
+| Field           | Type     | Description                                               |
+| --------------- | -------- | --------------------------------------------------------- |
+| `_id`           | ObjectId | Primary key                                               |
+| `name`          | String   | Tên mission (required)                                    |
+| `code`          | String   | Mã mission auto-generated (unique, `MS-DDMMYY-SEQ`)       |
+| `description`   | String   | Mô tả mission                                             |
+| `status`        | Enum     | PLANNED, IN_PROGRESS, PAUSED, PARTIAL, COMPLETED, ABORTED |
+| `priority`      | Enum     | Critical, High, Normal                                    |
+| `type`          | Enum     | RESCUE, RELIEF                                            |
+| `coordinatorId` | ObjectId | FK → User (coordinator tạo mission)                       |
 
 ---
 
@@ -266,21 +280,22 @@ Nhiệm vụ cứu hộ được tạo bởi Coordinator.
 
 Associative entity giữa Mission, Request và Team. Đại diện cho **một lần thực thi cứu hộ**.
 
-| Field              | Type               | Description                                               |
-| ------------------ | ------------------ | --------------------------------------------------------- |
-| `_id`              | ObjectId           | Primary key                                               |
-| `missionId`        | ObjectId           | FK → Mission                                              |
-| `requestId`        | ObjectId           | FK → Request                                              |
-| `teamId`           | ObjectId           | FK → Team                                                 |
-| `status`           | Enum               | ASSIGNED, EN_ROUTE, ARRIVED, COMPLETED, FAILED, WITHDRAWN |
-| `route`            | GeoJSON LineString | Đường đi tổng hợp của team                                |
-| `assignedAt`       | DateTime           | Thời điểm assign                                          |
-| `startedAt`        | DateTime           | Thời điểm team accept (EN_ROUTE)                          |
-| `arrivedAt`        | DateTime           | Thời điểm team đến nơi (ARRIVED)                          |
-| `completedAt`      | DateTime           | Thời điểm hoàn thành/thất bại                             |
-| `failureReason`    | String?            | Lý do thất bại                                            |
-| `withdrawalReason` | String?            | Lý do rút/từ chối                                         |
-| `note`             | String?            | Ghi chú                                                   |
+| Field              | Type               | Description                                                                   |
+| ------------------ | ------------------ | ----------------------------------------------------------------------------- |
+| `_id`              | ObjectId           | Primary key                                                                   |
+| `missionId`        | ObjectId           | FK → Mission                                                                  |
+| `requestId`        | ObjectId           | FK → Request                                                                  |
+| `teamId`           | ObjectId           | FK → Team                                                                     |
+| `status`           | Enum               | ASSIGNED, EN_ROUTE, ON_SITE, COMPLETED, PARTIAL, FAILED, WITHDRAWN, CANCELLED |
+| `route`            | GeoJSON LineString | Đường đi tổng hợp của team                                                    |
+| `rescuedCount`     | Number             | Số người đã cứu được (default: 0)                                             |
+| `assignedAt`       | DateTime           | Thời điểm assign                                                              |
+| `startedAt`        | DateTime           | Thời điểm team accept (EN_ROUTE)                                              |
+| `arrivedAt`        | DateTime           | Thời điểm team đến nơi (ARRIVED)                                              |
+| `completedAt`      | DateTime           | Thời điểm hoàn thành/thất bại                                                 |
+| `failureReason`    | String?            | Lý do thất bại                                                                |
+| `withdrawalReason` | String?            | Lý do rút/từ chối                                                             |
+| `note`             | String?            | Ghi chú                                                                       |
 
 ---
 
@@ -298,7 +313,7 @@ Vị trí theo thời gian thực của Team trong quá trình thực hiện Tim
 
 **Tracking rules:**
 
-- Ghi nhận mỗi **30 giây** khi Timeline ở trạng thái `EN_ROUTE` hoặc `ARRIVED`
+- Ghi nhận mỗi **30 giây** khi Timeline ở trạng thái `EN_ROUTE` hoặc `ON_SITE`
 - **Retention**: 60 ngày (sử dụng MongoDB TTL index)
 
 ---

@@ -1,6 +1,6 @@
 # 📋 TodoList - Flood Rescue System
 
-> **Last Updated:** 2026-02-12
+> **Last Updated:** 2026-02-18
 >
 > Theo dõi tiến độ implementation dựa trên [ERD.md](./ERD.md), [Rescue_flow_2.2.md](./flows/Rescue_flow_2.2.md), [Relief_flow_1.1.md](./flows/Relief_flow_1.1.md), và [Supply_management.md](./Supply_management.md).
 
@@ -20,16 +20,16 @@
 
 ## 📊 Trạng thái tổng quan
 
-| Module                 | Tiến độ | Ghi chú                                                       |
-| :--------------------- | :------ | :------------------------------------------------------------ |
-| **Authentication**     | ~90%    | Login, Register, JWT, Session. Refactored response format.    |
-| **Request Management** | ~98%    | Unified Flow 2.2, 12 endpoints. Refactored response format.   |
-| **Team Management**    | ~70%    | CRUD skeleton, Member management. Refactored response format. |
-| **Notification**       | ~85%    | WebSocket + REST API. Refactored response format.             |
-| **Mission**            | ~80%    | Core CRUD & Lifecycle implemented. Verified.                  |
+| Module                 | Tiến độ | Ghi chú                                                                 |
+| :--------------------- | :------ | :---------------------------------------------------------------------- |
+| **Authentication**     | ~90%    | Login, Register, JWT, Session. Refactored response format.              |
+| **Request Management** | ~98%    | Unified Flow 2.2, 12 endpoints. Refactored response format.             |
+| **Team Management**    | ~70%    | CRUD skeleton, Member management. Refactored response format.           |
+| **Notification**       | ~85%    | WebSocket + REST API. Refactored response format.                       |
+| **Mission**            | ~80%    | Core CRUD & Lifecycle implemented. Verified.                            |
 | **Timeline**           | ~90%    | Full core lifecycle API + status sync implemented (without GPS/Supply). |
-| **Supply Management**  | ~5%     | Chỉ có model cơ bản                                           |
-| **Position Tracking**  | 0%      | GPS tracking chưa implement                                   |
+| **Supply Management**  | ~5%     | Chỉ có model cơ bản                                                     |
+| **Position Tracking**  | 0%      | GPS tracking chưa implement                                             |
 
 ## 1. 🔐 Authentication Module
 
@@ -82,10 +82,10 @@
 - [x] `PATCH /api/requests/:id/duplicate` — Coordinator mark duplicate (sync status/priority từ gốc, chỉ trước IN_PROGRESS, không chain)
 - [x] `PATCH /api/requests/:id/location` — Coordinator update location & verify
 - [x] `PATCH /api/requests/:id/priority` — Coordinator đổi priority (chỉ VERIFIED, không cho duplicate)
+- [x] Derivation logic: Auto-update Request status dựa trên Timeline results (`syncRequestStatus` in `timeline.service.js`)
 
 ### Not Implemented ❌
 
-- [ ] Derivation logic: Auto-update status dựa trên Timeline results
 - [ ] Duplicate detection algorithm (location + time + citizen) - Future enhancement
 - [ ] Thêm supply vào request: requestSupplies
 - [ ] Citizen chỉnh sửa request: các field có thể chỉnh sửa như location, peopleCount, description, requestSupplies, media.
@@ -243,9 +243,9 @@
 
 ### Not Implemented ❌
 
-- [ ] `MISSION_ASSIGNED` event
-- [ ] `MISSION_APPROACHING` event (Team `EN_ROUTE`)
-- [ ] `MISSION_ACCEPTED` event
+- [x] `MISSION_ASSIGNED` event (emit in `mission.service.js`, listener in `notify.listener.js`)
+- [x] `MISSION_APPROACHING` event — Team `EN_ROUTE` (emit in `timeline.service.js`)
+- [x] `MISSION_ACCEPTED` event (emit in `timeline.service.js`)
 - [ ] Push notification integration (Firebase)
 
 ---
