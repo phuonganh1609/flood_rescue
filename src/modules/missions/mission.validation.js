@@ -9,14 +9,14 @@ const objectId = Joi.string()
 const createMissionSchema = Joi.object({
   name: Joi.string().trim().min(3).max(200).required(),
   description: Joi.string().max(1000).allow("", null),
-  priority: Joi.string().valid("CRITICAL", "HIGH", "NORMAL").default("NORMAL"),
+  priority: Joi.string().valid("Critical", "High", "Normal").default("Normal"),
   type: Joi.string().valid("RESCUE", "RELIEF").required(),
 });
 
 const updateMissionSchema = Joi.object({
   name: Joi.string().trim().min(3).max(200),
   description: Joi.string().max(1000).allow("", null),
-  priority: Joi.string().valid("CRITICAL", "HIGH", "NORMAL"),
+  priority: Joi.string().valid("Critical", "High", "Normal"),
 }).min(1); // Require at least one field to update
 
 const assignTeamSchema = Joi.object({
