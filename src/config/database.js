@@ -6,8 +6,7 @@ import mongoose from "mongoose";
  */
 const connectDB = async () => {
   try {
-    const connectionString =
-      process.env.MONGODB_CONNECT_URI || process.env.MONGODB_CONNECTIONSTRING;
+    const connectionString = process.env.MONGODB_CONNECTIONSTRING;
 
     if (!connectionString) {
       throw new Error("MongoDB connection string is not defined in .env file");

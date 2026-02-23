@@ -76,6 +76,9 @@ paths:
               schema:
                 type: object
                 properties:
+                  message:
+                    type: string
+                    example: "Đăng ký thành công"
                   userId:
                     type: string
                     example: "60d5ec49f1b2c8b1f8e4e1a1"
@@ -97,7 +100,9 @@ paths:
       tags:
         - Auth
       summary: User login
-      description: Login to the system with phone number and password
+      description: |-
+        Login to the system with email and password.
+        Returns access token in response body and refresh token in HTTP-only cookie.
       operationId: login
       requestBody:
         description: Login credentials
@@ -108,7 +113,13 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Login successful
+          description: Login successful. Refresh token is set in HTTP-only cookie.
+          headers:
+            Set-Cookie:
+              description: HTTP-only cookie containing refresh token (7 days)
+              schema:
+                type: string
+                example: refreshToken=abc123...; HttpOnly; Secure; SameSite=Strict; Max-Age=604800
           content:
             application/json:
               schema:
@@ -126,7 +137,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/auth/user:
+  /api/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: |
+        Refresh access token bằng refresh token lưu trong HTTP-only cookie. Không cần Authorization header.
+      operationId: refreshToken
+      parameters:
+        - name: refreshToken
+          in: cookie
+          required: true
+          description: Refresh token được set trong cookie khi đăng nhập
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Refresh thành công, trả về access token mới
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Refresh token không hợp lệ hoặc đã hết hạn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/me:
     get:
       tags:
         - Auth
@@ -148,48 +194,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /api/auth/createRescueTeam:
-    post:
-      tags:
-        - Auth
-      summary: Create a rescue team
-      description: Create a new rescue team (Coordinator, Manager, or Admin only)
-      operationId: createRescueTeam
-      security:
-        - bearerAuth: []
-      requestBody:
-        description: Rescue team information
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateRescueTeamRequest"
-      responses:
-        "201":
-          description: Rescue team created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  teamId:
-                    type: string
-                    example: "60d5ec49f1b2c8b1f8e4e1a2"
-        "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Forbidden - insufficient permissions
+        "404":
+          description: User not found
           content:
             application/json:
               schema:
@@ -201,81 +207,22 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/auth/addTeamMember:
+  /api/auth/logout:
     post:
       tags:
         - Auth
-      summary: Add member to rescue team
-      description: Add a new member to an existing rescue team
-      operationId: addTeamMember
+      summary: Logout
+      description: |-
+        Logout user by deleting refresh token from database and clearing cookie.
+        Requires refresh token in HTTP-only cookie.
+      operationId: logout
       security:
         - bearerAuth: []
-      requestBody:
-        description: Team member information
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AddTeamMemberRequest"
       responses:
-        "201":
-          description: Team member added successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
+        "204":
+          description: Logout successful. Cookie is cleared.
         "400":
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /api/auth/addRequest:
-    post:
-      tags:
-        - Auth
-      summary: Submit rescue or relief request
-      description: Submit a new rescue or relief request
-      operationId: addRequest
-      security:
-        - bearerAuth: []
-      requestBody:
-        description: Request information
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateRequestInput"
-      responses:
-        "201":
-          description: Request created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  requestId:
-                    type: string
-                    example: "60d5ec49f1b2c8b1f8e4e1a3"
-        "400":
-          description: Invalid input
+          description: No refresh token found in cookie
           content:
             application/json:
               schema:
@@ -292,7 +239,7 @@ paths:
       tags:
         - Requests
       summary: List all requests
-      description: Get list of rescue/relief requests (can filter by status)
+      description: "Get list of rescue/relief requests with pagination and filtering (Roles: Coordinator, RescueTeam)"
       operationId: listRequests
       security:
         - bearerAuth: []
@@ -304,13 +251,12 @@ paths:
           schema:
             type: string
             enum:
-              - Pending
-              - Verified
-              - Assigned
-              - InProgress
+              - Submitted
+              - Accepted
+              - Rejected
+              - In Progress
               - Completed
               - Cancelled
-              - Spam
         - name: type
           in: query
           description: Filter by request type
@@ -320,6 +266,18 @@ paths:
             enum:
               - Rescue
               - Relief
+        - name: incidentType
+          in: query
+          description: Filter by incident type
+          required: false
+          schema:
+            type: string
+            enum:
+              - Flood
+              - Trapped
+              - Injured
+              - Landslide
+              - Other
         - name: priority
           in: query
           description: Filter by priority level
@@ -330,18 +288,42 @@ paths:
               - Critical
               - High
               - Normal
+        - name: userName
+          in: query
+          description: Filter by requester name (case-insensitive)
+          required: false
+          schema:
+            type: string
+        - name: source
+          in: query
+          description: Filter by request source
+          required: false
+          schema:
+            type: string
+            enum:
+              - CITIZEN
+              - COORDINATOR
+        - name: createdBy
+          in: query
+          description: Filter by creator ID (ObjectId)
+          required: false
+          schema:
+            type: string
         - name: page
           in: query
           description: Page number for pagination
           schema:
             type: integer
             default: 1
+            minimum: 1
         - name: limit
           in: query
           description: Number of items per page
           schema:
             type: integer
-            default: 20
+            default: 10
+            minimum: 1
+            maximum: 100
       responses:
         "200":
           description: Requests retrieved successfully
@@ -374,19 +356,86 @@ paths:
       tags:
         - Requests
       summary: Get my requests
-      description: Get all requests submitted by current user (Citizen)
+      description: "Get all requests submitted by the current user with pagination and filtering (Role: Citizen)"
       operationId: getMyRequests
       security:
         - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by request status
+          required: false
+          schema:
+            type: string
+            enum:
+              - Submitted
+              - Accepted
+              - Rejected
+              - In Progress
+              - Completed
+              - Cancelled
+        - name: type
+          in: query
+          description: Filter by request type
+          required: false
+          schema:
+            type: string
+            enum:
+              - Rescue
+              - Relief
+        - name: incidentType
+          in: query
+          description: Filter by incident type
+          required: false
+          schema:
+            type: string
+            enum:
+              - Flood
+              - Trapped
+              - Injured
+              - Landslide
+              - Other
+        - name: priority
+          in: query
+          description: Filter by priority level
+          required: false
+          schema:
+            type: string
+            enum:
+              - Critical
+              - High
+              - Normal
+        - name: page
+          in: query
+          description: Page number for pagination
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
       responses:
         "200":
           description: Requests retrieved successfully
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Request"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Request"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
         "401":
           description: Unauthorized
           content:
@@ -400,7 +449,68 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/requests/{id}:
+  /api/requests/addRequest:
+    post:
+      tags:
+        - Requests
+      summary: Create new request
+      description: Create a new rescue or relief request
+      operationId: addRequest
+      security:
+        - bearerAuth: []
+      requestBody:
+        description: Request information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequestInput"
+      responses:
+        "201":
+          description: Request created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Request created successfully
+                  data:
+                    $ref: "#/components/schemas/Request"
+        "400":
+          description: Invalid input or validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Validation failed
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        message:
+                          type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/requests/{requestId}:
     get:
       tags:
         - Requests
@@ -410,7 +520,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: id
+        - name: requestId
           in: path
           description: Request ID
           required: true
@@ -429,6 +539,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         default:
           description: Unexpected error
           content:
@@ -436,55 +552,95 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/requests/{id}/verify:
+  /api/requests/{requestId}/status:
     patch:
       tags:
         - Requests
-      summary: Verify request
-      description: Verify or mark request as spam (Coordinator only)
-      operationId: verifyRequest
+      summary: Update request status
+      description: |
+        Update the status of a request with state machine validation.
+
+        **Allowed transitions:**
+        - Submitted → Accepted | Rejected
+        - Accepted → In Progress
+        - In Progress → Completed | Cancelled
+
+        ⚠️ Backward transitions are NOT allowed.
+      operationId: updateRequestStatus
       security:
         - bearerAuth: []
       parameters:
-        - name: id
+        - name: requestId
           in: path
-          description: Request ID
           required: true
+          description: The ID of the request to update
           schema:
             type: string
       requestBody:
+        description: New status and optional reason for rejection/cancellation
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - status
               properties:
                 status:
                   type: string
                   enum:
-                    - Verified
-                    - Spam
-              required:
-                - status
+                    [
+                      Submitted,
+                      Accepted,
+                      Rejected,
+                      In Progress,
+                      Completed,
+                      Cancelled,
+                    ]
+                  description: The new status for the request
+                reason:
+                  type: string
+                  maxLength: 200
+                  description: Reason for rejection or cancellation (optional)
       responses:
         "200":
-          description: Request verified successfully
+          description: Request status updated successfully
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
-        "403":
-          description: Forbidden - insufficient permissions
+                  message:
+                    type: string
+                    example: Request status updated successfully
+                  data:
+                    $ref: "#/components/schemas/Request"
+        "400":
+          description: Invalid input or validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                        message:
+                          type: string
+        "404":
+          description: Request not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "404":
-          description: Request not found
+        "401":
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -496,56 +652,59 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/requests/{id}/priority:
-    patch:
+  /api/requests/on-behalf:
+    post:
       tags:
         - Requests
-      summary: Set request priority
-      description: Set priority level for a request (Coordinator only)
-      operationId: setRequestPriority
+      summary: Create request on behalf of citizen
+      description: |
+        Coordinator creates a request on behalf of a citizen.
+        - If `citizenId` is provided: links to existing citizen account, checks 1 active request rule.
+        - If `citizenId` is NOT provided: requires `userName` and `phoneNumber` for unregistered citizen.
+        - Status is automatically set to `VERIFIED`.
+        - `source` is set to `COORDINATOR`, `createdBy` = coordinator ID.
+      operationId: createRequestOnBehalf
       security:
         - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          description: Request ID
-          required: true
-          schema:
-            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                priority:
-                  type: string
-                  enum:
-                    - Critical
-                    - High
-                    - Normal
-              required:
-                - priority
+              $ref: "#/components/schemas/CreateRequestOnBehalfInput"
       responses:
-        "200":
-          description: Priority updated successfully
+        "201":
+          description: Request created on behalf successfully
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
+                  message:
+                    type: string
+                    example: Request created on behalf successfully
+                  data:
+                    $ref: "#/components/schemas/Request"
+        "400":
+          description: Validation failed or citizen has active request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "403":
-          description: Forbidden - insufficient permissions
+          description: Forbidden - Coordinator only
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          description: Request not found
+          description: Citizen not found
           content:
             application/json:
               schema:
@@ -557,41 +716,67 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/requests/{id}/confirm:
-    patch:
+  /api/requests/search-citizens:
+    get:
       tags:
         - Requests
-      summary: Confirm safety or receipt
-      description: Citizen confirms they are safe or received relief supplies
-      operationId: confirmRequest
+      summary: Search citizens for on-behalf creation
+      description: |
+        Coordinator searches for citizens by display name or phone number.
+        Only returns active users with role = Citizen. Limited to 10 results.
+      operationId: searchCitizens
       security:
         - bearerAuth: []
       parameters:
-        - name: id
-          in: path
-          description: Request ID
+        - name: q
+          in: query
+          description: Search keyword (min 2 characters)
           required: true
           schema:
             type: string
+            minLength: 2
       responses:
         "200":
-          description: Confirmation successful
+          description: Citizens found
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
-        "403":
-          description: Forbidden - not request owner
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                          example: "60d5ec49f1b2c8b1f8e4e1a1"
+                        displayName:
+                          type: string
+                          example: "Nguyen Van A"
+                        userName:
+                          type: string
+                          example: "nguyenvana"
+                        phoneNumber:
+                          type: string
+                          example: "0901234567"
+                        email:
+                          type: string
+                          example: "nguyenvana@example.com"
+        "400":
+          description: Search query too short
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "404":
-          description: Request not found
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Coordinator only
           content:
             application/json:
               schema:
@@ -1566,17 +1751,431 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/teams:
+    get:
+      tags:
+        - Teams
+      summary: List all teams
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [AVAILABLE, BUSY]
+      responses:
+        "200":
+          description: Successful operation
+    post:
+      tags:
+        - Teams
+      summary: Create a new team
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - leaderId
+              properties:
+                name:
+                  type: string
+                leaderId:
+                  type: string
+      responses:
+        "201":
+          description: Team created successfully
+
+  /api/teams/{teamId}:
+    get:
+      tags:
+        - Teams
+      summary: Get team details
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful operation
+    patch:
+      tags:
+        - Teams
+      summary: Update team details
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                leaderId:
+                  type: string
+                status:
+                  type: string
+                  enum: [AVAILABLE, BUSY]
+      responses:
+        "200":
+          description: Team updated successfully
+    delete:
+      tags:
+        - Teams
+      summary: Delete team
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team deleted successfully
+
+  /api/teams/{teamId}/leader:
+    patch:
+      tags:
+        - Teams
+      summary: Change team leader
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newLeaderId
+              properties:
+                newLeaderId:
+                  type: string
+      responses:
+        "200":
+          description: Team leader updated successfully
+
+  /api/teams/{teamId}/members:
+    post:
+      tags:
+        - Teams
+      summary: Add member to team
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+      responses:
+        "201":
+          description: Member added successfully
+
+  /api/teams/{teamId}/members/{userId}:
+    delete:
+      tags:
+        - Teams
+      summary: Remove member from team
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: teamId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Member removed successfully
+
+  /api/timelines:
+    get:
+      tags:
+        - Missions
+      summary: List timelines
+      description: List timelines with filters and pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: missionId
+          schema:
+            type: string
+        - in: query
+          name: requestId
+          schema:
+            type: string
+        - in: query
+          name: teamId
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum:
+              - ASSIGNED
+              - EN_ROUTE
+              - ON_SITE
+              - COMPLETED
+              - PARTIAL
+              - FAILED
+              - WITHDRAWN
+              - CANCELLED
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Timelines retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Timeline"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
+
+  /api/timelines/{id}:
+    get:
+      tags:
+        - Missions
+      summary: Get timeline detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Timeline"
+
+  /api/timelines/{id}/accept:
+    patch:
+      tags:
+        - Missions
+      summary: Team accepts assigned timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline accepted successfully
+
+  /api/timelines/{id}/arrive:
+    patch:
+      tags:
+        - Missions
+      summary: Team marks timeline as ON_SITE
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Timeline marked ON_SITE successfully
+
+  /api/timelines/{id}/complete:
+    patch:
+      tags:
+        - Missions
+      summary: Complete timeline with outcome
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineCompleteInput"
+      responses:
+        "200":
+          description: Timeline completed successfully
+
+  /api/timelines/{id}/fail:
+    patch:
+      tags:
+        - Missions
+      summary: Mark timeline as FAILED
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineFailInput"
+      responses:
+        "200":
+          description: Timeline marked failed successfully
+
+  /api/timelines/{id}/withdraw:
+    patch:
+      tags:
+        - Missions
+      summary: Team withdraws assigned timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineWithdrawInput"
+      responses:
+        "200":
+          description: Timeline withdrawn successfully
+
+  /api/timelines/{id}/cancel:
+    patch:
+      tags:
+        - Missions
+      summary: Coordinator cancels assigned timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimelineCancelInput"
+      responses:
+        "200":
+          description: Timeline cancelled successfully
+
 components:
   schemas:
     RegisterRequest:
       type: object
       required:
-        - fullName
+        - userName
+        - displayName
         - email
         - phoneNumber
         - password
       properties:
-        fullName:
+        userName:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: "nguyenvana"
+        displayName:
           type: string
           minLength: 2
           maxLength: 100
@@ -1589,6 +2188,7 @@ components:
           type: string
           pattern: "^[0-9]{10,11}$"
           example: "0901234567"
+          description: "Required phone number (10-11 digits)"
         password:
           type: string
           minLength: 6
@@ -1607,13 +2207,13 @@ components:
     LoginRequest:
       type: object
       required:
-        - phoneNumber
+        - email
         - password
       properties:
-        phoneNumber:
+        email:
           type: string
-          pattern: "^[0-9]{10,11}$"
-          example: "0901234567"
+          format: email
+          example: "nguyenvana@example.com"
         password:
           type: string
           example: "password123"
@@ -1633,7 +2233,10 @@ components:
         _id:
           type: string
           example: "60d5ec49f1b2c8b1f8e4e1a1"
-        fullName:
+        userName:
+          type: string
+          example: "nguyenvana"
+        displayName:
           type: string
           example: "Nguyen Van A"
         email:
@@ -1642,6 +2245,15 @@ components:
         phoneNumber:
           type: string
           example: "0901234567"
+        avatarUrl:
+          type: string
+          example: "https://cloudinary.com/avatar.jpg"
+        avatarId:
+          type: string
+          example: "avatar_public_id"
+        isActive:
+          type: boolean
+          example: true
         role:
           type: string
           enum:
@@ -1709,31 +2321,70 @@ components:
           enum:
             - Rescue
             - Relief
+          description: Type of request - Rescue or Relief
+          example: Rescue
+        incidentType:
+          type: string
+          enum:
+            - Flood
+            - Trapped
+            - Injured
+            - Landslide
+            - Other
+          description: Type of incident
+          default: Other
+          example: Flood
         latitude:
           type: number
           format: double
           minimum: -90
           maximum: 90
+          description: Latitude coordinate of the incident location
           example: 10.762622
         longitude:
           type: number
           format: double
           minimum: -180
           maximum: 180
+          description: Longitude coordinate of the incident location
           example: 106.660172
         description:
           type: string
           minLength: 10
           maxLength: 500
-          example: "Trapped in flooded house, need immediate rescue"
+          description: Detailed description of the situation
+          example: "Trapped in flooded house on second floor, water rising quickly. 3 people including 1 elderly person."
+        peopleCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 1
+          description: Number of people affected
+          example: 3
         requestSupply:
+          type: array
+          items:
+            type: string
+          description: List of requested supplies
+          example: ["Food", "Water", "First aid kit", "Blankets"]
+        priority:
           type: string
-          maxLength: 200
-          example: "Food, water, first aid kit"
-        requestMedia:
-          type: string
-          format: uri
-          example: "https://example.com/image.jpg"
+          enum:
+            - Critical
+            - High
+            - Normal
+          default: Normal
+          description: Priority level of the request
+          example: High
+        imageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          maxItems: 5
+          description: URLs of images showing the situation (max 5)
+          example:
+            ["https://example.com/image1.jpg", "https://example.com/image2.jpg"]
 
     Request:
       type: object
@@ -1743,48 +2394,215 @@ components:
           example: "60d5ec49f1b2c8b1f8e4e1a3"
         userName:
           type: string
+          description: Name of the requester
           example: "Nguyen Van A"
+        userId:
+          type: string
+          nullable: true
+          description: ID of the citizen user (null for unregistered citizens)
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        createdBy:
+          type: string
+          description: ID of the user who created this request
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        source:
+          type: string
+          enum:
+            - CITIZEN
+            - COORDINATOR
+          description: Origin of the request
+          example: CITIZEN
+        phoneNumber:
+          type: string
+          nullable: true
+          description: Phone number of the requester
+          example: "0901234567"
         type:
           type: string
           enum:
             - Rescue
             - Relief
-        latitude:
-          type: number
-          format: double
-        longitude:
-          type: number
-          format: double
+          example: Rescue
+        incidentType:
+          type: string
+          enum:
+            - Flood
+            - Trapped
+            - Injured
+            - Landslide
+            - Other
+          example: Flood
+        location:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [Point]
+              example: Point
+            coordinates:
+              type: array
+              items:
+                type: number
+              example: [106.660172, 10.762622]
         description:
           type: string
+          example: "Trapped in flooded house on second floor"
+        peopleCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 3
         priority:
           type: string
           enum:
             - Critical
             - High
             - Normal
+          example: High
         status:
           type: string
           enum:
-            - Pending
-            - Verified
-            - Assigned
-            - InProgress
-            - Completed
-            - Cancelled
-            - Spam
-        requestSupply:
+            - SUBMITTED
+            - VERIFIED
+            - REJECTED
+            - IN_PROGRESS
+            - PARTIALLY_FULFILLED
+            - FULFILLED
+            - CLOSED
+            - CANCELLED
+          example: SUBMITTED
+        requestSupplies:
           type: array
           items:
-            type: string
-        requestMedia:
+            type: object
+            properties:
+              supplyId:
+                type: string
+              requestedQty:
+                type: integer
+                minimum: 1
+        media:
+          type: array
+          items:
+            type: object
+            properties:
+              imageUrl:
+                type: string
+                format: uri
+                example: "https://example.com/image.jpg"
+              description:
+                type: string
+              uploadedAt:
+                type: string
+                format: date-time
+        isDuplicated:
+          type: boolean
+          default: false
+        duplicatedOfRequestId:
           type: string
+          nullable: true
+        isLocationVerified:
+          type: boolean
+          default: false
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+
+    CreateRequestOnBehalfInput:
+      type: object
+      required:
+        - type
+        - location
+        - description
+      properties:
+        citizenId:
+          type: string
+          description: ID of an existing citizen user. If provided, userName and phoneNumber are forbidden.
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
+        userName:
+          type: string
+          minLength: 2
+          maxLength: 100
+          description: Required when citizenId is not provided
+          example: "Tran Van B"
+        phoneNumber:
+          type: string
+          pattern: "^[0-9]{10,11}$"
+          description: Required when citizenId is not provided
+          example: "0987654321"
+        type:
+          type: string
+          enum:
+            - Rescue
+            - Relief
+          example: Rescue
+        incidentType:
+          type: string
+          enum:
+            - Flood
+            - Trapped
+            - Injured
+            - Landslide
+            - Other
+          default: Other
+        location:
+          type: object
+          required:
+            - type
+            - coordinates
+          properties:
+            type:
+              type: string
+              enum: [Point]
+              default: Point
+            coordinates:
+              type: array
+              items:
+                type: number
+              minItems: 2
+              maxItems: 2
+              description: "[longitude, latitude]"
+              example: [106.660172, 10.762622]
+        description:
+          type: string
+          minLength: 10
+          maxLength: 500
+          example: "Citizen called via hotline, trapped on rooftop."
+        peopleCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 1
+        priority:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Normal
+          default: Normal
+          description: Coordinator can set priority at creation
+        requestSupplies:
+          type: array
+          items:
+            type: object
+            required:
+              - supplyId
+              - requestedQty
+            properties:
+              supplyId:
+                type: string
+              requestedQty:
+                type: integer
+                minimum: 1
+        imageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          maxItems: 5
 
     CreateMissionRequest:
       type: object
@@ -1982,6 +2800,113 @@ components:
         totalPages:
           type: integer
           example: 5
+
+    Timeline:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "65f1d2c3b4a5968776655443"
+        missionId:
+          type: string
+          example: "65f1d2c3b4a5968776655111"
+        requestId:
+          type: string
+          example: "65f1d2c3b4a5968776655222"
+        teamId:
+          type: string
+          example: "65f1d2c3b4a5968776655333"
+        status:
+          type: string
+          enum:
+            - ASSIGNED
+            - EN_ROUTE
+            - ON_SITE
+            - COMPLETED
+            - PARTIAL
+            - FAILED
+            - WITHDRAWN
+            - CANCELLED
+        assignedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        arrivedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        rescuedCount:
+          type: integer
+          minimum: 0
+          example: 4
+        failureReason:
+          type: string
+          nullable: true
+        withdrawalReason:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TimelineCompleteInput:
+      type: object
+      required:
+        - outcome
+      properties:
+        outcome:
+          type: string
+          enum:
+            - COMPLETED
+            - PARTIAL
+        note:
+          type: string
+          nullable: true
+        rescuedCount:
+          type: integer
+          minimum: 0
+
+    TimelineFailInput:
+      type: object
+      required:
+        - failureReason
+      properties:
+        failureReason:
+          type: string
+        note:
+          type: string
+          nullable: true
+
+    TimelineWithdrawInput:
+      type: object
+      required:
+        - withdrawalReason
+      properties:
+        withdrawalReason:
+          type: string
+        note:
+          type: string
+          nullable: true
+
+    TimelineCancelInput:
+      type: object
+      properties:
+        note:
+          type: string
+          nullable: true
 
     Error:
       type: object

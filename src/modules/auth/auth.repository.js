@@ -1,14 +1,11 @@
 import User from "../users/user.model.js";
-import RescueTeam from "../teams/teamRescue.model.js";
-import TeamMember from "../teams/teamMember.model.js";
-import RequestMission from "../requests/request.model.js";
 
 /**
  * Repository cho User operations
  */
 class AuthRepository {
   /**
-   * Tìm user theo email
+   * Tìm user theo email (bao gồm hashedPassword để verify login)
    * @param {string} email
    * @returns {Promise<Object|null>}
    */
@@ -43,7 +40,16 @@ class AuthRepository {
    * @returns {Promise<Object|null>}
    */
   async findUserById(userId) {
-    return await User.findById(userId).select("-password");
+    return await User.findById(userId).select("-hashedPassword");
+  }
+
+  /**
+   * Tìm user theo role
+   * @param {string} role
+   * @returns {Promise<Array>}
+   */
+  async findUsersByRole(role) {
+    return await User.find({ role }).select("-hashedPassword");
   }
 
   /**
@@ -65,52 +71,25 @@ class AuthRepository {
   async updateUser(userId, updateData) {
     return await User.findByIdAndUpdate(userId, updateData, { new: true });
   }
-}
-
-/**
- * Repository cho RescueTeam operations
- */
-class RescueTeamRepository {
-  /**
-   * Tìm rescue team theo tên
-   * @param {string} name
-   * @returns {Promise<Object|null>}
-   */
-  async findTeamByName(name) {
-    return await RescueTeam.findOne({ name });
-  }
 
   /**
-   * Tạo rescue team mới
-   * @param {Object} teamData
-   * @returns {Promise<Object>}
-   */
-  async createTeam(teamData) {
-    const team = new RescueTeam(teamData);
-    return await team.save();
-  }
-
-  /**
-   * Cập nhật rescue team
-   * @param {string} teamId
-   * @param {Object} updateData
-   * @returns {Promise<Object|null>}
-   */
-  async updateTeam(teamId, updateData) {
-    return await RescueTeam.findByIdAndUpdate(teamId, updateData, {
-      new: true,
-    });
-  }
-
-  /**
-   * Lấy danh sách tất cả teams
+   * Tìm kiếm citizen theo displayName hoặc phoneNumber
+   * @param {string} query - search keyword
    * @returns {Promise<Array>}
    */
-  async getAllTeams() {
-    return await RescueTeam.find();
+  async searchCitizens(query) {
+    const regex = new RegExp(query, "i");
+    return await User.find({
+      role: "Citizen",
+      isActive: true,
+      $or: [{ displayName: regex }, { phoneNumber: regex }],
+    })
+      .select("displayName userName phoneNumber email")
+      .limit(10);
   }
 }
 
+<<<<<<< HEAD
 /**
  * Repository cho TeamMember operations
  */
@@ -223,14 +202,8 @@ export {
   RequestRepository,
 };
 
+=======
+>>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
 const authRepository = new AuthRepository();
-const rescueTeamRepository = new RescueTeamRepository();
-const teamMemberRepository = new TeamMemberRepository();
-const requestRepository = new RequestRepository();
 
-export {
-  authRepository,
-  rescueTeamRepository,
-  teamMemberRepository,
-  requestRepository,
-};
+export { authRepository };

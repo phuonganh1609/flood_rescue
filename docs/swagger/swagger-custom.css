@@ -1,0 +1,38 @@
+.swagger-ui .models .no-margin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: flex-start;
+}
+.swagger-ui .models .model-box {
+  flex: 0 0 calc((100% - 40px) / 3);
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 15px;
+  background: #fff;
+  margin-bottom: 0 !important;
+  box-sizing: border-box;
+  transition: transform 0.2s;
+}
+.swagger-ui .models .model-box:hover {
+  transform: translateY(-3px);
+}
+.swagger-ui .models .model-box .model-title {
+  font-size: 1.1em;
+  color: #2c3e50;
+}
+/* Clean up internal spacing */
+.swagger-ui .model-box-control {
+  margin-bottom: 10px;
+}
+/* Responsive breakpoints */
+@media (max-width: 1200px) {
+  .swagger-ui .models .model-box {
+    flex: 0 0 calc((100% - 20px) / 2);
+  }
+}
+@media (max-width: 768px) {
+  .swagger-ui .models .model-box {
+    flex: 0 0 100%;
+  }
+}

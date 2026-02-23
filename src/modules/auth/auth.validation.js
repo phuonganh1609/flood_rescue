@@ -4,11 +4,17 @@ import Joi from "joi";
  * Validation schema cho register
  */
 const registerSchema = Joi.object({
-  fullName: Joi.string().min(2).max(100).required().messages({
-    "string.empty": "Họ tên không được để trống",
-    "string.min": "Họ tên phải có ít nhất 2 ký tự",
-    "string.max": "Họ tên không được vượt quá 100 ký tự",
-    "any.required": "Họ tên là bắt buộc",
+  userName: Joi.string().min(3).max(50).required().messages({
+    "string.empty": "Tên đăng nhập không được để trống",
+    "string.min": "Tên đăng nhập phải có ít nhất 3 ký tự",
+    "string.max": "Tên đăng nhập không được vượt quá 50 ký tự",
+    "any.required": "Tên đăng nhập là bắt buộc",
+  }),
+  displayName: Joi.string().min(2).max(100).required().messages({
+    "string.empty": "Tên hiển thị không được để trống",
+    "string.min": "Tên hiển thị phải có ít nhất 2 ký tự",
+    "string.max": "Tên hiển thị không được vượt quá 100 ký tự",
+    "any.required": "Tên hiển thị là bắt buộc",
   }),
   email: Joi.string().email().required().messages({
     "string.empty": "Email không được để trống",
@@ -19,8 +25,12 @@ const registerSchema = Joi.object({
     .pattern(/^[0-9]{10}$/)
     .required()
     .messages({
+<<<<<<< HEAD
       "string.empty": "Số điện thoại không được để trống",
       "string.pattern.base": "Số điện thoại phải có 10 chữ số",
+=======
+      "string.pattern.base": "Số điện thoại phải có 10-11 chữ số",
+>>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
       "any.required": "Số điện thoại là bắt buộc",
     }),
   password: Joi.string().min(6).max(100).required().messages({
@@ -41,6 +51,7 @@ const registerSchema = Joi.object({
  * Validation schema cho login
  */
 const loginSchema = Joi.object({
+<<<<<<< HEAD
   phoneNumber: Joi.string()
     .pattern(/^[0-9]{10}$/)
     .required()
@@ -49,12 +60,20 @@ const loginSchema = Joi.object({
       "string.pattern.base": "Số điện thoại phải có 10 chữ số",
       "any.required": "Số điện thoại là bắt buộc",
     }),
+=======
+  email: Joi.string().email().required().messages({
+    "string.empty": "Email không được để trống",
+    "string.email": "Email không hợp lệ",
+    "any.required": "Email là bắt buộc",
+  }),
+>>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
   password: Joi.string().required().messages({
     "string.empty": "Mật khẩu không được để trống",
     "any.required": "Mật khẩu là bắt buộc",
   }),
 });
 
+<<<<<<< HEAD
 /**
  * Validation schema cho tạo rescue team
  */
@@ -172,3 +191,6 @@ export {
   addMemberTeamSchema,
   addRequestSchema,
 };
+=======
+export { registerSchema, loginSchema };
+>>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
