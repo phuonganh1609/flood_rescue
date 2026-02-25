@@ -1,4 +1,5 @@
 import { teamRepository } from "./team.repository.js";
+import User from "../users/user.model.js";
 
 /**
  * Service for Team operations
@@ -99,8 +100,8 @@ class TeamService {
 
   /**
    * Add member to team
-   * - User must have role "Rescue Team"
-   * - User must not already belong to another team
+   * - User must have role "Citizen" and no current team
+   * - After adding, user role is updated to "Rescue Team" (via repository)
    */
   async addMember(teamId, userId) {
     const team = await teamRepository.findById(teamId);
@@ -108,17 +109,37 @@ class TeamService {
       throw new Error("Team not found");
     }
 
+    // Validate target user
+    const targetUser = await User.findById(userId).select("role teamId");
+    if (!targetUser) {
+      throw new Error("User not found");
+    }
+
+    if (targetUser.role !== "Citizen") {
+      throw new Error("Only users with role 'Citizen' can be added to a team");
+    }
+
+    if (targetUser.teamId) {
+      throw new Error("User already belongs to a team");
+    }
+
     return await teamRepository.addMember(userId, teamId);
   }
 
   /**
    * Remove member from team
-   * - Cannot remove the leader
+   * - Cannot remove the leader (must change leader first)
+   * - Cannot remove yourself
    */
-  async removeMember(teamId, userId) {
+  async removeMember(teamId, userId, requesterId) {
     const team = await teamRepository.findById(teamId);
     if (!team) {
       throw new Error("Team not found");
+    }
+
+    // Prevent self-removal
+    if (requesterId === userId) {
+      throw new Error("Cannot remove yourself from the team");
     }
 
     // Prevent removing the leader

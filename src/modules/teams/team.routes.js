@@ -1,5 +1,10 @@
 import express from "express";
-import { authenticate, authorize } from "../../middlewares/authMiddleware.js";
+import {
+  authenticate,
+  authorize,
+  authorizeTeamMember,
+  authorizeTeamLeader,
+} from "../../middlewares/authMiddleware.js";
 import {
   getAllTeams,
   getTeam,
@@ -38,6 +43,7 @@ router.get(
   "/:teamId",
   authenticate,
   authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
+  authorizeTeamMember,
   getTeam,
 );
 
@@ -71,7 +77,8 @@ router.patch(
 router.post(
   "/:teamId/members",
   authenticate,
-  authorize(["Rescue Coordinator", "Admin"]),
+  authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
+  authorizeTeamLeader,
   addMember,
 );
 
@@ -79,7 +86,8 @@ router.post(
 router.delete(
   "/:teamId/members/:userId",
   authenticate,
-  authorize(["Rescue Coordinator", "Admin"]),
+  authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
+  authorizeTeamLeader,
   removeMember,
 );
 

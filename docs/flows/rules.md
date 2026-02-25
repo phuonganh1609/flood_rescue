@@ -120,7 +120,31 @@ Request status được suy diễn từ tổng hợp kết quả của các Time
 
 ---
 
-## 5. Quan hệ 1-N (One Mission - Many Timelines)
+## 5. Team Access Rules
+
+### Roles & Permissions
+
+| Endpoint                             | Coordinator / Admin | Team Leader (of that team) | Team Member |
+| :----------------------------------- | :------------------ | :------------------------- | :---------- |
+| `GET /teams`                         | ✅                   | ❌                          | ❌           |
+| `POST /teams`                        | ✅                   | ❌                          | ❌           |
+| `GET /teams/:teamId`                 | ✅ (any team)        | ✅                          | ✅           |
+| `PATCH /teams/:teamId`               | ✅                   | ❌                          | ❌           |
+| `DELETE /teams/:teamId`              | ✅                   | ❌                          | ❌           |
+| `PATCH /teams/:teamId/leader`        | ✅                   | ❌                          | ❌           |
+| `POST /teams/:teamId/members`        | ✅ (any team)        | ✅                          | ❌           |
+| `DELETE /teams/:teamId/members/:uid` | ✅ (any team)        | ✅                          | ❌           |
+
+### Business Rules (Team)
+
+- **T1**: Team Leader = user có `leaderId` trùng với `team.leaderId`.
+- **T2**: `addMember` — chỉ thêm user có role `Citizen` và chưa thuộc team nào. Sau khi thêm, role tự động upgrade lên `Rescue Team`.
+- **T3**: `removeMember` — không thể remove bản thân (self-remove). Không thể remove leader (phải `changeLeader` trước).
+- **T4**: Coordinator / Admin bypass mọi kiểm tra thuộc team, có thể thao tác trên bất kỳ team nào.
+
+---
+
+## 6. Quan hệ 1-N (One Mission - Many Timelines)
 
 Để hỗ trợ quy mô lớn (Scale):
 
