@@ -38,6 +38,8 @@ tags:
     description: Rescue and relief request operations
   - name: Missions
     description: Mission management and tracking
+  - name: Timelines
+    description: Timeline tracking for rescue missions
   - name: Teams
     description: Rescue team management
   - name: Resources
@@ -2143,7 +2145,7 @@ paths:
   /api/timelines:
     get:
       tags:
-        - Missions
+        - Timelines
       summary: List timelines
       description: List timelines with filters and pagination
       security:
@@ -2209,7 +2211,7 @@ paths:
   /api/timelines/{id}:
     get:
       tags:
-        - Missions
+        - Timelines
       summary: Get timeline detail
       security:
         - bearerAuth: []
@@ -2237,7 +2239,7 @@ paths:
   /api/timelines/{id}/accept:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Team accepts assigned timeline
       security:
         - bearerAuth: []
@@ -2254,7 +2256,7 @@ paths:
   /api/timelines/{id}/arrive:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Team marks timeline as ON_SITE
       security:
         - bearerAuth: []
@@ -2271,7 +2273,7 @@ paths:
   /api/timelines/{id}/complete:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Complete timeline with outcome
       security:
         - bearerAuth: []
@@ -2294,7 +2296,7 @@ paths:
   /api/timelines/{id}/fail:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Mark timeline as FAILED
       security:
         - bearerAuth: []
@@ -2317,7 +2319,7 @@ paths:
   /api/timelines/{id}/withdraw:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Team withdraws assigned timeline
       security:
         - bearerAuth: []
@@ -2340,7 +2342,7 @@ paths:
   /api/timelines/{id}/cancel:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Coordinator cancels assigned timeline
       security:
         - bearerAuth: []
