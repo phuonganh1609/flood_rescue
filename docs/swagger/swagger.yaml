@@ -74,27 +74,19 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Đăng ký thành công"
-                  userId:
-                    type: string
-                    example: "60d5ec49f1b2c8b1f8e4e1a1"
+                $ref: "#/components/schemas/AuthRegisterResponse"
         "400":
           description: Invalid input or email already exists
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-
+                $ref: "#/components/schemas/ApiError"
   /api/auth/login:
     post:
       tags:
@@ -119,23 +111,23 @@ paths:
               description: HTTP-only cookie containing refresh token (7 days)
               schema:
                 type: string
-                example: refreshToken=abc123...; HttpOnly; Secure; SameSite=Strict; Max-Age=604800
+                example: refreshToken=abc123...; HttpOnly; Secure; SameSite=None; Max-Age=604800
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LoginResponse"
+                $ref: "#/components/schemas/AuthLoginResponse"
         "400":
           description: Invalid credentials
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
 
   /api/auth/refresh:
     post:
@@ -158,19 +150,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LoginResponse"
+                $ref: "#/components/schemas/AuthRefreshResponse"
         "401":
           description: Refresh token không hợp lệ hoặc đã hết hạn
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
 
   /api/auth/me:
     get:
@@ -187,25 +179,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/AuthMeResponse"
         "401":
           description: Unauthorized - invalid or missing token
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: User not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
 
   /api/auth/logout:
     post:
@@ -221,25 +213,31 @@ paths:
       responses:
         "204":
           description: Logout successful. Cookie is cleared.
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "400":
           description: No refresh token found in cookie
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
 
   /api/requests:
     get:
       tags:
         - Requests
       summary: List all requests
-      description: "Get list of rescue/relief requests with pagination and filtering (Roles: Coordinator, RescueTeam)"
+      description: "Get list of rescue/relief requests with pagination and filtering (Roles: Rescue Coordinator, Rescue Team)"
       operationId: listRequests
       security:
         - bearerAuth: []
@@ -251,12 +249,14 @@ paths:
           schema:
             type: string
             enum:
-              - Submitted
-              - Accepted
-              - Rejected
-              - In Progress
-              - Completed
-              - Cancelled
+              - SUBMITTED
+              - VERIFIED
+              - REJECTED
+              - IN_PROGRESS
+              - PARTIALLY_FULFILLED
+              - FULFILLED
+              - CLOSED
+              - CANCELLED
         - name: type
           in: query
           description: Filter by request type
@@ -330,26 +330,66 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Request"
-                  pagination:
-                    $ref: "#/components/schemas/Pagination"
+                $ref: "#/components/schemas/RequestListResponse"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
+
+    post:
+      tags:
+        - Requests
+      summary: Create new request
+      description: Create a new rescue or relief request (Citizen only)
+      operationId: addRequest
+      security:
+        - bearerAuth: []
+      requestBody:
+        description: Request information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequestInput"
+      responses:
+        "201":
+          description: Request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input or validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /api/requests/my:
     get:
@@ -368,12 +408,14 @@ paths:
           schema:
             type: string
             enum:
-              - Submitted
-              - Accepted
-              - Rejected
-              - In Progress
-              - Completed
-              - Cancelled
+              - SUBMITTED
+              - VERIFIED
+              - REJECTED
+              - IN_PROGRESS
+              - PARTIALLY_FULFILLED
+              - FULFILLED
+              - CLOSED
+              - CANCELLED
         - name: type
           in: query
           description: Filter by request type
@@ -428,87 +470,19 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Request"
-                  pagination:
-                    $ref: "#/components/schemas/Pagination"
+                $ref: "#/components/schemas/RequestListResponse"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-
-  /api/requests/addRequest:
-    post:
-      tags:
-        - Requests
-      summary: Create new request
-      description: Create a new rescue or relief request
-      operationId: addRequest
-      security:
-        - bearerAuth: []
-      requestBody:
-        description: Request information
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateRequestInput"
-      responses:
-        "201":
-          description: Request created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Request created successfully
-                  data:
-                    $ref: "#/components/schemas/Request"
-        "400":
-          description: Invalid input or validation failed
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Validation failed
-                  errors:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        field:
-                          type: string
-                        message:
-                          type: string
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
 
   /api/requests/{requestId}:
     get:
@@ -532,125 +506,379 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Request"
+                $ref: "#/components/schemas/RequestResponse"
         "404":
           description: Request not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
 
-  /api/requests/{requestId}/status:
+  /api/requests/{requestId}/verify:
     patch:
       tags:
         - Requests
-      summary: Update request status
-      description: |
-        Update the status of a request with state machine validation.
-
-        **Allowed transitions:**
-        - Submitted → Accepted | Rejected
-        - Accepted → In Progress
-        - In Progress → Completed | Cancelled
-
-        ⚠️ Backward transitions are NOT allowed.
-      operationId: updateRequestStatus
+      summary: Verify or reject request
+      description: Coordinator verifies or rejects a request (SUBMITTED → VERIFIED/REJECTED)
+      operationId: verifyRequest
       security:
         - bearerAuth: []
       parameters:
         - name: requestId
           in: path
           required: true
-          description: The ID of the request to update
+          description: Request ID
           schema:
             type: string
       requestBody:
-        description: New status and optional reason for rejection/cancellation
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - status
-              properties:
-                status:
-                  type: string
-                  enum:
-                    [
-                      Submitted,
-                      Accepted,
-                      Rejected,
-                      In Progress,
-                      Completed,
-                      Cancelled,
-                    ]
-                  description: The new status for the request
-                reason:
-                  type: string
-                  maxLength: 200
-                  description: Reason for rejection or cancellation (optional)
+              $ref: "#/components/schemas/VerifyRequestInput"
       responses:
         "200":
-          description: Request status updated successfully
+          description: Request verified or rejected successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Request status updated successfully
-                  data:
-                    $ref: "#/components/schemas/Request"
+                $ref: "#/components/schemas/RequestResponse"
         "400":
-          description: Invalid input or validation failed
+          description: Invalid input or transition
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  errors:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        field:
-                          type: string
-                        message:
-                          type: string
-        "404":
-          description: Request not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/close:
+    patch:
+      tags:
+        - Requests
+      summary: Close request
+      description: Coordinator closes a request (FULFILLED/PARTIALLY_FULFILLED → CLOSED)
+      operationId: closeRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request closed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/duplicate:
+    patch:
+      tags:
+        - Requests
+      summary: Mark request as duplicate
+      description: Coordinator marks a request as duplicate of another request
+      operationId: markDuplicate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkDuplicateInput"
+      responses:
+        "200":
+          description: Request marked as duplicate successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input or status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/location:
+    patch:
+      tags:
+        - Requests
+      summary: Update request location
+      description: Coordinator updates and verifies request location
+      operationId: updateRequestLocation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationInput"
+      responses:
+        "200":
+          description: Request location updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/priority:
+    patch:
+      tags:
+        - Requests
+      summary: Update request priority
+      description: Coordinator updates request priority
+      operationId: updateRequestPriority
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePriorityInput"
+      responses:
+        "200":
+          description: Request priority updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - Coordinator only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/requests/{requestId}/cancel:
+    patch:
+      tags:
+        - Requests
+      summary: Cancel request
+      description: Citizen cancels own request or Coordinator cancels any SUBMITTED request
+      operationId: cancelRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: Request ID
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelRequestInput"
+      responses:
+        "200":
+          description: Request cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestResponse"
+        "400":
+          description: Invalid input or status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - not request owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /api/requests/on-behalf:
     post:
@@ -678,43 +906,37 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Request created on behalf successfully
-                  data:
-                    $ref: "#/components/schemas/Request"
+                $ref: "#/components/schemas/RequestResponse"
         "400":
           description: Validation failed or citizen has active request
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden - Coordinator only
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: Citizen not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
 
   /api/requests/search-citizens:
     get:
@@ -741,52 +963,31 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        _id:
-                          type: string
-                          example: "60d5ec49f1b2c8b1f8e4e1a1"
-                        displayName:
-                          type: string
-                          example: "Nguyen Van A"
-                        userName:
-                          type: string
-                          example: "nguyenvana"
-                        phoneNumber:
-                          type: string
-                          example: "0901234567"
-                        email:
-                          type: string
-                          example: "nguyenvana@example.com"
+                $ref: "#/components/schemas/SearchCitizensResponse"
         "400":
           description: Search query too short
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: Forbidden - Coordinator only
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
 
   /api/missions:
     post:
@@ -2227,6 +2428,73 @@ components:
         user:
           $ref: "#/components/schemas/User"
 
+    AuthRegisterResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Đăng ký thành công"
+        data:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Đăng ký thành công"
+            userId:
+              type: string
+              example: "60d5ec49f1b2c8b1f8e4e1a1"
+
+    AuthLoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Đăng nhập thành công"
+        data:
+          type: object
+          properties:
+            accessToken:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            user:
+              $ref: "#/components/schemas/User"
+
+    AuthRefreshResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Refresh token thành công"
+        data:
+          type: object
+          properties:
+            accessToken:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            user:
+              $ref: "#/components/schemas/User"
+
+    AuthMeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Success"
+        data:
+          $ref: "#/components/schemas/User"
+
     User:
       type: object
       properties:
@@ -2312,8 +2580,7 @@ components:
       type: object
       required:
         - type
-        - latitude
-        - longitude
+        - location
         - description
       properties:
         type:
@@ -2334,20 +2601,8 @@ components:
           description: Type of incident
           default: Other
           example: Flood
-        latitude:
-          type: number
-          format: double
-          minimum: -90
-          maximum: 90
-          description: Latitude coordinate of the incident location
-          example: 10.762622
-        longitude:
-          type: number
-          format: double
-          minimum: -180
-          maximum: 180
-          description: Longitude coordinate of the incident location
-          example: 106.660172
+        location:
+          $ref: "#/components/schemas/GeoPoint"
         description:
           type: string
           minLength: 10
@@ -2361,21 +2616,14 @@ components:
           default: 1
           description: Number of people affected
           example: 3
-        requestSupply:
+        requestSupplies:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/RequestSupplyItem"
           description: List of requested supplies
-          example: ["Food", "Water", "First aid kit", "Blankets"]
-        priority:
-          type: string
-          enum:
-            - Critical
-            - High
-            - Normal
-          default: Normal
-          description: Priority level of the request
-          example: High
+          example:
+            - supplyId: "60d5ec49f1b2c8b1f8e4e1a7"
+              requestedQty: 2
         imageUrls:
           type: array
           items:
@@ -2385,6 +2633,40 @@ components:
           description: URLs of images showing the situation (max 5)
           example:
             ["https://example.com/image1.jpg", "https://example.com/image2.jpg"]
+
+    GeoPoint:
+      type: object
+      required:
+        - type
+        - coordinates
+      properties:
+        type:
+          type: string
+          enum:
+            - Point
+          default: Point
+          example: Point
+        coordinates:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: number
+          example: [106.660172, 10.762622]
+
+    RequestSupplyItem:
+      type: object
+      required:
+        - supplyId
+        - requestedQty
+      properties:
+        supplyId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a7"
+        requestedQty:
+          type: integer
+          minimum: 1
+          example: 2
 
     Request:
       type: object
@@ -2433,17 +2715,7 @@ components:
             - Other
           example: Flood
         location:
-          type: object
-          properties:
-            type:
-              type: string
-              enum: [Point]
-              example: Point
-            coordinates:
-              type: array
-              items:
-                type: number
-              example: [106.660172, 10.762622]
+          $ref: "#/components/schemas/GeoPoint"
         description:
           type: string
           example: "Trapped in flooded house on second floor"
@@ -2474,13 +2746,7 @@ components:
         requestSupplies:
           type: array
           items:
-            type: object
-            properties:
-              supplyId:
-                type: string
-              requestedQty:
-                type: integer
-                minimum: 1
+            $ref: "#/components/schemas/RequestSupplyItem"
         media:
           type: array
           items:
@@ -2549,23 +2815,7 @@ components:
             - Other
           default: Other
         location:
-          type: object
-          required:
-            - type
-            - coordinates
-          properties:
-            type:
-              type: string
-              enum: [Point]
-              default: Point
-            coordinates:
-              type: array
-              items:
-                type: number
-              minItems: 2
-              maxItems: 2
-              description: "[longitude, latitude]"
-              example: [106.660172, 10.762622]
+          $ref: "#/components/schemas/GeoPoint"
         description:
           type: string
           minLength: 10
@@ -2587,22 +2837,119 @@ components:
         requestSupplies:
           type: array
           items:
-            type: object
-            required:
-              - supplyId
-              - requestedQty
-            properties:
-              supplyId:
-                type: string
-              requestedQty:
-                type: integer
-                minimum: 1
+            $ref: "#/components/schemas/RequestSupplyItem"
         imageUrls:
           type: array
           items:
             type: string
             format: uri
           maxItems: 5
+
+    RequestResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Request created successfully"
+        data:
+          $ref: "#/components/schemas/Request"
+
+    RequestListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Success"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Request"
+        meta:
+          $ref: "#/components/schemas/Pagination"
+
+    SearchCitizensResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Success"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+
+    VerifyRequestInput:
+      type: object
+      required:
+        - approved
+      properties:
+        approved:
+          type: boolean
+          example: true
+        priority:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Normal
+          description: Required only when approved is true
+          example: High
+        reason:
+          type: string
+          maxLength: 500
+          description: Required only when approved is false
+          example: "Duplicate request"
+
+    CancelRequestInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          example: "Resolved already"
+
+    MarkDuplicateInput:
+      type: object
+      required:
+        - duplicatedOfRequestId
+      properties:
+        duplicatedOfRequestId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a3"
+
+    UpdateLocationInput:
+      type: object
+      required:
+        - location
+      properties:
+        location:
+          $ref: "#/components/schemas/GeoPoint"
+        isLocationVerified:
+          type: boolean
+          default: true
+          example: true
+
+    UpdatePriorityInput:
+      type: object
+      required:
+        - priority
+      properties:
+        priority:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Normal
+          example: High
 
     CreateMissionRequest:
       type: object
@@ -2919,6 +3266,28 @@ components:
         code:
           type: string
           example: "ERROR_CODE"
+
+    ApiError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Lỗi khi đăng nhập"
+        data:
+          nullable: true
+          example: null
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "INTERNAL_ERROR"
+            details:
+              type: object
+              nullable: true
 
   securitySchemes:
     bearerAuth:
