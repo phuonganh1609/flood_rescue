@@ -47,6 +47,11 @@ app.use(
     customCss: customCss,
   }),
 );
+// Dùng để cung cấp tài liệu Swagger dưới dạng JSON cho Insomnia/Postman.
+app.get("/api-docs.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerDocument);
+});
 
 // CORS configuration
 const allowedOrigins = [
