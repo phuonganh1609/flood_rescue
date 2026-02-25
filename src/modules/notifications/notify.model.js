@@ -18,6 +18,7 @@ const NotifySchema = new Schema(
         "IN_PROGRESS",
         "COMPLETED",
         "CANCELLED",
+        "WITHDRAWN",
       ],
     },
     role: {
@@ -33,6 +34,11 @@ const NotifySchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Request",
       required: true,
+    },
+    missionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Mission",
+      required: false,
     },
     isRead: {
       type: Boolean,

@@ -304,6 +304,37 @@ eventBus.on("MISSION_FAILED", async (payload) => {
 });
 
 /**
+ * MISSION_WITHDRAWN: Team rejects / withdraws from a mission
+ * → Notify all Coordinators to reassign
+ */
+eventBus.on("MISSION_WITHDRAWN", async (payload) => {
+  try {
+    const { requestId, missionId, teamName, withdrawalReason } = payload;
+
+    const coordinators =
+      await authService.getCurrentUsersByRole("Rescue Coordinator");
+    for (const coordinator of coordinators) {
+      const userId = coordinator._id || coordinator.id;
+
+      const result = await notificationService.create({
+        userId,
+        role: "COORDINATOR",
+        requestId,
+        missionId,
+        type: "WITHDRAWN",
+        message: `⚠️ Đội "${teamName}" đã từ chối nhiệm vụ - cần phân công lại${withdrawalReason ? ` (Lý do: ${withdrawalReason})` : ""}`,
+        isRead: false,
+      });
+
+      emitToUser(userId, NOTIFICATION_EVENTS.MISSION_WITHDRAWN, result.data);
+      await emitUnreadCountForUser(userId);
+    }
+  } catch (error) {
+    console.error("Error in MISSION_WITHDRAWN listener:", error);
+  }
+});
+
+/**
  * MISSION_REASSIGNED: Mission reassigned to a new team
  * → Notify new Team Leader
  */

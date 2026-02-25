@@ -38,6 +38,8 @@ tags:
     description: Rescue and relief request operations
   - name: Missions
     description: Mission management and tracking
+  - name: Timelines
+    description: Timeline tracking for rescue missions
   - name: Teams
     description: Rescue team management
   - name: Resources
@@ -994,7 +996,7 @@ paths:
       tags:
         - Missions
       summary: Create mission
-      description: Create a new rescue mission and assign to a team (Coordinator only)
+      description: "Create a new mission (status = PLANNED). Team assignment is done separately via /assign. (Roles: Rescue Coordinator, Admin)"
       operationId: createMission
       security:
         - bearerAuth: []
@@ -1003,18 +1005,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateMissionRequest"
+              $ref: "#/components/schemas/CreateMissionInput"
       responses:
         "201":
           description: Mission created successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  missionId:
-                    type: string
-                    example: "60d5ec49f1b2c8b1f8e4e1a4"
+                $ref: "#/components/schemas/Mission"
         "400":
           description: Invalid input
           content:
@@ -1022,7 +1020,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: Forbidden - insufficient permissions
+          description: Forbidden - Coordinator/Admin only
           content:
             application/json:
               schema:
@@ -1033,25 +1031,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
-  /api/missions/assigned:
     get:
       tags:
         - Missions
-      summary: Get assigned missions
-      description: Get missions assigned to current user's rescue team
-      operationId: getAssignedMissions
+      summary: List missions
+      description: "Get list of missions with pagination and filtering. (Roles: Rescue Coordinator, Admin)"
+      operationId: listMissions
       security:
         - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by mission status
+          required: false
+          schema:
+            type: string
+            enum: [PLANNED, IN_PROGRESS, PAUSED, PARTIAL, COMPLETED, ABORTED]
+        - name: type
+          in: query
+          description: Filter by mission type
+          required: false
+          schema:
+            type: string
+            enum: [RESCUE, RELIEF]
+        - name: code
+          in: query
+          description: Filter by mission code (partial match)
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
       responses:
         "200":
           description: Missions retrieved successfully
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Mission"
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Mission"
+                  meta:
+                    $ref: "#/components/schemas/Pagination"
         "401":
           description: Unauthorized
           content:
@@ -1100,14 +1137,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-
-  /api/missions/{id}/reassign:
     patch:
       tags:
         - Missions
-      summary: Reassign mission
-      description: Reassign mission to a different team (Coordinator only)
-      operationId: reassignMission
+      summary: Update mission
+      description: "Update mission name, description or priority. Status cannot be updated here — use /pause, /resume, /abort. (Roles: Rescue Coordinator, Admin)"
+      operationId: updateMission
       security:
         - bearerAuth: []
       parameters:
@@ -1122,254 +1157,248 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                teamId:
-                  type: string
-                  example: "60d5ec49f1b2c8b1f8e4e1a2"
-              required:
-                - teamId
+              $ref: "#/components/schemas/UpdateMissionInput"
       responses:
         "200":
-          description: Mission reassigned successfully
+          description: Mission updated successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-        "403":
-          description: Forbidden - insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "404":
-          description: Mission not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /api/missions/{id}/status:
-    patch:
-      tags:
-        - Missions
-      summary: Update mission status
-      description: Update the status of a mission (Rescue Team only)
-      operationId: updateMissionStatus
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          description: Mission ID
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                status:
-                  type: string
-                  enum:
-                    - Assigned
-                    - InProgress
-                    - Completed
-                    - Cancelled
-              required:
-                - status
-      responses:
-        "200":
-          description: Mission status updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-        "403":
-          description: Forbidden - not assigned team
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "404":
-          description: Mission not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /api/missions/{id}/report:
-    post:
-      tags:
-        - Missions
-      summary: Submit mission report
-      description: Submit report after completing a mission (Rescue Team only)
-      operationId: submitMissionReport
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          description: Mission ID
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                summary:
-                  type: string
-                  example: "Successfully rescued 5 people from flood area"
-                obstacles:
-                  type: string
-                  example: "Road partially blocked, had to use alternate route"
-              required:
-                - summary
-      responses:
-        "201":
-          description: Report submitted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  reportId:
-                    type: string
-                    example: "60d5ec49f1b2c8b1f8e4e1a5"
-        "403":
-          description: Forbidden - not assigned team
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "404":
-          description: Mission not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /api/missions/{id}/positions:
-    get:
-      tags:
-        - Missions
-      summary: Get mission positions
-      description: Get real-time position updates for a mission's rescue team
-      operationId: getMissionPositions
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          description: Mission ID
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Positions retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Position"
-        "404":
-          description: Mission not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        default:
-          description: Unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /api/team-positions:
-    post:
-      tags:
-        - Missions
-      summary: Send team position
-      description: Send real-time position update of rescue team (Rescue Team only)
-      operationId: sendTeamPosition
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                missionId:
-                  type: string
-                  example: "60d5ec49f1b2c8b1f8e4e1a4"
-                latitude:
-                  type: number
-                  format: double
-                  example: 10.762622
-                longitude:
-                  type: number
-                  format: double
-                  example: 106.660172
-              required:
-                - missionId
-                - latitude
-                - longitude
-      responses:
-        "200":
-          description: Position sent successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
+                $ref: "#/components/schemas/Mission"
         "400":
-          description: Invalid input
+          description: Invalid input or direct status update attempted
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "403":
-          description: Forbidden - not assigned team
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags:
+        - Missions
+      summary: Delete mission
+      description: "Delete a mission. Cannot delete if there are active timelines. (Roles: Rescue Coordinator, Admin)"
+      operationId: deleteMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Mission deleted successfully
+        "400":
+          description: Cannot delete mission with active timelines
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/{id}/assign:
+    patch:
+      tags:
+        - Missions
+      summary: Assign team to mission
+      description: |
+        Assign a rescue team to handle a specific request within this mission.
+        Creates a new Timeline (status = ASSIGNED). Request must be in VERIFIED or PARTIALLY_FULFILLED status.
+        Cannot assign to a COMPLETED, ABORTED, or PAUSED mission. (Roles: Rescue Coordinator, Admin)
+      operationId: assignTeam
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignTeamInput"
+      responses:
+        "200":
+          description: Team assigned — returns created Timeline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Timeline"
+        "400":
+          description: Invalid request status or mission already bound to another request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission, Request or Team not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/{id}/pause:
+    patch:
+      tags:
+        - Missions
+      summary: Pause mission
+      description: "Pause an IN_PROGRESS mission. Active timelines continue running — pausing only prevents new team assignments. (Roles: Rescue Coordinator, Admin)"
+      operationId: pauseMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission paused successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "400":
+          description: Mission is not IN_PROGRESS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/{id}/resume:
+    patch:
+      tags:
+        - Missions
+      summary: Resume mission
+      description: "Resume a PAUSED mission back to IN_PROGRESS. (Roles: Rescue Coordinator, Admin)"
+      operationId: resumeMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "400":
+          description: Mission is not PAUSED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/missions/{id}/abort:
+    patch:
+      tags:
+        - Missions
+      summary: Abort mission
+      description: |
+        Force-abort a mission. Automatically cancels all active timelines (ASSIGNED, EN_ROUTE, ON_SITE).
+        Cannot abort a COMPLETED or already ABORTED mission. (Roles: Rescue Coordinator, Admin)
+      operationId: abortMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mission aborted and all active timelines cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mission"
+        "400":
+          description: Mission is already closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission not found
           content:
             application/json:
               schema:
@@ -2143,7 +2172,7 @@ paths:
   /api/timelines:
     get:
       tags:
-        - Missions
+        - Timelines
       summary: List timelines
       description: List timelines with filters and pagination
       security:
@@ -2209,7 +2238,7 @@ paths:
   /api/timelines/{id}:
     get:
       tags:
-        - Missions
+        - Timelines
       summary: Get timeline detail
       security:
         - bearerAuth: []
@@ -2237,7 +2266,7 @@ paths:
   /api/timelines/{id}/accept:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Team accepts assigned timeline
       security:
         - bearerAuth: []
@@ -2254,7 +2283,7 @@ paths:
   /api/timelines/{id}/arrive:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Team marks timeline as ON_SITE
       security:
         - bearerAuth: []
@@ -2271,7 +2300,7 @@ paths:
   /api/timelines/{id}/complete:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Complete timeline with outcome
       security:
         - bearerAuth: []
@@ -2294,7 +2323,7 @@ paths:
   /api/timelines/{id}/fail:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Mark timeline as FAILED
       security:
         - bearerAuth: []
@@ -2317,7 +2346,7 @@ paths:
   /api/timelines/{id}/withdraw:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Team withdraws assigned timeline
       security:
         - bearerAuth: []
@@ -2340,7 +2369,7 @@ paths:
   /api/timelines/{id}/cancel:
     patch:
       tags:
-        - Missions
+        - Timelines
       summary: Coordinator cancels assigned timeline
       security:
         - bearerAuth: []
@@ -2951,23 +2980,64 @@ components:
             - Normal
           example: High
 
-    CreateMissionRequest:
+    CreateMissionInput:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 200
+          example: "Rescue operation - District 9 flooding"
+        type:
+          type: string
+          enum: [RESCUE, RELIEF]
+          example: RESCUE
+        description:
+          type: string
+          maxLength: 1000
+          example: "Multiple households trapped due to flash flood"
+        priority:
+          type: string
+          enum: [Critical, High, Normal]
+          default: Normal
+          example: High
+
+    UpdateMissionInput:
+      type: object
+      description: At least one field required. Status cannot be updated here.
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 1000
+        priority:
+          type: string
+          enum: [Critical, High, Normal]
+
+    AssignTeamInput:
       type: object
       required:
         - teamId
-        - requestIds
+        - requestId
       properties:
         teamId:
           type: string
           example: "60d5ec49f1b2c8b1f8e4e1a2"
-        requestIds:
-          type: array
-          items:
-            type: string
-          example: ["60d5ec49f1b2c8b1f8e4e1a3"]
-        vehicleId:
+        requestId:
           type: string
-          example: "60d5ec49f1b2c8b1f8e4e1a6"
+          description: Must be VERIFIED or PARTIALLY_FULFILLED
+          example: "60d5ec49f1b2c8b1f8e4e1a3"
+        note:
+          type: string
+          maxLength: 500
+          example: "Priority rescue, 1 elderly person"
 
     Mission:
       type: object
@@ -2975,21 +3045,37 @@ components:
         _id:
           type: string
           example: "60d5ec49f1b2c8b1f8e4e1a4"
-        teamId:
+        code:
           type: string
-        requestIds:
-          type: array
-          items:
-            type: string
-        vehicleId:
+          description: Auto-generated code (e.g. MS-250225-001)
+          example: "MS-250225-001"
+        name:
           type: string
+          example: "Rescue operation - District 9 flooding"
+        description:
+          type: string
+          nullable: true
         status:
           type: string
           enum:
-            - Assigned
-            - InProgress
-            - Completed
-            - Cancelled
+            - PLANNED
+            - IN_PROGRESS
+            - PAUSED
+            - PARTIAL
+            - COMPLETED
+            - ABORTED
+          example: PLANNED
+        priority:
+          type: string
+          enum: [Critical, High, Normal]
+          example: Normal
+        type:
+          type: string
+          enum: [RESCUE, RELIEF]
+          example: RESCUE
+        coordinatorId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a1"
         createdAt:
           type: string
           format: date-time
