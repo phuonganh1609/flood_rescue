@@ -27,7 +27,14 @@ const validate = (schema, source = "body") => {
     }
 
     // Replace source data với validated value
-    req[source] = value;
+    // req.query và req.params là getter-only trên IncomingMessage, không thể gán trực tiếp
+    if (source === "body") {
+      req.body = value;
+    } else {
+      // Mutate in-place: xóa keys cũ rồi gán value đã validate
+      Object.keys(req[source]).forEach((k) => delete req[source][k]);
+      Object.assign(req[source], value);
+    }
     next();
   };
 };
