@@ -2036,6 +2036,12 @@ paths:
       tags:
         - Teams
       summary: Get team details
+      description: |
+        Get detailed information about a team including its members.
+
+        **Access:**
+        - Rescue Coordinator / Admin: any team
+        - Rescue Team: only if user is a member of this team
       security:
         - bearerAuth: []
       parameters:
@@ -2047,6 +2053,8 @@ paths:
       responses:
         "200":
           description: Successful operation
+        "403":
+          description: Not a member of this team
     patch:
       tags:
         - Teams
@@ -2124,6 +2132,13 @@ paths:
       tags:
         - Teams
       summary: Add member to team
+      description: |
+        Add a user to the team. The target user must have role "Citizen" and not belong to any team.
+        After adding, the user's role is automatically upgraded to "Rescue Team".
+
+        **Access:**
+        - Rescue Coordinator / Admin: any team
+        - Rescue Team: only if user is the leader of this team
       security:
         - bearerAuth: []
       parameters:
@@ -2146,12 +2161,26 @@ paths:
       responses:
         "201":
           description: Member added successfully
+        "400":
+          description: User is not a Citizen or already belongs to a team
+        "403":
+          description: Only the team leader can perform this action
 
   /api/teams/{teamId}/members/{userId}:
     delete:
       tags:
         - Teams
       summary: Remove member from team
+      description: |
+        Remove a member from the team.
+
+        **Constraints:**
+        - Cannot remove yourself
+        - Cannot remove the team leader (must change leader first)
+
+        **Access:**
+        - Rescue Coordinator / Admin: any team
+        - Rescue Team: only if user is the leader of this team
       security:
         - bearerAuth: []
       parameters:
@@ -2168,6 +2197,10 @@ paths:
       responses:
         "200":
           description: Member removed successfully
+        "400":
+          description: Cannot remove yourself or the team leader
+        "403":
+          description: Only the team leader can perform this action
 
   /api/timelines:
     get:

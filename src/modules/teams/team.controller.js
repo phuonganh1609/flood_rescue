@@ -241,7 +241,7 @@ export const removeMember = async (req, res) => {
       });
     }
 
-    const member = await teamService.removeMember(teamId, userId);
+    const member = await teamService.removeMember(teamId, userId, req.user.id);
     return response.sendSuccess(res, {
       data: member,
       message: "Member removed successfully",

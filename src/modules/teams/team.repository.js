@@ -81,12 +81,12 @@ class TeamRepository {
   }
 
   /**
-   * Assign user to team (set User.teamId)
+   * Assign user to team (set User.teamId) and update role to "Rescue Team"
    */
   async addMember(userId, teamId) {
     return await User.findByIdAndUpdate(
       userId,
-      { teamId },
+      { teamId, role: "Rescue Team" },
       { new: true },
     ).select("displayName userName email phoneNumber role teamId");
   }
