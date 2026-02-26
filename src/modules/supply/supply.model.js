@@ -1,8 +1,17 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+// --- Enums ---
+export const SUPPLY_STATUS = {
+  SUBMITTED: "SUBMITTED",
+  CLOSED: "CLOSED",
+  CANCELLED: "CANCELLED",
+};
+
 const SupplySchema = new Schema(
+    
   {
+    
     name: {
          type: String, 
          unique: true,
@@ -28,6 +37,11 @@ const SupplySchema = new Schema(
     isActive: { 
         type: Boolean, 
         default: true 
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     },
     createdAt: { 
         type: Date, 

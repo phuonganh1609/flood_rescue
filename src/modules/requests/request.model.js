@@ -37,8 +37,8 @@ const MediaSchema = new Schema(
 
 const RequestSupplySchema = new Schema(
   {
-    supplyId: {
-      type: mongoose.Schema.Types.ObjectId,
+    name: {
+      type: mongoose.Schema.Types.String,
       ref: "Supply",
       required: true,
     },
@@ -76,21 +76,7 @@ const RequestSchema = new Schema(
 
     type: {
       type: String,
-<<<<<<< HEAD
-      enum: ["Cứu trợ", "Cứu nạn"],
-    },
-
-    incidentType: {
-      type: String,
-      enum: ["Ngập lụt", "Bị Kẹt", "Bị Thương", "Sạt lở", "Khác"],
-      default: "Khác",
-    },
-
-    latitude: {
-      type: mongoose.Decimal128,
-=======
       enum: ["Rescue", "Relief"],
->>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
       required: true,
     },
 
@@ -129,23 +115,14 @@ const RequestSchema = new Schema(
     
     priority: {
       type: String,
-<<<<<<< HEAD
-      enum: ["Báo Động", "Cao", "Bình thường"],
-      default: "Bình thường",
-=======
       enum: Object.values(REQUEST_PRIORITY),
       default: REQUEST_PRIORITY.NORMAL,
->>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
     },
 
     status: {
       type: String,
-<<<<<<< HEAD
-      default: "Chờ xử lý",
-=======
       enum: Object.values(REQUEST_STATUS),
       default: REQUEST_STATUS.SUBMITTED,
->>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
     },
 
     requestSupplies: {

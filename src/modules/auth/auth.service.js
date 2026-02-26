@@ -211,47 +211,6 @@ class AuthService {
       throw new Error("Refresh token đã hết hạn");
     }
 
-<<<<<<< HEAD
-    // Thêm member
-    const newMember = await teamMemberRepository.addMemberToTeam({
-      userName: memberName,
-      rescueTeamName: teamName,
-      roleTeam: memberRole || "Member",
-    });
-
-    return {
-      message: "Thêm thành viên thành công",
-      data: newMember,
-    };
-  }
-}
-
-/**
- * Service cho Request operations
- */
-class RequestService {
-  async createRequest(userId, requestData, files) {
-    const user = await authRepository.findUserById(userId);
-    if (!user) throw new Error("User không tồn tại");
-
-    const {
-      type,
-      latitude,
-      longitude,
-      description,
-      peopleCount,
-      requestSupply,
-    } = requestData;
-
-    const newRequest = await requestRepository.createRequest({
-      userName: user.fullName,
-      type,
-      latitude,
-      longitude,
-      description,
-      peopleCount: peopleCount || 1,
-      requestSupply: requestSupply || null,
-=======
     // Lấy thông tin user
     const user = await authRepository.findUserById(session.userId);
 
@@ -269,36 +228,9 @@ class RequestService {
       id: user._id,
       email: user.email,
       role: user.role,
->>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
     });
 
-    const uploadedFiles = [];
-
-    if (files.length > 0) {
-      for (const file of files) {
-        const media = await uploadFileForUser({
-          userId,
-          scope: "requests",
-          refId: newRequest.id,
-          file,
-        });
-
-        uploadedFiles.push({
-          requestId: newRequest.id,
-          ...media,
-        });
-      }
-
-      await requestRepository.createRequestMedia(uploadedFiles);
-    }
-
     return {
-<<<<<<< HEAD
-      message: "Tạo request thành công",
-      data: {
-        ...newRequest,
-        media: uploadedFiles,
-=======
       accessToken,
       user: {
         id: user._id,
@@ -308,15 +240,11 @@ class RequestService {
         phoneNumber: user.phoneNumber,
         avatarUrl: user.avatarUrl,
         role: user.role,
->>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
       },
     };
   }
 }
 
-<<<<<<< HEAD
-=======
 const authService = new AuthService();
 
 export { authService };
->>>>>>> d32bbffa137e8b9f1b01ef9648d7ee13aa68177b
