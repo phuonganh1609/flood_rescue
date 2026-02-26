@@ -2004,6 +2004,25 @@ paths:
           schema:
             type: string
             enum: [AVAILABLE, BUSY]
+        - in: query
+          name: name
+          description: Search team by name (case-insensitive, partial match)
+          schema:
+            type: string
+        - in: query
+          name: sortBy
+          description: "Field to sort by"
+          schema:
+            type: string
+            enum: [name, status, createdAt]
+            default: createdAt
+        - in: query
+          name: order
+          description: "Sort order"
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
       responses:
         "200":
           description: Successful operation
@@ -2021,12 +2040,12 @@ paths:
               type: object
               required:
                 - name
-                - leaderId
               properties:
                 name:
                   type: string
                 leaderId:
                   type: string
+                  description: Optional. If omitted, team is created without a leader.
       responses:
         "201":
           description: Team created successfully
@@ -2087,6 +2106,15 @@ paths:
       tags:
         - Teams
       summary: Delete team
+      description: |
+        Delete a team permanently.
+
+        **Pre-conditions (all must be met):**
+        - Team status must be `AVAILABLE` (not `BUSY`)
+        - No active timelines (`ASSIGNED`, `EN_ROUTE`, `ON_SITE`) referencing this team
+        - Team must have no members (remove all members first)
+
+        **Access:** Rescue Coordinator / Admin only
       security:
         - bearerAuth: []
       parameters:
@@ -2098,6 +2126,8 @@ paths:
       responses:
         "200":
           description: Team deleted successfully
+        "400":
+          description: Cannot delete — team is BUSY, has active timelines, or still has members
 
   /api/teams/{teamId}/leader:
     patch:

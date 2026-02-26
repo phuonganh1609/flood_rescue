@@ -33,7 +33,7 @@ class TeamRepository {
   /**
    * Find all teams with pagination
    */
-  async findAll(filter = {}, pagination = { page: 1, limit: 10 }) {
+  async findAll(filter = {}, pagination = { page: 1, limit: 10 }, sort = { createdAt: -1 }) {
     const { page, limit } = pagination;
     const skip = (page - 1) * limit;
 
@@ -42,7 +42,7 @@ class TeamRepository {
         .populate("leaderId", "displayName userName email phoneNumber role")
         .skip(skip)
         .limit(limit)
-        .sort({ createdAt: -1 }),
+        .sort(sort),
       Team.countDocuments(filter),
     ]);
 

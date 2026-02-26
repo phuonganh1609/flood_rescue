@@ -141,6 +141,10 @@ Request status được suy diễn từ tổng hợp kết quả của các Time
 - **T2**: `addMember` — chỉ thêm user có role `Citizen` và chưa thuộc team nào. Sau khi thêm, role tự động upgrade lên `Rescue Team`.
 - **T3**: `removeMember` — không thể remove bản thân (self-remove). Không thể remove leader (phải `changeLeader` trước).
 - **T4**: Coordinator / Admin bypass mọi kiểm tra thuộc team, có thể thao tác trên bất kỳ team nào.
+- **T5**: `deleteTeam` — chỉ được xoá khi thoả **cả 3 điều kiện**:
+  1. Team status = `AVAILABLE` (không phải `BUSY`)
+  2. Không có timeline active nào (`ASSIGNED` / `EN_ROUTE` / `ON_SITE`) reference tới team
+  3. Team không còn thành viên nào (phải remove hết members trước)
 
 ---
 
