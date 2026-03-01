@@ -11,9 +11,8 @@ export const createTeamSchema = Joi.object({
   }),
   leaderId: Joi.string()
     .pattern(/^[0-9a-fA-F]{24}$/)
-    .required()
+    .optional()
     .messages({
-      "string.empty": "Leader ID is required",
       "string.pattern.base": "Leader ID must be a valid ObjectId",
     }),
 });

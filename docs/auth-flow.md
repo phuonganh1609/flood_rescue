@@ -9,7 +9,7 @@ sequenceDiagram
     participant BE as Backend
     participant DB as MongoDB
 
-    FE->>BE: POST /api/auth/register<br/>{userName, displayName, email, password, phoneNumber?, role?}
+    FE->>BE: POST /api/auth/register<br/>{userName, displayName, email, password, phoneNumber, role?}
     BE->>DB: Kiểm tra email đã tồn tại?
     DB-->>BE: Kết quả
     alt Email đã tồn tại
@@ -157,12 +157,12 @@ flowchart TD
 ## 1) Thành phần chính
 - **Access token**: JWT (HS256) chứa `user.id`, `user.email`, `user.role`, hết hạn 30m.
 - **Refresh token**: Chuỗi ngẫu nhiên 128 hex (64 bytes), lưu trong collection `sessions` (MongoDB) kèm `userId`, `expiresAt` (7 ngày), unique.
-- **Cookie**: `refreshToken` được set HTTP-only, SameSite=Strict, Secure (prod), Max-Age 7 ngày.
+- **Cookie**: `refreshToken` được set HTTP-only, SameSite=None, Secure (prod), Max-Age 7 ngày.
 - **Middleware**: `authenticate` đọc `Authorization: Bearer <accessToken>` và verify JWT.
 
 ## 2) Luồng endpoint
 - **POST /api/auth/register**:
-  1) Nhận `userName`, `displayName`, `email`, `password`, `phoneNumber` (optional), `role` (optional, default: "Citizen").
+  1) Nhận `userName`, `displayName`, `email`, `password`, `phoneNumber`, `role` (optional, default: "Citizen").
   2) Kiểm tra email và phoneNumber (nếu có) đã tồn tại chưa.
   3) Hash password với bcrypt (salt rounds: 10).
   4) Tạo user mới với `isActive: true`.
@@ -182,7 +182,7 @@ flowchart TD
 
 ## 3) Lưu ý bảo mật
 - Refresh token chỉ ở cookie HTTP-only, tránh lưu trong localStorage.
-- SameSite=Strict để giảm CSRF; trong production bật `secure`.
+- SameSite=None để hỗ trợ cross-site (frontend và backend khác domain); trong production bật `secure`.
 - Không gửi refresh token trong body hay header cho các route khác.
 - Access token ngắn (30m) để giảm rủi ro lộ token.
 
