@@ -1789,19 +1789,75 @@ paths:
       tags:
         - Admin
       summary: List users
-      description: Get list of all users (Admin only)
+      description: |
+        Get list of users with pagination, filtering, and search.
+        - **Admin**: sees all users.
+        - **Rescue Coordinator**: sees only Citizen & Rescue Team (data scope enforced server-side).
+        If Coordinator filters by a role outside their scope (e.g. `?role=Admin`), returns empty result.
       operationId: listUsers
       security:
         - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          description: "Filter by user role. Coordinator can only filter: Citizen, Rescue Team."
+          required: false
+          schema:
+            type: string
+            enum:
+              - Citizen
+              - Rescue Team
+              - Rescue Coordinator
+              - Manager
+              - Admin
+        - name: isActive
+          in: query
+          description: Filter by active status
+          required: false
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          description: Search by displayName, phoneNumber, or email (case-insensitive)
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: sort
+          in: query
+          description: "Sort fields (comma-separated). Prefix with `-` for DESC. Example: `-createdAt,displayName`"
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: Users retrieved successfully
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/UserListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "403":
           description: Forbidden - insufficient permissions
           content:
@@ -1820,34 +1876,29 @@ paths:
       tags:
         - Admin
       summary: Update user role
-      description: Update user role/permissions (Admin only)
+      description: |
+        Update user role (Admin only).
+        - Admin cannot change their own role (returns 403).
+        - Target user must exist (returns 404).
+        - New role must differ from current role (returns 400).
       operationId: updateUserRole
       security:
         - bearerAuth: []
       parameters:
         - name: id
           in: path
-          description: User ID
+          description: Target user ID (MongoDB ObjectId)
           required: true
           schema:
             type: string
+            pattern: "^[0-9a-fA-F]{24}$"
+            example: "60d5ec49f1b2c8b1f8e4e1a1"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                role:
-                  type: string
-                  enum:
-                    - Citizen
-                    - Rescue Team
-                    - Rescue Coordinator
-                    - Manager
-                    - Admin
-              required:
-                - role
+              $ref: "#/components/schemas/UpdateUserRoleInput"
       responses:
         "200":
           description: User role updated successfully
@@ -1859,18 +1910,35 @@ paths:
                   success:
                     type: boolean
                     example: true
-        "403":
-          description: Forbidden - insufficient permissions
+                  message:
+                    type: string
+                    example: 'User role updated to "Rescue Team" successfully'
+                  data:
+                    $ref: "#/components/schemas/User"
+        "400":
+          description: Bad request - validation error or role unchanged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions or self-role-change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: User not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ApiError"
         default:
           description: Unexpected error
           content:
@@ -2978,6 +3046,38 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/User"
+
+    UserListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Users retrieved successfully"
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        meta:
+          $ref: "#/components/schemas/Pagination"
+
+    UpdateUserRoleInput:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          description: "New role to assign to the user"
+          enum:
+            - Citizen
+            - Rescue Team
+            - Rescue Coordinator
+            - Manager
+            - Admin
+          example: "Rescue Team"
 
     VerifyRequestInput:
       type: object
