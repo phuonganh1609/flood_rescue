@@ -2,6 +2,7 @@ import express from "express";
 import { authenticate, authorize } from "../../middlewares/authMiddleware.js";
 import {
   createNotification,
+  getMyNotifications,
   getNotificationsByUser,
   getNotificationById,
   markAsRead,
@@ -9,16 +10,40 @@ import {
   deleteAllNotificationsByUser
 } from "./notification.controller.js";
 
+// All authenticated roles
+const ALL_ROLES = ["Citizen", "Rescue Team", "Rescue Coordinator", "Admin", "Manager"];
+
 const router = express.Router();
 
 /**
- * POST /notifications - Create a new notification
+ * POST /notifications - Create a new notification (internal use)
  */
 router.post(
   "/",
   authenticate,
-  authorize(["USER", "COORDINATOR", "ADMIN", "MANAGER", "TEAM_LEADER"]),
+  authorize(ALL_ROLES),
   createNotification
+);
+
+/**
+ * GET /notifications/me - Get notifications for the authenticated user
+ * ⚠️ Must be defined BEFORE /:userId to avoid param conflict
+ */
+router.get(
+  "/me",
+  authenticate,
+  getMyNotifications
+);
+
+/**
+ * GET /notifications/detail/:notificationId - Get a single notification
+ * ⚠️ Must be defined BEFORE /:userId to avoid param conflict
+ */
+router.get(
+  "/detail/:notificationId",
+  authenticate,
+  authorize(ALL_ROLES),
+  getNotificationById
 );
 
 /**
@@ -27,18 +52,8 @@ router.post(
 router.get(
   "/:userId",
   authenticate,
-  authorize(["USER", "COORDINATOR", "ADMIN", "MANAGER", "TEAM_LEADER"]),
+  authorize(ALL_ROLES),
   getNotificationsByUser
-);
-
-/**
- * GET /notifications/detail/:notificationId - Get a single notification
- */
-router.get(
-  "/detail/:notificationId",
-  authenticate,
-  authorize(["USER", "COORDINATOR", "ADMIN", "MANAGER", "TEAM_LEADER"]),
-  getNotificationById
 );
 
 /**
@@ -47,8 +62,19 @@ router.get(
 router.patch(
   "/read/:notificationId",
   authenticate,
-  authorize(["USER", "COORDINATOR", "ADMIN", "MANAGER", "TEAM_LEADER"]),
+  authorize(ALL_ROLES),
   markAsRead
+);
+
+/**
+ * DELETE /notifications/user/:userId - Delete all notifications for a user
+ * ⚠️ Must be defined BEFORE /:notificationId to avoid param conflict
+ */
+router.delete(
+  "/user/:userId",
+  authenticate,
+  authorize(ALL_ROLES),
+  deleteAllNotificationsByUser
 );
 
 /**
@@ -57,18 +83,8 @@ router.patch(
 router.delete(
   "/:notificationId",
   authenticate,
-  authorize(["USER", "COORDINATOR", "ADMIN", "MANAGER", "TEAM_LEADER"]),
+  authorize(ALL_ROLES),
   deleteNotification
-);
-
-/**
- * DELETE /notifications/user/:userId - Delete all notifications for a user
- */
-router.delete(
-  "/user/:userId",
-  authenticate,
-  authorize(["USER", "COORDINATOR", "ADMIN", "MANAGER", "TEAM_LEADER"]),
-  deleteAllNotificationsByUser
 );
 
 export default router;

@@ -33,19 +33,44 @@ class NotificationService {
    * @param {Object} pagination - Pagination info
    * @param {number} pagination.page - Page number
    * @param {number} pagination.limit - Items per page
+   * @param {Object} [filters] - Optional filters
+   * @param {boolean} [filters.isRead] - Filter by read status
+   * @param {string} [filters.type] - Filter by notification type
+   * @param {Object} [sort] - Sort options
+   * @param {'asc'|'desc'} [sort.sortOrder='desc'] - Sort direction by createdAt
    * @returns {Promise<Object>}
    */
-  async getNotificationsByUser(userId, pagination = { page: 1, limit: 10 }) {
+  async getNotificationsByUser(
+    userId,
+    pagination = { page: 1, limit: 10 },
+    filters = {},
+    sort = {}
+  ) {
     try {
+      const query = { userId };
+
+      // Filter: isRead (only apply when explicitly passed)
+      if (filters.isRead !== undefined) {
+        query.isRead = filters.isRead;
+      }
+
+      // Filter: type
+      if (filters.type) {
+        query.type = filters.type;
+      }
+
+      // Sort direction
+      const sortDirection = sort.sortOrder === "asc" ? 1 : -1;
+
       const skip = (pagination.page - 1) * pagination.limit;
-      const notifications = await NotifyModel.find({ userId })
-        .sort({ createdAt: -1 })
+      const notifications = await NotifyModel.find(query)
+        .sort({ createdAt: sortDirection })
         .skip(skip)
         .limit(pagination.limit)
         .populate("userId", "displayName email")
         .populate("requestId", "type incidentType");
 
-      const total = await NotifyModel.countDocuments({ userId });
+      const total = await NotifyModel.countDocuments(query);
 
       return {
         data: notifications,

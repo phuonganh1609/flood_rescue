@@ -205,11 +205,31 @@ export function NotificationProvider({ children }: Props) {
 
   // ─── Fetch notifications qua REST API ───────────────────
   const fetchNotifications = useCallback(
-    async (page = 1, limit = 10) => {
-      if (!userId || !token) return;
+    async ({
+      page = 1,
+      limit = 10,
+      isRead,
+      type,
+      sortOrder = "desc",
+    }: {
+      page?: number;
+      limit?: number;
+      isRead?: boolean;
+      type?: string;
+      sortOrder?: "asc" | "desc";
+    } = {}) => {
+      if (!token) return;
       try {
+        const params = new URLSearchParams({
+          page: String(page),
+          limit: String(limit),
+          sortOrder,
+        });
+        if (isRead !== undefined) params.set("isRead", String(isRead));
+        if (type) params.set("type", type);
+
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/notifications/${userId}?page=${page}&limit=${limit}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/notifications/me?${params}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -225,7 +245,7 @@ export function NotificationProvider({ children }: Props) {
         console.error("Failed to fetch notifications:", error);
       }
     },
-    [userId, token]
+    [token]
   );
 
   // ─── Mark as read ────────────────────────────────────────
@@ -461,14 +481,15 @@ Base URL: `{API_URL}/api/notifications`
 
 Tất cả endpoints yêu cầu header `Authorization: Bearer <JWT>`.
 
-| Method   | Endpoint                       | Mô tả                              | Params / Body                |
-| :------- | :----------------------------- | :---------------------------------- | :--------------------------- |
-| `POST`   | `/`                            | Tạo notification mới                | Body: `NotificationData`     |
-| `GET`    | `/:userId`                     | Lấy danh sách notification của user | Query: `?page=1&limit=10`   |
-| `GET`    | `/detail/:notificationId`      | Lấy chi tiết 1 notification         | —                            |
-| `PATCH`  | `/read/:notificationId`        | Đánh dấu đã đọc                    | —                            |
-| `DELETE` | `/:notificationId`             | Xoá 1 notification                  | —                            |
-| `DELETE` | `/user/:userId`                | Xoá tất cả notification của user    | —                            |
+| Method   | Endpoint                       | Auth         | Mô tả                              | Params / Body              |
+| :------- | :----------------------------- | :----------- | :---------------------------------- | :------------------------- |
+| `GET`    | `/me`                          | Đăng nhập    | Lấy notification của chính mình     | Query: `?page=1&limit=10&isRead=false&type=COMPLETED&sortOrder=desc` |
+| `GET`    | `/:userId`                     | Role         | Lấy notification của user bất kỳ   | Query: `?page=1&limit=10`  |
+| `GET`    | `/detail/:notificationId`      | Đăng nhập    | Lấy chi tiết 1 notification         | —                          |
+| `PATCH`  | `/read/:notificationId`        | Đăng nhập    | Đánh dấu đã đọc                    | —                          |
+| `DELETE` | `/:notificationId`             | Đăng nhập    | Xoá 1 notification                  | —                          |
+| `DELETE` | `/user/:userId`                | Đăng nhập    | Xoá tất cả notification của user    | —                          |
+| `POST`   | `/`                            | Role         | Tạo notification (internal use)     | Body: `NotificationData`   |
 
 ### Response format
 
@@ -531,9 +552,6 @@ export const SOCKET_EVENTS = {
 
   /** Team đang trên đường → Citizen nhận */
   MISSION_APPROACHING: "MISSION_APPROACHING",
-
-  /** Team đến nơi và cứu xong → Citizen nhận */
-  MISSION_RESCUED: "MISSION_RESCUED",
 
   /** Mission hoàn thành → Citizen + Coordinator nhận */
   MISSION_COMPLETED: "MISSION_COMPLETED",
