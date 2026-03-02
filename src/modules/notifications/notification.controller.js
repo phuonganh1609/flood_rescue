@@ -138,6 +138,53 @@ export const deleteNotification = async (req, res) => {
 };
 
 /**
+ * Get notifications for the currently authenticated user
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const getMyNotifications = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const pagination = {
+      page: parseInt(req.query.page) || 1,
+      limit: parseInt(req.query.limit) || 10,
+    };
+
+    const filters = {};
+    if (req.query.isRead !== undefined) {
+      filters.isRead = req.query.isRead === "true";
+    }
+    if (req.query.type) {
+      filters.type = req.query.type;
+    }
+
+    const sort = {};
+    if (req.query.sortOrder) {
+      sort.sortOrder = req.query.sortOrder;
+    }
+
+    const result = await notificationService.getNotificationsByUser(
+      userId,
+      pagination,
+      filters,
+      sort,
+    );
+    return response.sendSuccess(res, {
+      data: result.data,
+      meta: result.pagination,
+      message: "Notifications fetched successfully",
+    });
+  } catch (error) {
+    console.error("Error fetching my notifications:", error);
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+    });
+  }
+};
+
+/**
  * Delete all notifications for a user
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
