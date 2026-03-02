@@ -16,6 +16,8 @@ import timelineRoute from "./modules/timelines/timeline.routes.js";
 import "./modules/notifications/notify.listener.js"; // Initialize event listeners
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
 import supplyRoute from "./modules/supply/supply.routes.js";
+import inventoryRoute from "./modules/inventory/inventoryItem.route.js";
+import warehouseRoute from "./modules/warehouse/warehouse.route.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -93,6 +95,8 @@ app.use("/api/timelines", timelineRoute);
 app.use("/api/notifications", notificationRoute);
 app.use("/api/teams", teamRoute);
 app.use("/api/supply", supplyRoute);
+app.use("/api/inventory", inventoryRoute);
+app.use("/api/warehouse", warehouseRoute);
 
 // Error handling middlewares (must be after all routes)
 app.use(notFound);

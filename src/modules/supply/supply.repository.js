@@ -10,7 +10,7 @@ class SupplyRepository {
     return await supply.save();
   }
 
-  /**
+  /** 
    * Find supply by name
    */
   async findSupplyByName(supplyName) {
