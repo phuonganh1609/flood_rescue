@@ -1,6 +1,6 @@
 # 📋 TodoList - Flood Rescue System
 
-> **Last Updated:** 2026-02-18
+> **Last Updated:** 2026-03-01
 >
 > Theo dõi tiến độ implementation dựa trên [ERD.md](./ERD.md), [Rescue_flow_2.2.md](./flows/Rescue_flow_2.2.md), [Relief_flow_1.1.md](./flows/Relief_flow_1.1.md), và [Supply_management.md](./Supply_management.md).
 
@@ -14,7 +14,7 @@
 | **Phase 2** | **Supply Tracking** (Warehouse + Inventory + Planning)     | ~5%      | 🌑 Pending     |
 | **Phase 3** | **GPS Tracking** (Realtime position updates)               | 0%       | 🌑 Pending     |
 | **Phase 4** | **Role APIs** (Coordinator, Rescue Team, Manager specific) | 0%       | 🌑 Pending     |
-| **Phase 5** | **Admin & Reports** (System config, exports)               | 0%       | 🌑 Pending     |
+| **Phase 5** | **Admin & Reports** (System config, exports)               | ~20%     | 🚧 In Progress |
 
 ---
 
@@ -28,6 +28,7 @@
 | **Notification**       | ~85%    | WebSocket + REST API. Refactored response format.                       |
 | **Mission**            | ~80%    | Core CRUD & Lifecycle implemented. Verified.                            |
 | **Timeline**           | ~90%    | Full core lifecycle API + status sync implemented (without GPS/Supply). |
+| **Admin**              | ~30%    | List users (scoped) + Update user role. Refactored response format.     |
 | **Supply Management**  | ~5%     | Chỉ có model cơ bản                                                     |
 | **Position Tracking**  | 0%      | GPS tracking chưa implement                                             |
 
@@ -252,10 +253,19 @@
 
 ## 9. 👨‍💼 Admin Module
 
+### Implemented ✅
+
+- [x] User module (controller, service, repository, validation, routes)
+- [x] `GET /api/users` — List users (Admin: all, Coordinator: Citizen + Rescue Team only)
+- [x] Query params: `role`, `isActive`, `search` (displayName/phoneNumber/email), `page`, `limit`, `sort`
+- [x] Role-based data scope (service-level): `DATA_SCOPE` config intersect with query filters
+- [x] `PATCH /api/users/:id/role` — Update user role (Admin only)
+- [x] Guards: Cannot change own role, user must exist, role must differ
+- [x] Joi validation: query params, ObjectId params, role enum body
+- [x] Routes registered at `/api/users`
+
 ### Not Implemented ❌
 
-- [ ] `GET /users` - List users
-- [ ] `PATCH /users/{id}/role` - Update user role
 - [ ] `GET /system/categories` - System config
 - [ ] `GET /reports/summary` - Summary report
 - [ ] `GET /reports/export` - Export CSV
