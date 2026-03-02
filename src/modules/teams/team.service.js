@@ -139,8 +139,8 @@ class TeamService {
       throw new Error("User not found");
     }
 
-    if (targetUser.role !== "Citizen") {
-      throw new Error("Only users with role 'Citizen' can be added to a team");
+    if (targetUser.role !== "Citizen" && targetUser.role !== "Rescue Team") {
+      throw new Error("Only users with role 'Citizen' or 'Rescue Team' can be added to a team");
     }
 
     if (targetUser.teamId) {
