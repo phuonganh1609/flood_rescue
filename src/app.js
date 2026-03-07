@@ -13,11 +13,13 @@ import notificationRoute from "./modules/notifications/notification.routes.js";
 import teamRoute from "./modules/teams/team.routes.js";
 import missionRoute from "./modules/missions/mission.routes.js";
 import timelineRoute from "./modules/timelines/timeline.routes.js";
+import userRoute from "./modules/users/user.routes.js";
 import "./modules/notifications/notify.listener.js"; // Initialize event listeners
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
 import supplyRoute from "./modules/supply/supply.routes.js";
 import inventoryRoute from "./modules/inventory/inventoryItem.route.js";
 import warehouseRoute from "./modules/warehouse/warehouse.route.js";
+import vehicleRoute from "./modules/vehicles/vehicle.routes.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -52,6 +54,11 @@ app.use(
     customCss: customCss,
   }),
 );
+// Dùng để cung cấp tài liệu Swagger dưới dạng JSON cho Insomnia/Postman.
+app.get("/api-docs.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerDocument);
+});
 
 // CORS configuration
 const allowedOrigins = [
@@ -97,6 +104,8 @@ app.use("/api/teams", teamRoute);
 app.use("/api/supply", supplyRoute);
 app.use("/api/inventory", inventoryRoute);
 app.use("/api/warehouse", warehouseRoute);
+app.use("/api/vehicles", vehicleRoute);
+app.use("/api/users", userRoute);
 
 // Error handling middlewares (must be after all routes)
 app.use(notFound);

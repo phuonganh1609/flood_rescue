@@ -267,6 +267,7 @@ class TimelineService {
       throw err;
     }
 
+    this.emitMissionWithdrawn(transitioned);
     await this.syncAllForTimeline(transitioned);
     return transitioned;
   }
@@ -514,6 +515,15 @@ class TimelineService {
       missionId: extractId(timeline.missionId),
       citizenId,
       reason,
+    });
+  }
+
+  emitMissionWithdrawn(timeline) {
+    eventBus.emit("MISSION_WITHDRAWN", {
+      requestId: extractId(timeline.requestId),
+      missionId: extractId(timeline.missionId),
+      teamName: timeline.teamId?.name || "Rescue Team",
+      withdrawalReason: timeline.withdrawalReason,
     });
   }
 }

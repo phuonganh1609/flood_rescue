@@ -36,12 +36,23 @@ export const getAllTeams = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const status = req.query.status;
+    const { status, name, sortBy, order } = req.query;
 
     const filter = {};
     if (status) filter.status = status;
+    if (name) filter.name = { $regex: name, $options: "i" };
 
-    const result = await teamService.getAllTeams(filter, { page, limit });
+    const sort = {};
+    if (sortBy) {
+      const allowedFields = ["name", "status", "createdAt"];
+      if (allowedFields.includes(sortBy)) {
+        sort[sortBy] = order === "asc" ? 1 : -1;
+      }
+    } else {
+      sort.createdAt = -1;
+    }
+
+    const result = await teamService.getAllTeams(filter, { page, limit }, sort);
 
     const { data, ...pagination } = result;
 
@@ -241,7 +252,7 @@ export const removeMember = async (req, res) => {
       });
     }
 
-    const member = await teamService.removeMember(teamId, userId);
+    const member = await teamService.removeMember(teamId, userId, req.user.id);
     return response.sendSuccess(res, {
       data: member,
       message: "Member removed successfully",

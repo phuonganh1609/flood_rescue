@@ -8,7 +8,7 @@ class MissionController {
     try {
       const missionData = {
         ...req.body,
-        coordinatorId: req.user._id,
+        coordinatorId: req.user.id,
       };
       const mission = await missionService.createMission(missionData);
       return sendSuccess(res, {

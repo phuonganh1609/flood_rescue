@@ -69,13 +69,12 @@ export const getByID = async (req, res) => {
 export const getAll = async (req, res) => {
  try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit) || 10; 
 
     const filter = {};
     if (req.query.supplyId) filter.supplyID = req.query.supplyId;
     if (req.query.warehouseId) filter.warehouse = req.query.warehouseId;
     if (req.query.quantity) filter.quantity = req.query.quantity;
-    if (re.quey.reservedQuantity) filter.reservedQuantity = req.query.reservedQuantity;
     if (req.query.unit) filter.unit = req.query.unit;
     if (req.query.status) filter.status = req.query.status;
 

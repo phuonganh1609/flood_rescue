@@ -15,13 +15,13 @@ const router = express.Router();
 router.post("/", authenticate, authorize(["Manager"]), addSupply);
 
 // Get all supplies
-router.get("/", authenticate, getAllSupplies);
+router.get("/list", authenticate,  authorize(["Manager"]),getAllSupplies);
 
 // get supply by request type (specific route first)
-router.get("/type/:type", authenticate, getSupplyByRequestType);
+router.get("/type/:type", authenticate, authorize(["Manager"]), getSupplyByRequestType);
 
 // Get supply by id
-router.get("/:supplyId", authenticate, getSupply);
+router.get("/:supplyId", authenticate, authorize(["Manager"]), getSupply);
 
 // Update supply
 router.put("/:supplyId", authenticate, authorize(["Manager"]), updateSupply);

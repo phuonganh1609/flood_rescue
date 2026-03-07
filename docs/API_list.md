@@ -350,18 +350,27 @@
 
 - **Method:** `GET`
 - **Endpoint:** `/api/users`
-- **Description:** Danh sách user
-- **Response:** `User[]`
-- **Auth:** ✅ Admin
+- **Description:** Danh sách user (Admin xem tất cả, Coordinator chỉ xem Citizen & Rescue Team)
+- **Query Params:** `role, isActive, search, page, limit, sort`
+- **Response:** `{ success, data: User[], meta: { total, page, limit, totalPages } }`
+- **Auth:** ✅ Admin, Coordinator
+- **Note:**
+  - `search`: tìm theo displayName, phoneNumber, email (case-insensitive)
+  - `sort`: vd `-createdAt,displayName` (prefix `-` = DESC)
+  - **Data scope**: Coordinator chỉ thấy `Citizen` và `Rescue Team`. Nếu filter `?role=Admin` → trả empty.
 
 ### Update User Role
 
 - **Method:** `PATCH`
 - **Endpoint:** `/api/users/{id}/role`
-- **Description:** Phân quyền user
-- **Request:** `{ roleId }`
-- **Response:** `{ success }`
+- **Description:** Phân quyền user (Admin only)
+- **Request:** `{ role }` (enum: `Citizen`, `Rescue Team`, `Rescue Coordinator`, `Manager`, `Admin`)
+- **Response:** `{ success, data: User, message }`
 - **Auth:** ✅ Admin
+- **Rules:**
+  - Admin không thể đổi role chính mình (403)
+  - User phải tồn tại (404)
+  - Role phải khác role hiện tại (400)
 
 ### Get System Categories
 

@@ -1,4 +1,7 @@
 import { teamRepository } from "./team.repository.js";
+import User from "../users/user.model.js";
+import Timeline from "../timelines/timeline.model.js";
+import { TEAM_STATUS } from "./team.model.js";
 
 /**
  * Service for Team operations
@@ -6,9 +9,9 @@ import { teamRepository } from "./team.repository.js";
 class TeamService {
   /**
    * Create a new team
-   * - Leader must have role "Rescue Team"
    * - Team name must be unique
-   * - Leader must not already lead or belong to another team
+   * - leaderId is optional (team can be created empty)
+   * - If leaderId provided, assign leader as first member
    */
   async createTeam({ name, leaderId }) {
     // Check duplicate name
@@ -18,10 +21,12 @@ class TeamService {
     }
 
     // Create team
-    const team = await teamRepository.createTeam({ name, leaderId });
+    const team = await teamRepository.createTeam({ name, leaderId: leaderId || null });
 
-    // Assign leader to team
-    await teamRepository.addMember(leaderId, team._id);
+    // If leader provided, assign leader to team
+    if (leaderId) {
+      await teamRepository.addMember(leaderId, team._id);
+    }
 
     return await teamRepository.findById(team._id);
   }
@@ -43,8 +48,8 @@ class TeamService {
   /**
    * Get all teams with pagination and filters
    */
-  async getAllTeams(filter = {}, pagination = { page: 1, limit: 10 }) {
-    return await teamRepository.findAll(filter, pagination);
+  async getAllTeams(filter = {}, pagination = { page: 1, limit: 10 }, sort = { createdAt: -1 }) {
+    return await teamRepository.findAll(filter, pagination, sort);
   }
 
   /**
@@ -83,7 +88,10 @@ class TeamService {
   }
 
   /**
-   * Delete team — clears all member associations
+   * Delete team
+   * - Team must be AVAILABLE (not BUSY)
+   * - No active timelines (ASSIGNED / EN_ROUTE / ON_SITE)
+   * - Team must have no members (remove all members first)
    */
   async deleteTeam(teamId) {
     const team = await teamRepository.findById(teamId);
@@ -91,16 +99,33 @@ class TeamService {
       throw new Error("Team not found");
     }
 
-    // Clear all member associations
-    await teamRepository.clearAllMembers(teamId);
+    // Check team status
+    if (team.status === TEAM_STATUS.BUSY) {
+      throw new Error("Cannot delete a BUSY team. Wait until the team is AVAILABLE.");
+    }
+
+    // Check for active timelines
+    const activeTimelines = await Timeline.countDocuments({
+      teamId,
+      status: { $in: ["ASSIGNED", "EN_ROUTE", "ON_SITE"] },
+    });
+    if (activeTimelines > 0) {
+      throw new Error("Cannot delete team with active timelines. Complete or cancel them first.");
+    }
+
+    // Check for remaining members
+    const members = await teamRepository.findMembers(teamId);
+    if (members.length > 0) {
+      throw new Error("Cannot delete team with members. Remove all members first.");
+    }
 
     return await teamRepository.deleteTeam(teamId);
   }
 
   /**
    * Add member to team
-   * - User must have role "Rescue Team"
-   * - User must not already belong to another team
+   * - User must have role "Citizen" and no current team
+   * - After adding, user role is updated to "Rescue Team" (via repository)
    */
   async addMember(teamId, userId) {
     const team = await teamRepository.findById(teamId);
@@ -108,17 +133,37 @@ class TeamService {
       throw new Error("Team not found");
     }
 
+    // Validate target user
+    const targetUser = await User.findById(userId).select("role teamId");
+    if (!targetUser) {
+      throw new Error("User not found");
+    }
+
+    if (targetUser.role !== "Citizen" && targetUser.role !== "Rescue Team") {
+      throw new Error("Only users with role 'Citizen' or 'Rescue Team' can be added to a team");
+    }
+
+    if (targetUser.teamId) {
+      throw new Error("User already belongs to a team");
+    }
+
     return await teamRepository.addMember(userId, teamId);
   }
 
   /**
    * Remove member from team
-   * - Cannot remove the leader
+   * - Cannot remove the leader (must change leader first)
+   * - Cannot remove yourself
    */
-  async removeMember(teamId, userId) {
+  async removeMember(teamId, userId, requesterId) {
     const team = await teamRepository.findById(teamId);
     if (!team) {
       throw new Error("Team not found");
+    }
+
+    // Prevent self-removal
+    if (requesterId === userId) {
+      throw new Error("Cannot remove yourself from the team");
     }
 
     // Prevent removing the leader
@@ -131,12 +176,18 @@ class TeamService {
 
   /**
    * Change team leader
+   * - Team must be AVAILABLE
    * - New leader must be a member of the team
    */
   async changeLeader(teamId, newLeaderId) {
     const team = await teamRepository.findById(teamId);
     if (!team) {
       throw new Error("Team not found");
+    }
+
+    // Only allow when team is AVAILABLE
+    if (team.status === TEAM_STATUS.BUSY) {
+      throw new Error("Cannot change leader while the team is BUSY");
     }
 
     // Check if new leader is already the leader

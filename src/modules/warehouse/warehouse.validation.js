@@ -6,8 +6,9 @@ const locationSchema = Joi.object({
   type: Joi.string().valid("Point").default("Point"),
   coordinates: Joi.array()
     .ordered(
+ 
       Joi.number().min(-180).max(180).required(), // longitude
-      Joi.number().min(-90).max(90).required(), // latitude
+           Joi.number().min(-90).max(90).required(), // latitude
     )
     .length(2)
     .required()

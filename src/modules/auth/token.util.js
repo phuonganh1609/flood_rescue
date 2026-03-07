@@ -5,7 +5,7 @@ const ACCESS_TOKEN_TTL = "30m";
  * Generate JWT access token
  * @param {Object} payload - User data to encode
  * @param {string} payload.id - User ID
- * @param {string} payload.phoneNumber - User phone number
+ * @param {string} payload.email - User email
  * @param {string} payload.role - User role
  * @returns {string} JWT token
  */
@@ -13,7 +13,7 @@ const generateToken = (payload) => {
   const tokenPayload = {
     user: {
       id: payload.id,
-      phoneNumber: payload.phoneNumber,
+      email: payload.email,
       role: payload.role,
     },
   };
