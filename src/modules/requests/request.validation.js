@@ -16,11 +16,10 @@ const locationSchema = Joi.object({
 }).required();
 
 const requestSupplyItemSchema = Joi.object({
-  supplyId: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  name: Joi.string()
     .required()
     .messages({
-      "string.pattern.base": "supplyId must be a valid ObjectId",
+      "string.pattern.base": "supplyName must be a valid supply name",
     }),
   requestedQty: Joi.number().integer().min(1).required().messages({
     "number.min": "Requested quantity must be at least 1",

@@ -16,9 +16,15 @@ import timelineRoute from "./modules/timelines/timeline.routes.js";
 import userRoute from "./modules/users/user.routes.js";
 import "./modules/notifications/notify.listener.js"; // Initialize event listeners
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
-
+import supplyRoute from "./modules/supply/supply.routes.js";
+import inventoryRoute from "./modules/inventory/inventoryItem.route.js";
+import warehouseRoute from "./modules/warehouse/warehouse.route.js";
+import vehicleRoute from "./modules/vehicles/vehicle.routes.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+
+
 
 // Load Swagger YAML documentation
 const swaggerDocument = YAML.load(
@@ -95,6 +101,10 @@ app.use("/api/missions", missionRoute);
 app.use("/api/timelines", timelineRoute);
 app.use("/api/notifications", notificationRoute);
 app.use("/api/teams", teamRoute);
+app.use("/api/supply", supplyRoute);
+app.use("/api/inventory", inventoryRoute);
+app.use("/api/warehouse", warehouseRoute);
+app.use("/api/vehicles", vehicleRoute);
 app.use("/api/users", userRoute);
 
 // Error handling middlewares (must be after all routes)

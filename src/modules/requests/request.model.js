@@ -37,8 +37,8 @@ const MediaSchema = new Schema(
 
 const RequestSupplySchema = new Schema(
   {
-    supplyId: {
-      type: mongoose.Schema.Types.ObjectId,
+    name: {
+      type: mongoose.Schema.Types.String,
       ref: "Supply",
       required: true,
     },
@@ -108,6 +108,11 @@ const RequestSchema = new Schema(
       default: 1,
     },
 
+    peopleCount: {
+      type: Number,
+      default: 1,
+    },
+    
     priority: {
       type: String,
       enum: Object.values(REQUEST_PRIORITY),
