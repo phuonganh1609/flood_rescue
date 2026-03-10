@@ -1,11 +1,23 @@
+import { mongoose } from 'mongoose';
 import response from '../../utils/response.js';
 import {inventoryItemService} from './inventoryItem.service.js';
 import { createSchema, updateSchema } from './inventoryItem.validation.js';
-
+import Supply from '../supply/supply.model.js';
 function validateObjectId(id, res) {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     response.sendError(res, {
-      message: "Invalid request ID",
+      message: "Invalid ID parameter",
+      statusCode: 400,
+    });
+    return false;
+  }
+  return true;
+}
+
+function validateObjectName(name, res) {
+  if (!name || name.trim() === "") {
+    response.sendError(res, {
+      message: "Invalid name parameter",
       statusCode: 400,
     });
     return false;
@@ -54,11 +66,11 @@ export const create = async (req, res) => {
   }
 };
 
-export const getByID = async (req, res) => {
+export const getByName = async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!validateObjectId(id, res)) return;
-    const doc = await inventoryItemService.getById(id);
+   
+    if (!validateObjectName(req.params.supplyName, res)) return;
+    const doc = await inventoryItemService.getByName(req.params.supplyName);
     if (!doc) return response.sendError(res, { message: 'Not found', statusCode: 404 });
     return response.sendSuccess(res, { data: doc });
   } catch (err) {
@@ -71,12 +83,23 @@ export const getAll = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10; 
 
+     
     const filter = {};
     if (req.query.supplyId) filter.supplyID = req.query.supplyId;
     if (req.query.warehouseId) filter.warehouse = req.query.warehouseId;
     if (req.query.quantity) filter.quantity = req.query.quantity;
     if (req.query.unit) filter.unit = req.query.unit;
     if (req.query.status) filter.status = req.query.status;
+    // SEARCH SUPPLY NAME
+    if (req.query.supplyName) {
+
+      const supplies = await Supply.find({
+        name: { $regex: req.query.supplyName, $options: "i" }
+      }).select("_id");
+
+      filter.supplyID = { $in: supplies.map(s => s._id) };
+
+    }
 
     const result = await inventoryItemService.list(filter, { page, limit });
 

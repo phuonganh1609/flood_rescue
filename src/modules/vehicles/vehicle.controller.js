@@ -6,6 +6,7 @@ import {
   updateVehicleSchema,
   assignVehicleSchema,
 } from "./vehicle.validation.js";
+import XLSX from "xlsx";
 
 function validateBody(schema, body, res) {
   const { error, value } = schema.validate(body, { abortEarly: false });
@@ -73,9 +74,9 @@ export const addVehicle = async (req, res) => {
  */
 export const getVehicle = async (req, res) => {
   try {
-    if (!validateObjectId(req.params.vehicleId, res)) return;
+    if (!validateObjectId(req.params.licensePlate, res)) return;
 
-    const vehicle = await vehicleService.getVehicleById(req.params.vehicleId);
+    const vehicle = await vehicleService.getVehicleByLicensePlate(req.params.licensePlate);
     if (!vehicle) {
       return response.sendError(res, {
         message: "Vehicle not found",
@@ -334,5 +335,42 @@ export const deleteVehicle = async (req, res) => {
     });
   } catch (err) {
     handleError(err, res);
+  }
+};
+
+//import excel file
+export const importVehiclesFromExcel = async (req, res) => {
+  try {
+
+    if (!req.file) {
+      return res.status(400).json({
+        message: "File is required"
+      });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    const data = XLSX.utils.sheet_to_json(sheet, {
+      header: ["licensePlate", "type",  "brand", "model", "year", "color", "capacity", "capacityUnit", "status","lastMaintenanceDate", "MaintenanceDate"],
+      range: 1
+    });
+
+    const result = await vehicleService.importExcel(data, req.user.id);
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Import vehicles successfully"
+    });
+
+  } catch (err) {
+
+    return response.sendError(res, {
+      message: "Import Excel failed",
+      statusCode: 500,
+      errors: err.message
+    });
+
   }
 };

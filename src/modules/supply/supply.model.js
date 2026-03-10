@@ -34,6 +34,11 @@ const SupplySchema = new Schema(
         type: String, 
         required: true 
     },
+    status: { 
+        type: String, 
+        enum: Object.values(SUPPLY_STATUS), 
+        default: SUPPLY_STATUS.SUBMITTED 
+    },
     isActive: { 
         type: Boolean, 
         default: true 
@@ -54,4 +59,4 @@ const SupplySchema = new Schema(
   },
   { timestamps: true },
 );
-export default mongoose.model("Supply", SupplySchema);
+export default mongoose.model("Supply", SupplySchema); 

@@ -52,9 +52,9 @@ class InventoryItemService {
         };
     };
 
-    async getById(id) {
+    async getByName(supplyName) {
         // repository already populates the supply and warehouse
-        return await inventoryItemRepository.findById(id);
+        return await inventoryItemRepository.findByName(supplyName);
     };
 
     

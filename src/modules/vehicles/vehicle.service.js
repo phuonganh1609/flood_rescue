@@ -1,7 +1,33 @@
 import { vehicleRepository } from "./vehicle.repository.js";
 import { eventBus } from "../../utils/events.js";
+import XLSX from "xlsx";
 
 class VehicleService {
+
+  async importExcel(vehicles, managerId) {
+  
+    const formattedVehicles = vehicles.map((row) => ({
+      licensePlate: row.licensePlate,
+      type: row.type,
+      brand: row.brand,
+      model: row.model,
+      year: Number(row.year),
+      color: row.color,
+      capacity: Number(row.capacity),
+      capacityUnit: row.capacityUnit,
+      status: row.status || "ACTIVE",
+      lastMaintenanceDate: row["Last Maintenance Date"] ? new Date(row["Last Maintenance Date"]) : null,
+      maintenanceDate: row["Maintenance Date"] ? new Date(row["Maintenance Date"]) : null,
+        createdBy: managerId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    }));
+  
+    const result = await vehicleRepository.insertMany(formattedVehicles);
+  
+    return result;
+  }
+
   async createVehicle(vehicleData, managerId) {
     const {
       licensePlate,
@@ -64,8 +90,8 @@ class VehicleService {
 
   // ─── Read ───────────────────────────────────────────────
 
-  async getVehicleById(vehicleId) {
-    return await vehicleRepository.findVehicleById(vehicleId);
+  async getVehicle(licensePlate) {
+    return await vehicleRepository.findVehicleByLicensePlate(licensePlate);
   }
 
   async getAllVehicles(filter = {}, pagination = { page: 1, limit: 10 }) {

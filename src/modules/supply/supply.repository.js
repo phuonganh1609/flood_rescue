@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 import Supply from "./supply.model.js";
 import Request from "../requests/request.model.js";
 class SupplyRepository {
+
+ async insertMany(supplies) {
+    return await Supply.insertMany(supplies);
+  }
+
   /**
    * Create a new supply
    */
@@ -81,13 +86,13 @@ class SupplyRepository {
    * Find supplies by request type
    * Returns the aggregated `requestSupplies` arrays from matching Request documents.
    */
-  async getSuppliesByRequestType(type) {
+  async getSuppliesByRequestStatus(status) {
     if (!Request || !Request.find) {
       throw new Error("Request model not available");
     }
 
     // Get requests with core fields + requestSupplies
-    const requests = await Request.find({ type }).select(
+    const requests = await Request.find({ status }).select(
       "userName userId createdBy phoneNumber type incidentType location description priority status requestSupplies createdAt"
     );
 

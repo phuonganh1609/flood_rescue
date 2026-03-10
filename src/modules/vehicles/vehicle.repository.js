@@ -1,7 +1,14 @@
 import mongoose from "mongoose";
 import Vehicle from "./vehicle.model.js";
+import XLSX from "xlsx";
 
 class VehicleRepository {
+
+async insertMany(vehicles) {
+    return await Vehicle.insertMany(vehicles);
+  }
+  
+
   /**
    * Create a new vehicle
    */
