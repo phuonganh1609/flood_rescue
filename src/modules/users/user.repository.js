@@ -61,4 +61,8 @@ class UserRepository {
   }
 }
 
+async function createUser(userData) {
+  const user = new User(userData);
+  return await user.save();
+}
 export const userRepository = new UserRepository();

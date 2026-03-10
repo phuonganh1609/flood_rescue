@@ -14,6 +14,10 @@ const DATA_SCOPE = {
  * Service for User admin operations
  */
 class UserService {
+
+  async createUser(userData, adminId) {
+    return await userRepository.createUser(userData);
+  };
   /**
    * List users with filters, search, pagination, sort, and role-based data scope
    * @param {Object} query - { role, isActive, search, page, limit, sort, requesterRole }
