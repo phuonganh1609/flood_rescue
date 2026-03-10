@@ -5,6 +5,8 @@ import {
   addSupplySchema,
   updateSupplySchema
 } from "./supply.validation.js";
+import XLSX from "xlsx";
+import { supplyRepository } from "./supply.repository.js";
 
 function validateBody(schema, body, res) {
   const { error, value } = schema.validate(body, { abortEarly: false });
@@ -64,9 +66,9 @@ export const addSupply = async (req, res) => {
  */
 export const getSupply = async (req, res) => {
   try {
-    if (!validateObjectId(req.params.supplyId, res)) return;
+    if (!validateObjectName(req.params.supplyName, res)) return;
 
-    const supply = await supplyService.getSupplyById(req.params.supplyId);
+    const supply = await supplyService.getSupplyByName(req.params.supplyName);
     if (!supply) {
       return response.sendError(res, {
         message: "Supply not found",
@@ -111,25 +113,25 @@ export const getAllSupplies = async (req, res) => {
  * GET /supplies/type/:type
  */
 
-export const getSupplyByRequestType = async (req, res) => {
+export const getSupplyByRequestStatus = async (req, res) => {
   try {
-    const type = req.params.type;
-    if (!type) {
+    const status = req.params.status;
+    if (!status) {
       return response.sendError(res, {
-        message: "type is required",
+        message: "status is required",
         statusCode: 400,
       });
     }
-    // Validate allowed request types
-    const allowed = ["Rescue", "Relief"];
-    if (!allowed.includes(type)) {
+    // Validate allowed request types 
+    const allowed = [ "IN_PROGRESS",];
+    if (!allowed.includes(status)) {
       return response.sendError(res, {
-        message: `Invalid type. Allowed: ${allowed.join(", ")}`,
+        message: `Invalid status. Allowed: ${allowed.join(", ")}`,
         statusCode: 400,
       });
     }
 
-    const data = await supplyService.getSupplyByRequestType(type);
+    const data = await supplyService.getSupplyByRequestStatus(status);
     return response.sendSuccess(res, { data });
   } catch (err) {
     handleError(err, res);
@@ -175,5 +177,42 @@ export const deleteSupply = async (req, res) => {
     });
   } catch (err) {
     handleError(err, res);
+  }
+};
+
+//import excel file
+export const importSuppliesFromExcel = async (req, res) => {
+  try {
+
+    if (!req.file) {
+      return res.status(400).json({
+        message: "File is required"
+      });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    const data = XLSX.utils.sheet_to_json(sheet, {
+      header: ["name", "category", "unit", "unitWeight"],
+      range: 1
+    });
+
+    const result = await supplyService.importExcel(data, req.user.id);
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Import supplies successfully"
+    });
+
+  } catch (err) {
+
+    return response.sendError(res, {
+      message: "Import Excel failed",
+      statusCode: 500,
+      errors: err.message
+    });
+
   }
 };

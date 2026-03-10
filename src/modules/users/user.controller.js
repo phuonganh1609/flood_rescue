@@ -2,6 +2,21 @@ import mongoose from "mongoose";
 import { userService } from "./user.service.js";
 import response from "../../utils/response.js";
 
+
+
+
+export const createUser = async (req, res) => {
+  const { name, email, password, role } = req.body;
+
+  const user = await userService.createUser({
+    name,
+    email,
+    password: await bcrypt.hash(password, 10),
+    role,
+  }, req.user.id);
+
+  res.json(user);
+};
 /**
  * GET /api/users
  * List all users with filters, search, and pagination

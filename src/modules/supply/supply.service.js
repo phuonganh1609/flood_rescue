@@ -2,8 +2,28 @@ import { authRepository } from "../auth/auth.repository.js";
 import { eventBus } from "../../utils/events.js";
 import Supply from "./supply.model.js";
 import { supplyRepository } from "./supply.repository.js";
+import XLSX from "xlsx";
 
 class SupplyService {
+
+async importExcel(supplies, managerId) {
+
+  const formattedSupplies = supplies.map((row) => ({
+    name: row.name,
+    category: row.category|| "OTHER",
+    unit: row.unit,
+    unitWeight: Number(row.unitWeight),
+    description: row.description || "Imported from Excel",
+    status: row.status || "SUBMITTED",
+    createdBy: managerId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }));
+
+  const result = await supplyRepository.insertMany(formattedSupplies);
+
+  return result;
+}
     async createSupply(supplyData, managerId) {
         const{ 
             name, 
@@ -52,8 +72,8 @@ class SupplyService {
         return await supplyRepository.findAllSuppliesCategory(filter, pagination);
     }
 
-    async getSupplyByRequestType(type) {
-        return await supplyRepository.getSuppliesByRequestType(type);
+    async getSupplyByRequestStatus(status) {
+        return await supplyRepository.getSuppliesByRequestStatus(status);
     }
 
     // ─── Update ─────────────────────────────────────────────

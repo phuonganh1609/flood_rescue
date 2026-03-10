@@ -1,5 +1,6 @@
 import express from "express";
 import { authenticate, authorize } from "../../middlewares/authMiddleware.js";
+import multer from "multer";
 import {
   addVehicle,
   getVehicle,
@@ -9,6 +10,7 @@ import {
   getVehiclesByTeam,
   getVehicleStats,
   getVehiclesNeedingMaintenance,
+  importVehiclesFromExcel,
   updateVehicle,
   assignVehicleToTeam,
   updateMaintenanceStatus,
@@ -16,10 +18,19 @@ import {
 } from "./vehicle.controller.js";
 
 const router = express.Router();
-
+// multer config
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 // ─── Create ────────────────────────────────────────────────
 router.post("/", authenticate, authorize(["Manager"]), addVehicle);
-
+// Import supplies from Excel
+router.post(
+  "/import",
+  authenticate,
+  authorize(["Manager"]),
+  upload.single("file"),
+  importVehiclesFromExcel
+);
 // ─── Read ──────────────────────────────────────────────────
 
 // Get vehicles needing maintenance (specific route first)
@@ -61,7 +72,7 @@ router.get(
 );
 
 // Get vehicle by ID
-router.get("/:vehicleId", authenticate, authorize(["Manager"]), getVehicle);
+router.get("/:licensePlate", authenticate, authorize(["Manager"]), getVehicle);
 
 // ─── Update ────────────────────────────────────────────────
 router.put(

@@ -1,4 +1,6 @@
+import { updateSupplySchema } from '../supply/supply.validation.js';
 import { InventoryItem } from './inventoryItem.model.js';
+import Supply from '../supply/supply.model.js';
 
 class InventoryItemRepository {
 
@@ -7,12 +9,16 @@ class InventoryItemRepository {
     return doc.save();
   };
 
-  async findByID(inventoryID) {
-      return await InventoryItem.findById(inventoryID)
-          .populate('supplyID')
-          .populate('warehouse')
-          .lean();
-  };
+  async findByName(supplyName) {
+  // Tìm Supply trước
+  const supply = await Supply.findOne({ name: supplyName });
+  if (!supply) return null;
+  // Tìm InventoryItem theo supplyID
+  return await InventoryItem.findOne({ supplyID: supply._id })
+    .populate('supplyID')
+    .populate('warehouse')
+    .lean();
+}
 
   async findAll(filter = {}, pagination = { page: 1, limit: 10 }) {
        const { page, limit } = pagination;
