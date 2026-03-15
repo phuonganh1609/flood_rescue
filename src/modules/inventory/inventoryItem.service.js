@@ -1,4 +1,4 @@
-import {inventoryItemRepository} from './inventoryItem.responsitory.js';
+import { inventoryItemRepository } from './inventoryItem.repository.js';
 import { Warehouse } from '../warehouse/warehouse.model.js';
 import Supply from '../supply/supply.model.js';
 import {eventBus} from '../../utils/events.js';
@@ -74,14 +74,28 @@ class InventoryItemService {
         return await inventoryItemRepository.findByName(supplyName);
     };
 
+    async getById(id) {
+        return await inventoryItemRepository.findById(id);
+    };
+
     
     async list(filter = {}, pagination = { page: 1, limit: 10 }) {
+        if (filter.supplyName) {
+            const supplies = await Supply.find({
+                name: { $regex: filter.supplyName, $options: 'i' },
+            }).select('_id');
+
+            filter.supplyID = { $in: supplies.map((s) => s._id) };
+            delete filter.supplyName;
+        }
+
         // repository already populates the supply and warehouse
         return await inventoryItemRepository.findAll(filter, pagination);
     };
 
-    async update(name, payload) {
-        const updatedInventoryItem = await inventoryItemRepository.updateByName(name, payload);
+    async update(id, payload) {
+        const updater = inventoryItemRepository.updateById || inventoryItemRepository.updateByName;
+        const updatedInventoryItem = await updater.call(inventoryItemRepository, id, payload);
         if (updatedInventoryItem) {
             eventBus.emit("INVENTORY_ITEM_UPDATED", {
                 inventoryItemId: updatedInventoryItem._id,
@@ -93,8 +107,9 @@ class InventoryItemService {
         return updatedInventoryItem;
     };
 
-    async remove(name) {
-        const deletedInventoryItem = await inventoryItemRepository.deleteByName(name);
+    async remove(id) {
+        const deleter = inventoryItemRepository.deleteById || inventoryItemRepository.deleteByName;
+        const deletedInventoryItem = await deleter.call(inventoryItemRepository, id);
         if (deletedInventoryItem) {
             eventBus.emit("INVENTORY_ITEM_DELETED", {
                 inventoryItemId: deletedInventoryItem._id,

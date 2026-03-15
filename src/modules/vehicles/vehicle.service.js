@@ -94,6 +94,10 @@ class VehicleService {
     return await vehicleRepository.findVehicleByLicensePlate(licensePlate);
   }
 
+  async getVehicleById(vehicleId) {
+    return await vehicleRepository.findVehicleById(vehicleId);
+  }
+
   async getAllVehicles(filter = {}, pagination = { page: 1, limit: 10 }) {
     return await vehicleRepository.findAllVehicles(filter, pagination);
   }

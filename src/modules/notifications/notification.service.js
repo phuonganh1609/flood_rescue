@@ -68,7 +68,8 @@ class NotificationService {
         .skip(skip)
         .limit(pagination.limit)
         .populate("userId", "displayName email")
-        .populate("requestId", "type incidentType");
+        .populate("requestId", "type incidentType")
+        .populate("teamApplicationId", "status motivation submittedPhoneNumber");
 
       const total = await NotifyModel.countDocuments(query);
 
@@ -97,7 +98,8 @@ class NotificationService {
     try {
       return await NotifyModel.findById(notificationId)
         .populate("userId", "displayName email")
-        .populate("requestId", "type incidentType");
+        .populate("requestId", "type incidentType")
+        .populate("teamApplicationId", "status motivation submittedPhoneNumber");
     } catch (error) {
       throw new Error(`Failed to fetch notification: ${error.message}`);
     }

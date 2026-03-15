@@ -107,11 +107,6 @@ const RequestSchema = new Schema(
       max: 100,
       default: 1,
     },
-
-    peopleCount: {
-      type: Number,
-      default: 1,
-    },
     
     priority: {
       type: String,
@@ -134,6 +129,8 @@ const RequestSchema = new Schema(
       type: [MediaSchema],
       default: [],
     },
+
+    rejectionReason: { type: String, default: null },
 
     // Duplicate detection
     isDuplicated: { type: Boolean, default: false },

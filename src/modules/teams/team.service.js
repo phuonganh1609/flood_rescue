@@ -3,6 +3,13 @@ import User from "../users/user.model.js";
 import Timeline from "../timelines/timeline.model.js";
 import { TEAM_STATUS } from "./team.model.js";
 
+const toIdString = (value) => {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (value._id) return value._id.toString();
+  return value.toString();
+};
+
 /**
  * Service for Team operations
  */
@@ -20,6 +27,18 @@ class TeamService {
       throw new Error("Team name already exists");
     }
 
+    // Validate leader before creating team to avoid partial/invalid team creation
+    if (leaderId) {
+      const leader = await User.findById(leaderId).select("teamId");
+      if (!leader) {
+        throw new Error("Leader not found");
+      }
+
+      if (leader.teamId) {
+        throw new Error("Leader already belongs to a team");
+      }
+    }
+
     // Create team
     const team = await teamRepository.createTeam({ name, leaderId: leaderId || null });
 
@@ -35,21 +54,24 @@ class TeamService {
    * Get team by ID with members
    */
   async getTeamById(teamId) {
-    const team = await teamRepository.findById(teamId);
+    const team = await teamRepository.findByIdWithStats(teamId);
     if (!team) {
       throw new Error("Team not found");
     }
 
-    const members = await teamRepository.findMembers(teamId);
-
-    return { ...team.toObject(), members };
+    return team;
   }
 
   /**
    * Get all teams with pagination and filters
    */
-  async getAllTeams(filter = {}, pagination = { page: 1, limit: 10 }, sort = { createdAt: -1 }) {
-    return await teamRepository.findAll(filter, pagination, sort);
+  async getAllTeams(
+    filter = {},
+    pagination = { page: 1, limit: 10 },
+    sort = { createdAt: -1 },
+    options = {},
+  ) {
+    return await teamRepository.findAllWithStats(filter, pagination, sort, options);
   }
 
   /**
@@ -70,10 +92,8 @@ class TeamService {
     }
 
     // If changing leader, validate new leader
-    if (
-      updateData.leaderId &&
-      updateData.leaderId !== team.leaderId.toString()
-    ) {
+    const currentLeaderId = toIdString(team.leaderId);
+    if (updateData.leaderId && updateData.leaderId !== currentLeaderId) {
       // Ensure new leader is a member of this team
       const members = await teamRepository.findMembers(teamId);
       const isMember = members.some(
@@ -167,7 +187,8 @@ class TeamService {
     }
 
     // Prevent removing the leader
-    if (team.leaderId._id.toString() === userId) {
+    const currentLeaderId = toIdString(team.leaderId);
+    if (currentLeaderId === userId) {
       throw new Error("Cannot remove the team leader. Change leader first.");
     }
 
@@ -191,7 +212,8 @@ class TeamService {
     }
 
     // Check if new leader is already the leader
-    if (team.leaderId._id.toString() === newLeaderId) {
+    const currentLeaderId = toIdString(team.leaderId);
+    if (currentLeaderId === newLeaderId) {
       throw new Error("User is already the leader of this team");
     }
 

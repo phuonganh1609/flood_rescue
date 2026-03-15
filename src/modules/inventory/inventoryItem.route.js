@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import { create,
   getByName,
+  getById,
   getAll,
   update,
   remove,

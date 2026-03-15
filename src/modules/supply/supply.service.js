@@ -1,6 +1,4 @@
-import { authRepository } from "../auth/auth.repository.js";
 import { eventBus } from "../../utils/events.js";
-import Supply from "./supply.model.js";
 import { supplyRepository } from "./supply.repository.js";
 import XLSX from "xlsx";
 import { normalizeText } from '../../utils/normalizeName.js';
@@ -16,6 +14,7 @@ async importExcel(supplies, managerId) {
     unitWeight: Number(row.unitWeight),
     description: row.description || "Imported from Excel",
     status: row.status || "SUBMITTED",
+    isActive: row.isActive ?? true,
     createdBy: managerId,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -79,7 +78,11 @@ async importExcel(supplies, managerId) {
     }
     
     async getAllSuppliesByCategory(filter = {}, pagination = { page: 1, limit: 10 }) {
-        return await supplyRepository.findAllSuppliesCategory(filter, pagination);
+        const findByCategory =
+            supplyRepository.findAllSuppliesByCategory ||
+            supplyRepository.findAllSuppliesCategory;
+
+        return await findByCategory.call(supplyRepository, filter, pagination);
     }
 
     async getSupplyByRequestStatus(status) {

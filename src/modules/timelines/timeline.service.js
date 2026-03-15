@@ -152,7 +152,7 @@ class TimelineService {
 
   async arriveTimeline(timelineId, actorUserId) {
     const timeline = await this.getTimelineById(timelineId);
-    await this.assertMissionCanExecute(extractId(timeline.missionId));
+    await this.assertMissionNotTerminated(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
     assertTimelineTransition(timeline.status, TIMELINE_STATUS.ON_SITE);
 
@@ -178,7 +178,7 @@ class TimelineService {
   async completeTimeline(timelineId, actorUserId, payload) {
     const { outcome, note, rescuedCount } = payload;
     const timeline = await this.getTimelineById(timelineId);
-    await this.assertMissionCanExecute(extractId(timeline.missionId));
+    await this.assertMissionNotTerminated(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
 
     const nextStatus =
@@ -217,7 +217,7 @@ class TimelineService {
   async failTimeline(timelineId, actorUserId, payload) {
     const { failureReason, note } = payload;
     const timeline = await this.getTimelineById(timelineId);
-    await this.assertMissionCanExecute(extractId(timeline.missionId));
+    await this.assertMissionNotTerminated(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
     assertTimelineTransition(timeline.status, TIMELINE_STATUS.FAILED);
 
@@ -246,7 +246,7 @@ class TimelineService {
   async withdrawTimeline(timelineId, actorUserId, payload) {
     const { withdrawalReason, note } = payload;
     const timeline = await this.getTimelineById(timelineId);
-    await this.assertMissionCanExecute(extractId(timeline.missionId));
+    await this.assertMissionNotTerminated(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
     assertTimelineTransition(timeline.status, TIMELINE_STATUS.WITHDRAWN);
 
@@ -449,6 +449,23 @@ class TimelineService {
     }
 
     if (["ABORTED", "COMPLETED", "PAUSED"].includes(mission.status)) {
+      const err = new Error(`Mission is ${mission.status}. Timeline action is not allowed.`);
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  // Lighter check — only blocks truly terminal states.
+  // Used for arrive/complete/fail/withdraw where the team is already executing.
+  async assertMissionNotTerminated(missionId) {
+    const mission = await missionRepository.findById(missionId);
+    if (!mission) {
+      const err = new Error("Mission not found");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (["ABORTED", "COMPLETED"].includes(mission.status)) {
       const err = new Error(`Mission is ${mission.status}. Timeline action is not allowed.`);
       err.statusCode = 400;
       throw err;

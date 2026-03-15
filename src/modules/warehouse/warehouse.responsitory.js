@@ -1,4 +1,5 @@
 import { Warehouse } from './warehouse.model.js';
+import InventoryItem from '../inventory/inventoryItem.model.js';
 
 class WarehouseRepository {
 // Warehouse repository
