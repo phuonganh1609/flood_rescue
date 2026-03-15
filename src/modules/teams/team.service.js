@@ -20,6 +20,18 @@ class TeamService {
       throw new Error("Team name already exists");
     }
 
+    // Validate leader before creating team to avoid partial/invalid team creation
+    if (leaderId) {
+      const leader = await User.findById(leaderId).select("teamId");
+      if (!leader) {
+        throw new Error("Leader not found");
+      }
+
+      if (leader.teamId) {
+        throw new Error("Leader already belongs to a team");
+      }
+    }
+
     // Create team
     const team = await teamRepository.createTeam({ name, leaderId: leaderId || null });
 
