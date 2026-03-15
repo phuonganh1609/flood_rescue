@@ -11,13 +11,25 @@ function isValidObjectId(id) {
 function parseTimelineId(req, res) {
   const { id } = req.params;
   if (!isValidObjectId(id)) {
-    sendError(res, { message: "Invalid timeline ID", statusCode: 400 });
+    sendError(res, {
+      message: "ID timeline không hợp lệ",
+      statusCode: 400,
+      errorCode: "INVALID_TIMELINE_ID",
+    });
     return null;
   }
   return id;
 }
 
 class TimelineController {
+  static toErrorPayload(error) {
+    return {
+      message: error.message || "Có lỗi nội bộ xảy ra",
+      statusCode: error.statusCode || 500,
+      errorCode: error.errorCode || "INTERNAL_ERROR",
+    };
+  }
+
   async getTimelines(req, res) {
     try {
       const result = await timelineService.getTimelines(req.query, req.user);
@@ -32,10 +44,7 @@ class TimelineController {
         message: "Timelines retrieved successfully",
       });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
-      });
+      return sendError(res, TimelineController.toErrorPayload(error));
     }
   }
 
@@ -51,7 +60,11 @@ class TimelineController {
         const actorTeamId = await timelineService.getUserTeamId(req.user.id);
         const timelineTeamId = timeline.teamId?._id?.toString?.() || timeline.teamId?.toString?.();
         if (!actorTeamId || actorTeamId !== timelineTeamId) {
-          return sendError(res, { message: "Access denied", statusCode: 403 });
+          return sendError(res, {
+            message: "Bạn không có quyền truy cập timeline này",
+            statusCode: 403,
+            errorCode: "UNAUTHORIZED_TIMELINE_ACCESS",
+          });
         }
       }
 
@@ -60,10 +73,7 @@ class TimelineController {
         message: "Timeline retrieved successfully",
       });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
-      });
+      return sendError(res, TimelineController.toErrorPayload(error));
     }
   }
 
@@ -78,7 +88,7 @@ class TimelineController {
         message: "Timeline accepted successfully",
       });
     } catch (error) {
-      return sendError(res, { message: error.message, statusCode: error.statusCode || 500 });
+      return sendError(res, TimelineController.toErrorPayload(error));
     }
   }
 
@@ -93,7 +103,7 @@ class TimelineController {
         message: "Timeline marked ON_SITE successfully",
       });
     } catch (error) {
-      return sendError(res, { message: error.message, statusCode: error.statusCode || 500 });
+      return sendError(res, TimelineController.toErrorPayload(error));
     }
   }
 
@@ -108,7 +118,7 @@ class TimelineController {
         message: "Timeline completed successfully",
       });
     } catch (error) {
-      return sendError(res, { message: error.message, statusCode: error.statusCode || 500 });
+      return sendError(res, TimelineController.toErrorPayload(error));
     }
   }
 
@@ -123,7 +133,7 @@ class TimelineController {
         message: "Timeline marked failed successfully",
       });
     } catch (error) {
-      return sendError(res, { message: error.message, statusCode: error.statusCode || 500 });
+      return sendError(res, TimelineController.toErrorPayload(error));
     }
   }
 
@@ -138,7 +148,7 @@ class TimelineController {
         message: "Timeline withdrawn successfully",
       });
     } catch (error) {
-      return sendError(res, { message: error.message, statusCode: error.statusCode || 500 });
+      return sendError(res, TimelineController.toErrorPayload(error));
     }
   }
 
@@ -153,7 +163,7 @@ class TimelineController {
         message: "Timeline cancelled successfully",
       });
     } catch (error) {
-      return sendError(res, { message: error.message, statusCode: error.statusCode || 500 });
+      return sendError(res, TimelineController.toErrorPayload(error));
     }
   }
 }

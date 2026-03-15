@@ -4,21 +4,46 @@ import timelineService from "../timelines/timeline.service.js";
 import { requestRepository } from "../requests/request.repository.js";
 import { REQUEST_STATUS } from "../requests/request.model.js";
 import { teamRepository } from "../teams/team.repository.js";
+import { missionRequestRepository } from "../missionRequests/missionRequest.repository.js";
 import { eventBus } from "../../utils/events.js";
 
 class MissionService {
+  async assertMissionExists(id) {
+    const mission = await missionRepository.findById(id);
+    if (!mission) {
+      const error = new Error(`Không tìm thấy mission với ID: ${id}`);
+      error.statusCode = 404;
+      error.errorCode = "MISSION_NOT_FOUND";
+      throw error;
+    }
+    return mission;
+  }
+
+  assertMissionDraft(mission, action = "perform this action") {
+    if (mission.status !== "DRAFT") {
+      const error = new Error(
+        `Không thể ${action}: mission đang ở trạng thái ${mission.status}, yêu cầu DRAFT`,
+      );
+      error.statusCode = 400;
+      error.errorCode = "INVALID_MISSION_STATUS";
+      throw error;
+    }
+  }
+
   async buildMissionAbortedPayload(missionId) {
-    const activeTimelines = await Timeline.find({
+    const [activeTimelines, missionRequests] = await Promise.all([
+      Timeline.find({
       missionId,
       status: { $in: ["ASSIGNED", "EN_ROUTE", "ON_SITE"] },
     })
-      .populate("requestId")
-      .populate("teamId");
+        .populate("teamId"),
+      missionRequestRepository.findByMissionId(missionId),
+    ]);
 
     const requestIds = [
       ...new Set(
-        activeTimelines
-          .map((timeline) => timeline.requestId?._id?.toString?.() || timeline.requestId?.toString?.())
+        missionRequests
+          .map((missionRequest) => missionRequest.requestId?._id?.toString?.() || missionRequest.requestId?.toString?.())
           .filter(Boolean),
       ),
     ];
@@ -77,124 +102,201 @@ class MissionService {
   }
 
   async getMissionById(id) {
-    const mission = await missionRepository.findById(id);
-    if (!mission) {
-      const error = new Error("Mission not found");
-      error.statusCode = 404;
-      throw error;
-    }
-    return mission;
+    return await this.assertMissionExists(id);
+  }
+
+  async getMissionRequests(id) {
+    await this.assertMissionExists(id);
+    return await missionRequestRepository.findByMissionId(id);
   }
 
   async updateMission(id, data) {
-    const mission = await missionRepository.findById(id);
-    if (!mission) {
-      const error = new Error("Mission not found");
-      error.statusCode = 404;
-      throw error;
-    }
+    const mission = await this.assertMissionExists(id);
 
     // Block status update via generic update — use dedicated actions instead
     if (data.status) {
       const error = new Error(
-        "Cannot update status directly. Use /pause, /resume, /abort actions instead",
+        "Không thể cập nhật trực tiếp status. Hãy dùng các action /pause, /resume hoặc /abort",
       );
       error.statusCode = 400;
+      error.errorCode = "STATUS_UPDATE_BLOCKED";
       throw error;
     }
 
     return await missionRepository.update(id, data);
   }
 
-  async assignTeam(id, { teamId, requestId, note }) {
-    const mission = await missionRepository.findById(id);
-    if (!mission) {
-      const error = new Error("Mission not found");
-      error.statusCode = 404;
-      throw error;
+  async addRequestsToMission(id, { requestIds, note }) {
+    const mission = await this.assertMissionExists(id);
+    this.assertMissionDraft(mission, "add requests");
+
+    const uniqueRequestIds = [...new Set(requestIds)];
+    const created = [];
+
+    for (const requestId of uniqueRequestIds) {
+      const [request, existing] = await Promise.all([
+        requestRepository.findRequestById(requestId),
+        missionRequestRepository.findByMissionAndRequest(id, requestId),
+      ]);
+
+      if (!request) {
+        const error = new Error(`Không tìm thấy request với ID: ${requestId}`);
+        error.statusCode = 404;
+        error.errorCode = "REQUEST_NOT_FOUND";
+        throw error;
+      }
+
+      if (
+        ![
+          REQUEST_STATUS.VERIFIED,
+          REQUEST_STATUS.IN_PROGRESS,
+          REQUEST_STATUS.PARTIALLY_FULFILLED,
+        ].includes(request.status)
+      ) {
+        const error = new Error(
+          `Không thể thêm request có trạng thái ${request.status}. Chỉ chấp nhận: VERIFIED, IN_PROGRESS, PARTIALLY_FULFILLED`,
+        );
+        error.statusCode = 400;
+        error.errorCode = "INVALID_REQUEST_STATUS";
+        throw error;
+      }
+
+      if (existing) continue;
+
+      created.push(
+        await missionRequestRepository.create({
+          missionId: id,
+          requestId,
+          status: "PENDING",
+          peopleNeeded: request.peopleCount || 0,
+          peopleRescued: 0,
+          peopleRemaining: request.peopleCount || 0,
+          requestSuppliesSnapshot: request.requestSupplies || [],
+          note: note || null,
+        }),
+      );
     }
 
-    if (["COMPLETED", "ABORTED", "PAUSED"].includes(mission.status)) {
+    return created;
+  }
+
+  async assignTeamsToMission(id, { teamIds, note }) {
+    const mission = await this.assertMissionExists(id);
+    this.assertMissionDraft(mission, "assign teams");
+
+    const uniqueTeamIds = [...new Set(teamIds)];
+    const created = [];
+
+    for (const teamId of uniqueTeamIds) {
+      const team = await teamRepository.findById(teamId);
+      if (!team) {
+        const error = new Error(`Không tìm thấy đội cứu hộ với ID: ${teamId}`);
+        error.statusCode = 404;
+        error.errorCode = "TEAM_NOT_FOUND";
+        throw error;
+      }
+
+      created.push(
+        await timelineService.createTimeline({
+          missionId: id,
+          teamId,
+          status: "PLANNED",
+          note,
+        }),
+      );
+    }
+
+    return created;
+  }
+
+  async startMission(id) {
+    const mission = await this.assertMissionExists(id);
+    this.assertMissionDraft(mission, "start mission");
+
+    const missionRequests = await missionRequestRepository.findByMissionId(id);
+    if (missionRequests.length === 0) {
       const error = new Error(
-        `Cannot assign team to a mission with status ${mission.status}`,
+        "Không thể bắt đầu mission: cần có ít nhất một request",
       );
       error.statusCode = 400;
+      error.errorCode = "NO_MISSION_REQUESTS";
       throw error;
     }
 
-    const [request, team] = await Promise.all([
-      requestRepository.findRequestById(requestId),
-      teamRepository.findById(teamId),
-    ]);
-
-    if (!request) {
-      const error = new Error("Request not found");
-      error.statusCode = 404;
-      throw error;
-    }
-
-    if (
-      ![REQUEST_STATUS.VERIFIED, REQUEST_STATUS.PARTIALLY_FULFILLED].includes(
-        request.status,
-      )
-    ) {
-      const error = new Error(
-        `Cannot assign request with status ${request.status}. Allowed: VERIFIED, PARTIALLY_FULFILLED`,
-      );
-      error.statusCode = 400;
-      throw error;
-    }
-
-    if (!team) {
-      const error = new Error("Team not found");
-      error.statusCode = 404;
-      throw error;
-    }
-
-    // If mission already has timelines, prevent mixing requests in same mission.
-    const missionTimelines = await Timeline.find({ missionId: id }).lean();
-    if (
-      missionTimelines.length > 0 &&
-      !missionTimelines.some((t) => t.requestId.toString() === requestId)
-    ) {
-      const error = new Error(
-        "This mission is already bound to another request. Please create a new mission for this request.",
-      );
-      error.statusCode = 400;
-      throw error;
-    }
-
-    // Create Timeline
-    const timeline = await timelineService.createTimeline({
+    const plannedTimelines = await Timeline.find({
       missionId: id,
-      teamId,
-      requestId,
-      status: "ASSIGNED",
-      note,
-    });
+      status: "PLANNED",
+    }).populate("teamId");
 
-    // Emit assignment notification event.
+    if (plannedTimelines.length === 0) {
+      const error = new Error(
+        "Không thể bắt đầu mission: chưa có timeline ở trạng thái PLANNED",
+      );
+      error.statusCode = 400;
+      error.errorCode = "NO_PLANNED_TIMELINES";
+      throw error;
+    }
+
+    await Timeline.updateMany(
+      {
+        missionId: id,
+        status: "PLANNED",
+      },
+      {
+        $set: {
+          status: "ASSIGNED",
+          assignedAt: new Date(),
+        },
+      },
+    );
+
+    const updatedMission = await missionRepository.update(id, { status: "PLANNED" });
+
+    const requestIds = [
+      ...new Set(
+        missionRequests
+          .map((item) => item.requestId?._id?.toString?.() || item.requestId?.toString?.())
+          .filter(Boolean),
+      ),
+    ];
+    const citizenIds = [
+      ...new Set(
+        missionRequests
+          .map((item) => item.requestId?.userId?._id?.toString?.() || item.requestId?.userId?.toString?.())
+          .filter(Boolean),
+      ),
+    ];
+    const teamLeaderIds = [
+      ...new Set(
+        plannedTimelines
+          .map((timeline) => timeline.teamId?.leaderId?._id?.toString?.() || timeline.teamId?.leaderId?.toString?.())
+          .filter(Boolean),
+      ),
+    ];
+    const teamNames = [
+      ...new Set(plannedTimelines.map((timeline) => timeline.teamId?.name).filter(Boolean)),
+    ];
+
     eventBus.emit("MISSION_ASSIGNED", {
-      requestId,
       missionId: id,
-      citizenId: request.userId?._id?.toString?.() || request.userId?.toString?.(),
-      teamLeaderId: team.leaderId?._id?.toString?.() || team.leaderId?.toString?.(),
-      teamName: team.name,
+      missionCode: updatedMission?.code || mission?.code,
+      requestIds,
+      citizenIds,
+      teamLeaderIds,
+      teamNames,
     });
 
-    return timeline;
+    return updatedMission;
   }
 
   async pauseMission(id) {
-    const mission = await missionRepository.findById(id);
-    if (!mission) {
-      const error = new Error("Mission not found");
-      error.statusCode = 404;
-      throw error;
-    }
+    const mission = await this.assertMissionExists(id);
     if (mission.status !== "IN_PROGRESS") {
-      const error = new Error("Only IN_PROGRESS missions can be paused");
+      const error = new Error(
+        `Không thể tạm dừng mission: trạng thái hiện tại là ${mission.status}, yêu cầu IN_PROGRESS`,
+      );
       error.statusCode = 400;
+      error.errorCode = "INVALID_MISSION_STATE_FOR_PAUSE";
       throw error;
     }
 
@@ -202,15 +304,13 @@ class MissionService {
   }
 
   async resumeMission(id) {
-    const mission = await missionRepository.findById(id);
-    if (!mission) {
-      const error = new Error("Mission not found");
-      error.statusCode = 404;
-      throw error;
-    }
+    const mission = await this.assertMissionExists(id);
     if (mission.status !== "PAUSED") {
-      const error = new Error("Only PAUSED missions can be resumed");
+      const error = new Error(
+        `Không thể tiếp tục mission: trạng thái hiện tại là ${mission.status}, yêu cầu PAUSED`,
+      );
       error.statusCode = 400;
+      error.errorCode = "INVALID_MISSION_STATE_FOR_RESUME";
       throw error;
     }
 
@@ -218,15 +318,13 @@ class MissionService {
   }
 
   async abortMission(id) {
-    const mission = await missionRepository.findById(id);
-    if (!mission) {
-      const error = new Error("Mission not found");
-      error.statusCode = 404;
-      throw error;
-    }
+    const mission = await this.assertMissionExists(id);
     if (["COMPLETED", "ABORTED"].includes(mission.status)) {
-      const error = new Error("Mission is already closed");
+      const error = new Error(
+        `Không thể huỷ mission: mission đang ở trạng thái kết thúc ${mission.status}`,
+      );
       error.statusCode = 400;
+      error.errorCode = "MISSION_TERMINAL";
       throw error;
     }
 
@@ -248,12 +346,7 @@ class MissionService {
   }
 
   async deleteMission(id) {
-    const mission = await missionRepository.findById(id);
-    if (!mission) {
-      const error = new Error("Mission not found");
-      error.statusCode = 404;
-      throw error;
-    }
+    await this.assertMissionExists(id);
 
     // Check for active timelines
     const activeTimelines = await Timeline.countDocuments({
@@ -262,8 +355,11 @@ class MissionService {
     });
 
     if (activeTimelines > 0) {
-      const error = new Error("Cannot delete mission with active timelines");
+      const error = new Error(
+        `Không thể xoá mission: còn ${activeTimelines} timeline đang hoạt động`,
+      );
       error.statusCode = 400;
+      error.errorCode = "ACTIVE_TIMELINES_EXIST";
       throw error;
     }
 

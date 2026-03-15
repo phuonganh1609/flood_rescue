@@ -298,7 +298,7 @@ Nhiệm vụ cứu hộ được tạo bởi Coordinator.
 | Status        | Ý nghĩa                                                                      |
 | :------------ | :--------------------------------------------------------------------------- |
 | `DRAFT`       | Coordinator đang lên kế hoạch: kéo request vào, ghép team; chưa thông báo   |
-| `PLANNED`     | Tất cả cặp (request, team) đã sẵn sàng; chờ Coordinator bấm Start           |
+| `PLANNED`     | Start Mission đã bấm; notifications gửi tới teams; chờ team accept đầu tiên  |
 | `IN_PROGRESS` | Mission đã start; ít nhất 1 timeline đang EN_ROUTE / ON_SITE                 |
 | `PAUSED`      | Tạm dừng                                                                     |
 | `PARTIAL`     | Hoàn thành một phần (cần thêm timeline)                                      |

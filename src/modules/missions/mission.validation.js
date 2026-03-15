@@ -3,7 +3,7 @@ import Joi from "joi";
 const objectId = Joi.string()
   .regex(/^[0-9a-fA-F]{24}$/)
   .messages({
-    "string.pattern.base": "{{#label}} must be a valid ObjectId",
+    "string.pattern.base": "{{#label}} phải là ObjectId hợp lệ",
   });
 
 const createMissionSchema = Joi.object({
@@ -19,9 +19,17 @@ const updateMissionSchema = Joi.object({
   priority: Joi.string().valid("Critical", "High", "Normal"),
 }).min(1); // Require at least one field to update
 
-const assignTeamSchema = Joi.object({
-  teamId: objectId.required().label("teamId"),
-  requestId: objectId.required().label("requestId"),
+const addRequestsSchema = Joi.object({
+  requestIds: Joi.array().items(objectId.label("requestId")).min(1).required(),
+  note: Joi.string().max(500).allow("", null),
+});
+
+const addTeamsSchema = Joi.object({
+  teamIds: Joi.array().items(objectId.label("teamId")).min(1).required(),
+  note: Joi.string().max(500).allow("", null),
+});
+
+const startMissionSchema = Joi.object({
   note: Joi.string().max(500).allow("", null),
 });
 
@@ -29,6 +37,7 @@ const queryMissionSchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(10),
   status: Joi.string().valid(
+    "DRAFT",
     "PLANNED",
     "IN_PROGRESS",
     "PAUSED",
@@ -43,6 +52,8 @@ const queryMissionSchema = Joi.object({
 export {
   createMissionSchema,
   updateMissionSchema,
-  assignTeamSchema,
+  addRequestsSchema,
+  addTeamsSchema,
+  startMissionSchema,
   queryMissionSchema,
 };

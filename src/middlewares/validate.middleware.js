@@ -17,7 +17,7 @@ const validate = (schema, source = "body") => {
       const errorMessages = error.details.map((detail) => detail.message);
       return res.status(400).json({
         success: false,
-        message: "Validation error",
+        message: "Dữ liệu gửi lên không hợp lệ",
         data: null,
         error: {
           code: "VALIDATION_ERROR",

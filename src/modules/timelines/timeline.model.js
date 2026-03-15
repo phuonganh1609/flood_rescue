@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 export const TIMELINE_STATUS = {
+  PLANNED: "PLANNED",
   ASSIGNED: "ASSIGNED",
   EN_ROUTE: "EN_ROUTE",
   ON_SITE: "ON_SITE",
@@ -21,7 +22,6 @@ const timelineSchema = new mongoose.Schema(
     requestId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Request",
-      required: true,
     },
     teamId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -31,12 +31,9 @@ const timelineSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: Object.values(TIMELINE_STATUS),
-      default: TIMELINE_STATUS.ASSIGNED,
+      default: TIMELINE_STATUS.PLANNED,
     },
-    assignedAt: {
-      type: Date,
-      default: Date.now,
-    },
+    assignedAt: Date,
     startedAt: Date,
     arrivedAt: Date,
     completedAt: Date,

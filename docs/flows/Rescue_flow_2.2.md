@@ -42,11 +42,12 @@ flowchart TD
     START --> TEAM_RESPOND{Team responds?}
     TEAM_RESPOND -- Withdraw --> WITHDRAWN[Timeline = WITHDRAWN]
     WITHDRAWN --> REASSIGN[Coordinator assigns new team]
-    ## State Diagrams (Redesigned)
+```
+## State Diagrams (Redesigned)
 
-    ### 1. Request State Diagram
+### 1. Request State Diagram
 
-    ```mermaid
+```mermaid
     stateDiagram-v2
         [*] --> SUBMITTED
 
@@ -67,169 +68,48 @@ flowchart TD
         REJECTED --> [*]
         CANCELLED --> [*]
         CLOSED --> [*]
-    ```
-
-    ### 2. MissionRequest State Diagram
-
-    ```mermaid
-    stateDiagram-v2
-        [*] --> PENDING
-
-        PENDING --> IN_PROGRESS : team accepts (timeline EN_ROUTE)
-        IN_PROGRESS --> PARTIAL : timeline completed (partial)
-        IN_PROGRESS --> FULFILLED : timeline completed (all rescued)
-
-        PARTIAL --> IN_PROGRESS : new team accepts in same mission
-        FULFILLED --> CLOSED : coordinator closes request
-        PARTIAL --> CLOSED : coordinator closes manually
-
-        PENDING --> DROPPED : coordinator removes request from mission
-        IN_PROGRESS --> DROPPED : coordinator removes during execution
-
-        CLOSED --> [*]
-        DROPPED --> [*]
-        FULFILLED --> [*]
-    ```
-
-    ### 3. Timeline State Diagram
-
-    ```mermaid
-    stateDiagram-v2
-        [*] --> PLANNED
-
-        PLANNED --> ASSIGNED : mission started (Start Mission)
-        PLANNED --> CANCELLED : coordinator cancels before start
-
-        ASSIGNED --> EN_ROUTE : team accepts
-        ASSIGNED --> WITHDRAWN : team rejects
-        ASSIGNED --> CANCELLED : coordinator cancels
-
-        EN_ROUTE --> ON_SITE : team arrives
-
-        ON_SITE --> COMPLETED : rescue success (full)
-        ON_SITE --> PARTIAL : rescue success (partial)
-        ON_SITE --> FAILED : rescue failed
-
-        COMPLETED --> [*]
-        PARTIAL --> [*]
-        FAILED --> [*]
-        WITHDRAWN --> [*]
-        CANCELLED --> [*]
-    ```
-
-    ### 4. Mission State Diagram
-
-    ```mermaid
-    stateDiagram-v2
-        [*] --> DRAFT
-
-        DRAFT --> PLANNED : coordinator starts mission (notifications sent)
-        PLANNED --> IN_PROGRESS : first team accepts (timeline EN_ROUTE)
-
-        IN_PROGRESS --> PAUSED : coordinator pauses
-        PAUSED --> IN_PROGRESS : coordinator resumes
-
-        IN_PROGRESS --> PARTIAL : some MissionRequests partial
-        PARTIAL --> IN_PROGRESS : new team added
-
-        IN_PROGRESS --> COMPLETED : all MissionRequests fulfilled/closed
-        PARTIAL --> COMPLETED : remaining closed manually
-
-        IN_PROGRESS --> ABORTED : coordinator aborts
-        PAUSED --> ABORTED : coordinator aborts
-
-        COMPLETED --> [*]
-        ABORTED --> [*]
-    ```
-        Coordinator ->> API: POST /missions
-        API ->> API: create Mission (status=DRAFT)
-
-        Note over Coordinator,API: Coordinator drags request(s) into mission board
-        Coordinator ->> API: POST /missions/{id}/requests
-        Note right of Coordinator: { requestId, note? }
-        API ->> API: create MissionRequest (status=PENDING)<br/>peopleNeeded = Request.peopleCount
-        API -->> Coordinator: MissionRequest created
-
-        Note over Coordinator,API: Coordinator assigns team(s) to mission
-        Coordinator ->> API: POST /missions/{id}/teams
-        Note right of Coordinator: { teamId, note? }
-        API ->> API: create Timeline (status=PLANNED)
-        API -->> Coordinator: Timeline created
-
-        %% -------------------------------------------------
-        %% 3. Start Mission
-        %% -------------------------------------------------
-        Coordinator ->> API: PATCH /missions/{id}/start
-        API ->> API: all PLANNED Timelines → ASSIGNED<br/>Mission: DRAFT → PLANNED
-        API ->> Noti: emit MISSION_ASSIGNED → each Team + affected Citizens
-        Noti ->> Team: New mission notification
-
-        %% -------------------------------------------------
-        %% 4. Team Execution
-        %% -------------------------------------------------
-        Team ->> API: PATCH /timelines/{id}/accept
-        Note right of Team: { supplies?: [{supplyId, carriedQty}] }
-        API ->> API: Timeline = EN_ROUTE, Mission = IN_PROGRESS
-        API ->> Noti: emit MISSION_APPROACHING → Citizen
-
-        loop GPS Updates
-            Team ->> API: POST /positions
-            API ->> Citizen: Realtime location (via socket)
-        end
-
-        Team ->> API: PATCH /timelines/{id}/arrive
-        API ->> API: Timeline = ON_SITE
-
-        %% -------------------------------------------------
-        %% 5. Report + Fulfillment Update
-        %% -------------------------------------------------
-        alt Full Rescue
-            Team ->> API: PATCH /timelines/{id}/complete
-            Note right of Team: { rescuedCount, supplies?: [{distributedQty, returnedQty}] }
-            API ->> API: Timeline = COMPLETED
-            API ->> API: MissionRequest.peopleRescued += rescuedCount<br/>suppliesDelivered updated<br/>fulfillmentPercent recalculated
-            API ->> API: if fulfilled → MissionRequest = FULFILLED<br/>Request = FULFILLED
-            API ->> Noti: emit MISSION_COMPLETED → All
-            Coordinator ->> API: PATCH /requests/{id}/close
-            API ->> API: Request = CLOSED
-        else Partial Rescue
-            Team ->> API: PATCH /timelines/{id}/complete
-            Note right of Team: partial result
-            API ->> API: Timeline = PARTIAL
-            API ->> API: MissionRequest = PARTIAL<br/>Request = PARTIALLY_FULFILLED
-            Note over Coordinator: Assign more teams or close manually
-        end
-    ```
-    IN_PROGRESS --> FULFILLED : timeline completed (full)
-
-    PARTIALLY_FULFILLED --> IN_PROGRESS : new timeline created
-    PARTIALLY_FULFILLED --> CLOSED : coordinator closes
-
-    FULFILLED --> CLOSED
-
-    REJECTED --> [*]
-    CANCELLED --> [*]
-    CLOSED --> [*]
 ```
 
-### 2. Timeline State Diagram
+### 2. MissionRequest State Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+
+    PENDING --> IN_PROGRESS : team accepts (timeline EN_ROUTE)
+    IN_PROGRESS --> PARTIAL : timeline completed (partial)
+    IN_PROGRESS --> FULFILLED : timeline completed (all rescued)
+
+    PARTIAL --> IN_PROGRESS : new team accepts in same mission
+    FULFILLED --> CLOSED : coordinator closes request
+    PARTIAL --> CLOSED : coordinator closes manually
+
+    PENDING --> DROPPED : coordinator removes request from mission
+    IN_PROGRESS --> DROPPED : coordinator removes during execution
+
+    CLOSED --> [*]
+    DROPPED --> [*]
+    FULFILLED --> [*]
+```
+
+### 3. Timeline State Diagram
 
 ```mermaid
 stateDiagram-v2
     [*] --> PLANNED
 
-    PLANNED --> ASSIGNED : coordinator starts mission
+    PLANNED --> ASSIGNED : mission started (Start Mission)
+    PLANNED --> CANCELLED : coordinator cancels before start
 
     ASSIGNED --> EN_ROUTE : team accepts
     ASSIGNED --> WITHDRAWN : team rejects
+    ASSIGNED --> CANCELLED : coordinator cancels
 
-    EN_ROUTE --> ON_SITE : team arrives (GPS match)
+    EN_ROUTE --> ON_SITE : team arrives
 
     ON_SITE --> COMPLETED : rescue success (full)
     ON_SITE --> PARTIAL : rescue success (partial)
     ON_SITE --> FAILED : rescue failed
-
-    ASSIGNED --> CANCELLED : coordinator cancels
 
     COMPLETED --> [*]
     PARTIAL --> [*]
@@ -238,22 +118,23 @@ stateDiagram-v2
     CANCELLED --> [*]
 ```
 
-### 3. Mission State Diagram
+### 4. Mission State Diagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PLANNED
+    [*] --> DRAFT
 
-    PLANNED --> IN_PROGRESS : first timeline starts
+    DRAFT --> PLANNED : coordinator starts mission (notifications sent)
+    PLANNED --> IN_PROGRESS : first team accepts (timeline EN_ROUTE)
 
     IN_PROGRESS --> PAUSED : coordinator pauses
     PAUSED --> IN_PROGRESS : coordinator resumes
 
-    IN_PROGRESS --> PARTIAL : timeline completed (partial)
-    PARTIAL --> IN_PROGRESS : new timeline created
+    IN_PROGRESS --> PARTIAL : some MissionRequests partial
+    PARTIAL --> IN_PROGRESS : new team added
 
-    IN_PROGRESS --> COMPLETED : all requests fulfilled
-    PARTIAL --> COMPLETED : remaining requests closed
+    IN_PROGRESS --> COMPLETED : all MissionRequests fulfilled/closed
+    PARTIAL --> COMPLETED : remaining closed manually
 
     IN_PROGRESS --> ABORTED : coordinator aborts
     PAUSED --> ABORTED : coordinator aborts

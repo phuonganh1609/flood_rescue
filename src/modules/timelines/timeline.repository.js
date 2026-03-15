@@ -64,10 +64,6 @@ class TimelineRepository {
     return await Timeline.find({ missionId }).lean();
   }
 
-  async findByRequestId(requestId) {
-    return await Timeline.find({ requestId }).lean();
-  }
-
   async countActiveByTeamId(teamId) {
     return await Timeline.countDocuments({
       teamId,

@@ -4,6 +4,14 @@ import responseUtils from "../../utils/response.js";
 const { sendSuccess, sendError } = responseUtils;
 
 class MissionController {
+  static toErrorPayload(error) {
+    return {
+      message: error.message || "Có lỗi nội bộ xảy ra",
+      statusCode: error.statusCode || 500,
+      errorCode: error.errorCode || "INTERNAL_ERROR",
+    };
+  }
+
   async createMission(req, res) {
     try {
       const missionData = {
@@ -17,10 +25,7 @@ class MissionController {
         statusCode: 201,
       });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
-      });
+      return sendError(res, MissionController.toErrorPayload(error));
     }
   }
 
@@ -39,10 +44,7 @@ class MissionController {
         },
       });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
-      });
+      return sendError(res, MissionController.toErrorPayload(error));
     }
   }
 
@@ -54,10 +56,19 @@ class MissionController {
         message: "Mission details retrieved successfully",
       });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
+      return sendError(res, MissionController.toErrorPayload(error));
+    }
+  }
+
+  async getMissionRequests(req, res) {
+    try {
+      const data = await missionService.getMissionRequests(req.params.id);
+      return sendSuccess(res, {
+        data,
+        message: "Mission requests retrieved successfully",
       });
+    } catch (error) {
+      return sendError(res, MissionController.toErrorPayload(error));
     }
   }
 
@@ -72,10 +83,7 @@ class MissionController {
         message: "Mission updated successfully",
       });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
-      });
+      return sendError(res, MissionController.toErrorPayload(error));
     }
   }
 
@@ -87,31 +95,54 @@ class MissionController {
         message: "Mission deleted successfully",
       });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
-      });
+      return sendError(res, MissionController.toErrorPayload(error));
     }
   }
 
-  async assignTeam(req, res) {
+  async addRequests(req, res) {
     try {
-      const { teamId, requestId, note } = req.body;
-      const timeline = await missionService.assignTeam(req.params.id, {
-        teamId,
-        requestId,
+      const { requestIds, note } = req.body;
+      const missionRequests = await missionService.addRequestsToMission(req.params.id, {
+        requestIds,
         note,
       });
       return sendSuccess(res, {
-        data: timeline,
-        message: "Team assigned successfully",
+        data: missionRequests,
+        message: "Requests added to mission successfully",
         statusCode: 200,
       });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
+      return sendError(res, MissionController.toErrorPayload(error));
+    }
+  }
+
+  async addTeams(req, res) {
+    try {
+      const { teamIds, note } = req.body;
+      const timelines = await missionService.assignTeamsToMission(req.params.id, {
+        teamIds,
+        note,
       });
+      return sendSuccess(res, {
+        data: timelines,
+        message: "Teams assigned to mission successfully",
+        statusCode: 200,
+      });
+    } catch (error) {
+      return sendError(res, MissionController.toErrorPayload(error));
+    }
+  }
+
+  async startMission(req, res) {
+    try {
+      const mission = await missionService.startMission(req.params.id);
+      return sendSuccess(res, {
+        data: mission,
+        message: "Mission started successfully",
+        statusCode: 200,
+      });
+    } catch (error) {
+      return sendError(res, MissionController.toErrorPayload(error));
     }
   }
 
@@ -120,10 +151,7 @@ class MissionController {
       const mission = await missionService.pauseMission(req.params.id);
       return sendSuccess(res, { data: mission, message: "Mission paused" });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
-      });
+      return sendError(res, MissionController.toErrorPayload(error));
     }
   }
 
@@ -132,10 +160,7 @@ class MissionController {
       const mission = await missionService.resumeMission(req.params.id);
       return sendSuccess(res, { data: mission, message: "Mission resumed" });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
-      });
+      return sendError(res, MissionController.toErrorPayload(error));
     }
   }
 
@@ -144,10 +169,7 @@ class MissionController {
       const mission = await missionService.abortMission(req.params.id);
       return sendSuccess(res, { data: mission, message: "Mission aborted" });
     } catch (error) {
-      return sendError(res, {
-        message: error.message,
-        statusCode: error.statusCode || 500,
-      });
+      return sendError(res, MissionController.toErrorPayload(error));
     }
   }
 }
