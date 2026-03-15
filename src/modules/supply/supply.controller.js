@@ -36,6 +36,17 @@ function validateObjectId(id, res) {
   return true;
 }
 
+function validateObjectName(name, res) {
+  if (!name || !name.trim()) {
+    response.sendError(res, {
+      message: "Supply name is required",
+      statusCode: 400,
+    });
+    return false;
+  }
+  return true;
+}
+
 function handleError(err, res) {
   const status = err.statusCode || 400;
   response.sendError(res, {
