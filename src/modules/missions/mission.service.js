@@ -7,6 +7,57 @@ import { teamRepository } from "../teams/team.repository.js";
 import { eventBus } from "../../utils/events.js";
 
 class MissionService {
+  async buildMissionAbortedPayload(missionId) {
+    const activeTimelines = await Timeline.find({
+      missionId,
+      status: { $in: ["ASSIGNED", "EN_ROUTE", "ON_SITE"] },
+    })
+      .populate("requestId")
+      .populate("teamId");
+
+    const requestIds = [
+      ...new Set(
+        activeTimelines
+          .map((timeline) => timeline.requestId?._id?.toString?.() || timeline.requestId?.toString?.())
+          .filter(Boolean),
+      ),
+    ];
+    const teamIds = [
+      ...new Set(
+        activeTimelines
+          .map((timeline) => timeline.teamId?._id?.toString?.() || timeline.teamId?.toString?.())
+          .filter(Boolean),
+      ),
+    ];
+
+    const [requests, teams] = await Promise.all([
+      Promise.all(requestIds.map((requestId) => requestRepository.findRequestById(requestId))),
+      Promise.all(teamIds.map((teamId) => teamRepository.findById(teamId))),
+    ]);
+
+    return {
+      missionId,
+      requestIds,
+      citizenIds: [
+        ...new Set(
+          requests
+            .map((request) => request?.userId?._id?.toString?.() || request?.userId?.toString?.())
+            .filter(Boolean),
+        ),
+      ],
+      teamLeaderIds: [
+        ...new Set(
+          teams
+            .map((team) => team?.leaderId?._id?.toString?.() || team?.leaderId?.toString?.())
+            .filter(Boolean),
+        ),
+      ],
+      teamNames: [
+        ...new Set(teams.map((team) => team?.name).filter(Boolean)),
+      ],
+    };
+  }
+
   async createMission(data) {
     return await missionRepository.create(data);
   }
@@ -179,12 +230,21 @@ class MissionService {
       throw error;
     }
 
+    const abortedPayload = await this.buildMissionAbortedPayload(id);
+
     await timelineService.cancelActiveTimelinesByMission(
       id,
       "Mission aborted by coordinator",
     );
 
-    return await missionRepository.update(id, { status: "ABORTED" });
+    const updatedMission = await missionRepository.update(id, { status: "ABORTED" });
+
+    eventBus.emit("MISSION_ABORTED", {
+      ...abortedPayload,
+      missionCode: updatedMission?.code || mission?.code,
+    });
+
+    return updatedMission;
   }
 
   async deleteMission(id) {

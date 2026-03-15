@@ -1,201 +1,205 @@
-# Rescue Flow 2.2 (Unified)
+# Rescue Flow 2.2 (Redesigned — Multi-Request Mission)
 
-> Phiên bản Unified từ [Rescue_flow_2.1.md](./Rescue_flow_2.1.md)
+> Phiên bản redesign với mô hình multi-request mission.
 >
-> **Changes v2.2**:
+> **Changes v2.2 (redesign)**:
 >
-> - Áp dụng Unified States từ [rules.md](./rules.md).
-> - Request Status: `ACCEPTED` → `VERIFIED`.
-> - Timeline Status: `ASSIGNED` (initial).
-> - Hỗ trợ **Multi-timeline**: 1 Request có thể được cứu bởi nhiều Team cùng lúc.
+> - Mission khởi đầu ở `DRAFT` (coordinator đang lên kế hoạch; chưa notify).
+> - Coordinator kéo Request vào mission → tạo `MissionRequest` (status=`PENDING`).
+> - Coordinator ghép Team vào mission (không phải request) → tạo `Timeline` (status=`PLANNED`).
+> - Coordinator bấm **Start Mission** → tất cả `PLANNED` Timeline → `ASSIGNED`; notification gửi tới từng team.
+> - `Timeline` không còn `requestId` FK — Timeline đại diện cho team × mission.
+> - `MissionRequest` theo dõi fulfillment (people + supply) cho từng request trong mission.
 
 ---
 
-## Flowchart for Rescue Flow (Unified)
+## Flowchart for Rescue Flow (Redesigned)
 
 ```mermaid
 flowchart TD
-    A[Citizen submits rescue request] --> B[Create Request]
-    B --> C[Request status = SUBMITTED]
+    A[Citizen submits rescue request] --> B[Request status = SUBMITTED]
 
-    C --> CANCEL_CHECK{Citizen cancel?}
-    CANCEL_CHECK -- Yes --> CITIZEN_CANCELLED[Request status = CANCELLED<br/>reason: USER_CANCELLED]
+    B --> CANCEL_CHECK{Citizen cancel?}
+    CANCEL_CHECK -- Yes --> CITIZEN_CANCELLED[Request = CANCELLED]
     CITIZEN_CANCELLED --> END_CANCEL[End]
 
-    CANCEL_CHECK -- No --> D{Coordinator verifies?}
+    CANCEL_CHECK -- No --> VERIFY{Coordinator verifies?}
+    VERIFY -- Reject --> REJ[Request = REJECTED → Notify Citizen]
+    REJ --> END_REJ[End]
 
-    D -- No --> E[Request status = REJECTED]
-    E --> F[Notify Citizen]
-    F --> END1[End]
+    VERIFY -- Verify OK --> VER[Request = VERIFIED]
+    VER --> MISSION["Coordinator tạo Mission (status = DRAFT)"]
 
-    D -- Yes --> G[Request status = VERIFIED]
+    MISSION --> ADD_REQ["Coordinator kéo Request vào Mission\nCreate MissionRequest (PENDING)"]
+    ADD_REQ --> MORE_REQ{Thêm request khác?}
+    MORE_REQ -- Yes --> ADD_REQ
+    MORE_REQ -- No --> ASSIGN_TEAM["Coordinator ghép Team vào Mission\nCreate Timeline (PLANNED)"]
 
-    G --> H[Create Mission<br/>status = PLANNED]
+    ASSIGN_TEAM --> MORE_TEAM{Thêm team khác?}
+    MORE_TEAM -- Yes --> ASSIGN_TEAM
+    MORE_TEAM -- No --> START["Coordinator bấm Start Mission\nAll PLANNED → ASSIGNED\nMission: DRAFT → PLANNED\nNotify all Teams + Citizens"]
 
-    H --> I[Coordinator assigns Team A]
-    I --> J[Create Timeline #1<br/>status = ASSIGNED]
-    J --> K[Request status = IN_PROGRESS]
-    J --> L[Notify Team A & Citizen]
+    START --> TEAM_RESPOND{Team responds?}
+    TEAM_RESPOND -- Withdraw --> WITHDRAWN[Timeline = WITHDRAWN]
+    WITHDRAWN --> REASSIGN[Coordinator assigns new team]
+    ## State Diagrams (Redesigned)
 
-    L --> M{Team accepts?}
+    ### 1. Request State Diagram
 
-    M -- No --> WITHDRAWN[Timeline #1 status = WITHDRAWN]
-    WITHDRAWN --> I2[Coordinator assigns Team B / Reassign]
+    ```mermaid
+    stateDiagram-v2
+        [*] --> SUBMITTED
 
-    M -- Yes --> N[Timeline #1 status = EN_ROUTE<br/>Mission status = IN_PROGRESS]
-    N --> O[Team arrives]
-    O --> P[Timeline #1 status = ON_SITE]
+        SUBMITTED --> VERIFIED : coordinator verifies OK
+        SUBMITTED --> REJECTED : coordinator rejects
+        SUBMITTED --> CANCELLED : citizen cancels
 
-    P --> PAUSE_CHECK{Coordinator pause?}
-    PAUSE_CHECK -- Yes --> PAUSED[Mission status = PAUSED]
-    PAUSED --> RESUME{Coordinator resume?}
-    RESUME -- Yes --> P
-    RESUME -- No --> ABORT[Mission status = ABORTED]
-    ABORT --> END_ABORT[End]
+        VERIFIED --> IN_PROGRESS : mission started, team accepts
 
-    PAUSE_CHECK -- No --> Q{Mission outcome?}
+        IN_PROGRESS --> PARTIALLY_FULFILLED : MissionRequest partial
+        IN_PROGRESS --> FULFILLED : MissionRequest fulfilled
 
-    Q -- Success (All Rescued) --> R[Timeline #1 status = COMPLETED]
-    R --> S[Submit rescue report]
-    S --> T[Request Check: Total >= Need?]
+        PARTIALLY_FULFILLED --> IN_PROGRESS : new team assigned
+        PARTIALLY_FULFILLED --> CLOSED : coordinator closes
 
-    T -- Yes --> U[Request status = FULFILLED]
-    U --> V[Coordinator Closes Request<br/>status = CLOSED]
-    V --> END2[End]
+        FULFILLED --> CLOSED
 
-    T -- No --> W[Request status = PARTIALLY_FULFILLED]
-    W --> I3["Create Timeline #2 (More teams)"]
+        REJECTED --> [*]
+        CANCELLED --> [*]
+        CLOSED --> [*]
+    ```
 
-    Q -- Failed --> X[Timeline #1 status = FAILED]
-    X --> Y[Submit failure report]
-    Y --> Z{Retry?}
-    Z -- Yes --> I3
-    Z -- No --> CANCEL_REQ[Request status = CANCELLED]
-```
+    ### 2. MissionRequest State Diagram
 
----
+    ```mermaid
+    stateDiagram-v2
+        [*] --> PENDING
 
-## Sequence Diagram for Rescue Flow (Unified)
+        PENDING --> IN_PROGRESS : team accepts (timeline EN_ROUTE)
+        IN_PROGRESS --> PARTIAL : timeline completed (partial)
+        IN_PROGRESS --> FULFILLED : timeline completed (all rescued)
 
-```mermaid
-sequenceDiagram
-    autonumber
+        PARTIAL --> IN_PROGRESS : new team accepts in same mission
+        FULFILLED --> CLOSED : coordinator closes request
+        PARTIAL --> CLOSED : coordinator closes manually
 
-    participant Citizen as Citizen App
-    participant Coordinator as Coordinator Dashboard
-    participant Team as Rescue Team App
-    participant API as API Server
-    participant Inv as Inventory
-    participant Noti as Notification Service
+        PENDING --> DROPPED : coordinator removes request from mission
+        IN_PROGRESS --> DROPPED : coordinator removes during execution
 
-    %% -----------------------------
-    %% Submit rescue request
-    %% -----------------------------
-    Citizen ->> API: POST /requests
-    API ->> API: create Request (status=SUBMITTED)
-    API ->> Noti: emit RequestSubmitted
-    Noti ->> Citizen: Confirmation notification
+        CLOSED --> [*]
+        DROPPED --> [*]
+        FULFILLED --> [*]
+    ```
 
-    %% -----------------------------
-    %% Verify request
-    %% -----------------------------
-    Coordinator ->> API: GET /requests?status=SUBMITTED
-    Coordinator ->> API: PATCH /requests/{id}/verify
+    ### 3. Timeline State Diagram
 
-    alt Request rejected
-        API ->> API: Request = REJECTED
-        API ->> Noti: emit RequestRejected
-    else Request verified
-        API ->> API: Request = VERIFIED
-        Note right of API: Ready for planning
-    end
+    ```mermaid
+    stateDiagram-v2
+        [*] --> PLANNED
 
-    %% -----------------------------
-    %% Create Mission & Assign + Plan Supplies
-    %% -----------------------------
-    Coordinator ->> API: POST /missions (requestId)
-    API ->> API: create Mission (status=PLANNED)
+        PLANNED --> ASSIGNED : mission started (Start Mission)
+        PLANNED --> CANCELLED : coordinator cancels before start
 
-    Coordinator ->> API: PATCH /missions/{id}/assign (teamId)
-    Note over API: Create Timeline #1:<br/>status=ASSIGNED<br/>assignedAt=now()
-    API ->> API: Request = IN_PROGRESS
-    API ->> Noti: emit MissionAssigned
-    Noti ->> Team: New mission assigned
+        ASSIGNED --> EN_ROUTE : team accepts
+        ASSIGNED --> WITHDRAWN : team rejects
+        ASSIGNED --> CANCELLED : coordinator cancels
 
-    %% Supply Planning Phase
-    Note over Coordinator,Inv: Supply Planning Phase
-    Coordinator ->> API: POST /timelines/{id}/supplies/plan
-    Note right of Coordinator: [{supplyId, warehouseId, plannedQty}]
-    API ->> Inv: Reserve quantity
-    Inv -->> API: reservedQuantity += plannedQty
+        EN_ROUTE --> ON_SITE : team arrives
 
-    %% -----------------------------
-    %% Team Execution (GPS Tracking + Supply Carry)
-    %% -----------------------------
-    %% Supply Carrying Phase
-    Note over Team,Inv: Supply Carrying Phase
-    Team ->> API: PATCH /timelines/{id}/accept
-    Note right of Team: {supplies: [{supplyId, carriedQty}]}
-    API ->> Inv: Deduct inventory
-    Inv -->> API: quantity -= carriedQty, reservedQuantity -= plannedQty
-    API ->> API: Timeline = EN_ROUTE, Mission = IN_PROGRESS
-    API ->> Citizen: Push "Team is on the way"
+        ON_SITE --> COMPLETED : rescue success (full)
+        ON_SITE --> PARTIAL : rescue success (partial)
+        ON_SITE --> FAILED : rescue failed
 
-    loop GPS Updates
-        Team ->> API: POST /tracking/update
-        API ->> Citizen: Realtime location
-    end
+        COMPLETED --> [*]
+        PARTIAL --> [*]
+        FAILED --> [*]
+        WITHDRAWN --> [*]
+        CANCELLED --> [*]
+    ```
 
-    Team ->> API: PATCH /timelines/{id}/arrive
-    API ->> API: Timeline = ON_SITE
-    API ->> Citizen: Push "Team has arrived"
+    ### 4. Mission State Diagram
 
-    %% -----------------------------
-    %% Completion & Supply Report
-    %% -----------------------------
-    %% Supply Distribution & Return Phase
-    Note over Team,Inv: Supply Distribution & Return Phase
-    alt Rescue Full Success
-        Team ->> API: PATCH /timelines/{id}/complete
-        Note right of Team: {rescued: 5, supplies: [{distributedQty, returnedQty}]}
-        API ->> API: Timeline = COMPLETED
-        API ->> Inv: Return unused: quantity += returnedQty
-        API ->> API: Request = FULFILLED
-        API ->> Noti: emit RescueCompleted
-        Noti ->> Citizen: All rescued!
+    ```mermaid
+    stateDiagram-v2
+        [*] --> DRAFT
 
-        Coordinator ->> API: PATCH /requests/{id}/close
-        API ->> API: Request = CLOSED
-    else Rescue Partial / Failed
-        Team ->> API: PATCH /timelines/{id}/complete (or fail)
-        Note over Team: Report: Rescued 2/5, supplies used + returned
-        API ->> API: Timeline = PARTIAL
-        API ->> Inv: Return unused supplies
-        API ->> API: Request = PARTIALLY_FULFILLED
+        DRAFT --> PLANNED : coordinator starts mission (notifications sent)
+        PLANNED --> IN_PROGRESS : first team accepts (timeline EN_ROUTE)
 
-        Note over Coordinator: Need more teams for remaining 3 people
-        Coordinator ->> API: PATCH /missions/{id}/assign (newTeamId)
-        Note over API: Create Timeline #2
-    end
-```
+        IN_PROGRESS --> PAUSED : coordinator pauses
+        PAUSED --> IN_PROGRESS : coordinator resumes
 
----
+        IN_PROGRESS --> PARTIAL : some MissionRequests partial
+        PARTIAL --> IN_PROGRESS : new team added
 
-## State Diagrams (Unified)
+        IN_PROGRESS --> COMPLETED : all MissionRequests fulfilled/closed
+        PARTIAL --> COMPLETED : remaining closed manually
 
-### 1. Request State Diagram
+        IN_PROGRESS --> ABORTED : coordinator aborts
+        PAUSED --> ABORTED : coordinator aborts
 
-```mermaid
-stateDiagram-v2
-    [*] --> SUBMITTED
+        COMPLETED --> [*]
+        ABORTED --> [*]
+    ```
+        Coordinator ->> API: POST /missions
+        API ->> API: create Mission (status=DRAFT)
 
-    SUBMITTED --> VERIFIED : coordinator verifies OK
-    SUBMITTED --> REJECTED : coordinator rejects
-    SUBMITTED --> CANCELLED : citizen cancels
+        Note over Coordinator,API: Coordinator drags request(s) into mission board
+        Coordinator ->> API: POST /missions/{id}/requests
+        Note right of Coordinator: { requestId, note? }
+        API ->> API: create MissionRequest (status=PENDING)<br/>peopleNeeded = Request.peopleCount
+        API -->> Coordinator: MissionRequest created
 
-    VERIFIED --> IN_PROGRESS : first timeline created
+        Note over Coordinator,API: Coordinator assigns team(s) to mission
+        Coordinator ->> API: POST /missions/{id}/teams
+        Note right of Coordinator: { teamId, note? }
+        API ->> API: create Timeline (status=PLANNED)
+        API -->> Coordinator: Timeline created
 
-    IN_PROGRESS --> PARTIALLY_FULFILLED : timeline completed (partial)
+        %% -------------------------------------------------
+        %% 3. Start Mission
+        %% -------------------------------------------------
+        Coordinator ->> API: PATCH /missions/{id}/start
+        API ->> API: all PLANNED Timelines → ASSIGNED<br/>Mission: DRAFT → PLANNED
+        API ->> Noti: emit MISSION_ASSIGNED → each Team + affected Citizens
+        Noti ->> Team: New mission notification
+
+        %% -------------------------------------------------
+        %% 4. Team Execution
+        %% -------------------------------------------------
+        Team ->> API: PATCH /timelines/{id}/accept
+        Note right of Team: { supplies?: [{supplyId, carriedQty}] }
+        API ->> API: Timeline = EN_ROUTE, Mission = IN_PROGRESS
+        API ->> Noti: emit MISSION_APPROACHING → Citizen
+
+        loop GPS Updates
+            Team ->> API: POST /positions
+            API ->> Citizen: Realtime location (via socket)
+        end
+
+        Team ->> API: PATCH /timelines/{id}/arrive
+        API ->> API: Timeline = ON_SITE
+
+        %% -------------------------------------------------
+        %% 5. Report + Fulfillment Update
+        %% -------------------------------------------------
+        alt Full Rescue
+            Team ->> API: PATCH /timelines/{id}/complete
+            Note right of Team: { rescuedCount, supplies?: [{distributedQty, returnedQty}] }
+            API ->> API: Timeline = COMPLETED
+            API ->> API: MissionRequest.peopleRescued += rescuedCount<br/>suppliesDelivered updated<br/>fulfillmentPercent recalculated
+            API ->> API: if fulfilled → MissionRequest = FULFILLED<br/>Request = FULFILLED
+            API ->> Noti: emit MISSION_COMPLETED → All
+            Coordinator ->> API: PATCH /requests/{id}/close
+            API ->> API: Request = CLOSED
+        else Partial Rescue
+            Team ->> API: PATCH /timelines/{id}/complete
+            Note right of Team: partial result
+            API ->> API: Timeline = PARTIAL
+            API ->> API: MissionRequest = PARTIAL<br/>Request = PARTIALLY_FULFILLED
+            Note over Coordinator: Assign more teams or close manually
+        end
+    ```
     IN_PROGRESS --> FULFILLED : timeline completed (full)
 
     PARTIALLY_FULFILLED --> IN_PROGRESS : new timeline created
@@ -212,7 +216,9 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ASSIGNED
+    [*] --> PLANNED
+
+    PLANNED --> ASSIGNED : coordinator starts mission
 
     ASSIGNED --> EN_ROUTE : team accepts
     ASSIGNED --> WITHDRAWN : team rejects
@@ -260,27 +266,52 @@ stateDiagram-v2
 
 ## Status Definitions
 
-_(Tham chiếu đầy đủ xem tại [rules.md](./rules.md))_
+### Mission Status
 
-### Request Status (Unified)
+| Status        | Meaning                                                                    |
+| :------------ | :------------------------------------------------------------------------- |
+| `DRAFT`       | Coordinator đang xây dựng kế hoạch — thêm requests, ghép teams            |
+| `PLANNED`     | Start Mission đã được bấm; notifications gửi đến teams; chờ team accept   |
+| `IN_PROGRESS` | Ít nhất 1 timeline đang EN_ROUTE hoặc ON_SITE                             |
+| `PAUSED`      | Tạm dừng toàn bộ                                                           |
+| `PARTIAL`     | Hoàn thành một phần (có MissionRequest chưa FULFILLED)                     |
+| `COMPLETED`   | Tất cả MissionRequests đã FULFILLED hoặc CLOSED                           |
+| `ABORTED`     | Huỷ mission                                                                |
+
+### MissionRequest Status
+
+| Status        | Meaning                                                                        |
+| :------------ | :----------------------------------------------------------------------------- |
+| `PENDING`     | Request đã vào mission, chưa có team nào accept                                |
+| `IN_PROGRESS` | Có ít nhất 1 Timeline đang EN_ROUTE / ON_SITE cho request này trong mission    |
+| `PARTIAL`     | Rescue hoàn thành nhưng không đủ (còn người hoặc supplies thiếu)               |
+| `FULFILLED`   | Toàn bộ people rescued và supplies delivered đầy đủ                            |
+| `CLOSED`      | Coordinator đóng thủ công                                                       |
+| `DROPPED`     | Coordinator loại request khỏi mission                                           |
+
+### Timeline Status
+
+| Status      | Meaning                                                                              |
+| :---------- | :----------------------------------------------------------------------------------- |
+| `PLANNED`   | Team được ghép vào mission; mission chưa start; team **chưa được thông báo**        |
+| `ASSIGNED`  | Mission đã start; team được thông báo; chờ team accept                              |
+| `EN_ROUTE`  | Team accepted; đang di chuyển đến hiện trường                                       |
+| `ON_SITE`   | Team đã đến và đang xử lý                                                           |
+| `COMPLETED` | Hoàn thành toàn bộ                                                                  |
+| `PARTIAL`   | Hoàn thành một phần                                                                 |
+| `FAILED`    | Thất bại                                                                             |
+| `WITHDRAWN` | Team từ chối sau khi được thông báo                                                 |
+| `CANCELLED` | Coordinator huỷ trước khi team hành động                                            |
+
+### Request Status
 
 | Status                | Meaning                               |
 | :-------------------- | :------------------------------------ |
-| `VERIFIED`            | Đã xác minh, chờ lên Mission          |
+| `VERIFIED`            | Đã xác minh, chờ vào Mission          |
 | `IN_PROGRESS`         | Đang có team xử lý                    |
 | `PARTIALLY_FULFILLED` | Đã cứu được một số, vẫn còn người kẹt |
 | `FULFILLED`           | Đã cứu hết, chờ đóng hồ sơ            |
 | `CLOSED`              | Hồ sơ đóng hoàn tất                   |
-
-### Timeline Status (Unified)
-
-| Status      | Meaning                       |
-| :---------- | :---------------------------- |
-| `ASSIGNED`  | Đã gán team                   |
-| `EN_ROUTE`  | Team đang đi (GPS)            |
-| `ON_SITE`   | Team đã đến & đang cứu hộ     |
-| `COMPLETED` | Xong nhiệm vụ timeline này    |
-| `PARTIAL`   | Xong nhưng không cứu hết được |
 
 ---
 
@@ -366,34 +397,108 @@ sequenceDiagram
 
 ## API Endpoints Summary
 
-| Method  | Endpoint                   | Actor               | Description                                       |
-| :------ | :------------------------- | :------------------ | :------------------------------------------------ |
-| `POST`  | `/requests`                | Citizen/Coordinator | Create request (validates 1 active request limit) |
-| `PATCH` | `/requests/{id}/verify`    | Coordinator         | Verify request → `VERIFIED` / `REJECTED`          |
-| `PATCH` | `/requests/{id}/close`     | Coordinator         | Close valid request → `CLOSED`                    |
-| `PATCH` | `/requests/{id}/duplicate` | Coordinator         | Mark as duplicate                                 |
-| `PATCH` | `/requests/{id}/location`  | Coordinator         | Update location & verify                          |
-| `PATCH` | `/missions/{id}/assign`    | Coordinator         | Assign team → Create new Timeline (`ASSIGNED`)    |
-| `PATCH` | `/timelines/{id}/accept`   | Team                | Accept → `EN_ROUTE`                               |
-| `PATCH` | `/timelines/{id}/arrive`   | Team                | Arrive → `ON_SITE`                                |
-| `PATCH` | `/timelines/{id}/complete` | Team                | Finish → `COMPLETED` / `PARTIAL`                  |
+| Method   | Endpoint                                     | Actor       | Description                                                           |
+| :------- | :------------------------------------------- | :---------- | :-------------------------------------------------------------------- |
+| `POST`   | `/requests`                                  | Citizen/Coord | Create request (1 active request limit)                             |
+| `PATCH`  | `/requests/{id}/verify`                      | Coordinator | Verify request → `VERIFIED` / `REJECTED`                             |
+| `PATCH`  | `/requests/{id}/close`                       | Coordinator | Close request → `CLOSED`                                             |
+| `PATCH`  | `/requests/{id}/duplicate`                   | Coordinator | Mark as duplicate                                                     |
+| `PATCH`  | `/requests/{id}/location`                    | Coordinator | Update location & verify                                             |
+| `POST`   | `/missions`                                  | Coordinator | Create mission → status=`DRAFT`                                      |
+| `GET`    | `/missions`                                  | Coordinator | List missions (filter by status, type)                               |
+| `GET`    | `/missions/{id}`                             | Coordinator | Get mission detail                                                    |
+| `PATCH`  | `/missions/{id}`                             | Coordinator | Update mission name/description/priority                             |
+| `POST`   | `/missions/{id}/requests`                    | Coordinator | Add request to mission → create `MissionRequest` (PENDING)           |
+| `DELETE` | `/missions/{id}/requests/{missionRequestId}` | Coordinator | Remove request from mission (PENDING/DROPPED only)                   |
+| `GET`    | `/missions/{id}/requests`                    | Coordinator | List MissionRequests of this mission                                 |
+| `POST`   | `/missions/{id}/teams`                       | Coordinator | Assign team to mission → create `Timeline` (PLANNED)                 |
+| `PATCH`  | `/missions/{id}/start`                       | Coordinator | Start mission: all PLANNED → ASSIGNED + notify teams                 |
+| `PATCH`  | `/missions/{id}/pause`                       | Coordinator | Pause mission                                                         |
+| `PATCH`  | `/missions/{id}/resume`                      | Coordinator | Resume mission                                                        |
+| `PATCH`  | `/missions/{id}/abort`                       | Coordinator | Abort mission → cancel all active timelines                          |
+| `PATCH`  | `/timelines/{id}/accept`                     | Team        | Accept → `EN_ROUTE`; confirm supplies carried                        |
+| `PATCH`  | `/timelines/{id}/arrive`                     | Team        | Arrive → `ON_SITE`                                                   |
+| `PATCH`  | `/timelines/{id}/complete`                   | Team        | Finish with report → `COMPLETED` / `PARTIAL`; updates MissionRequest |
+| `PATCH`  | `/timelines/{id}/fail`                       | Team        | Report failure → `FAILED`                                            |
+| `PATCH`  | `/timelines/{id}/withdraw`                   | Team        | Withdraw → `WITHDRAWN`                                               |
+| `PATCH`  | `/timelines/{id}/cancel`                     | Coordinator | Cancel timeline → `CANCELLED`                                        |
+
+---
+
+## Target Design Flow (Coordinator → Mission → Timeline)
+
+Luồng mục tiêu sau khi redesign:
+
+1. Coordinator verify Request → `PATCH /api/requests/{id}/verify` → Request: `VERIFIED`.
+2. Coordinator tạo Mission → `POST /api/missions` → Mission: `DRAFT`.
+3. Coordinator thêm Request(s) vào Mission → `POST /api/missions/{id}/requests` → tạo `MissionRequest (PENDING)`.
+4. Coordinator ghép Team(s) vào Mission → `POST /api/missions/{id}/teams` → tạo `Timeline (PLANNED)`.
+5. Coordinator bấm Start → `PATCH /api/missions/{id}/start` → tất cả Timeline `PLANNED → ASSIGNED`; Mission `DRAFT → PLANNED`; notify teams.
+6. Team thao tác lifecycle: `PATCH /api/timelines/{id}/accept|arrive|complete|fail|withdraw`.
+7. Sau mỗi `complete`, BE cập nhật `MissionRequest.peopleRescued`, `suppliesDelivered`, `fulfillmentPercent`.
+8. Coordinator/Admin huỷ timeline: `PATCH /api/timelines/{id}/cancel`.
+9. Coordinator abort mission: `PATCH /api/missions/{id}/abort` → huỷ tất cả active timelines; emit `MISSION_ABORTED`.
+
+### Validation Rules
+
+- Mission phải ở `DRAFT` để thêm requests và ghép teams.
+- Mission phải có ít nhất 1 Timeline `PLANNED` để có thể Start.
+- Một Request chỉ được thêm vào Mission một lần (unique missionId + requestId trong MissionRequest).
+- Một Team có thể được assign vào Mission nhiều lần (sau WITHDRAWN/CANCELLED).
+- Start Mission không cho phép khi mission không ở `DRAFT`.
+
+### Sequence (Target Design)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Coordinator
+    participant API as API Server
+    participant MR as MissionRequest
+    participant T as Timeline
+    participant N as Notification
+
+    C->>API: PATCH /api/requests/{id}/verify
+    API->>API: Request = VERIFIED
+
+    C->>API: POST /api/missions
+    API->>API: Mission = DRAFT
+
+    C->>API: POST /api/missions/{id}/requests
+    Note right of C: { requestId }
+    API->>MR: create MissionRequest (PENDING)
+
+    C->>API: POST /api/missions/{id}/teams
+    Note right of C: { teamId, note? }
+    API->>T: create Timeline (PLANNED)
+
+    C->>API: PATCH /api/missions/{id}/start
+    API->>T: PLANNED → ASSIGNED (all)
+    API->>N: emit MISSION_ASSIGNED per team
+    API->>API: Mission: DRAFT → PLANNED
+    API-->>C: Mission started
+
+    Note over T,API: Teams execute via /api/timelines/{id}/accept|arrive|complete|fail|withdraw
+    Note over MR,API: BE updates MissionRequest fulfillment after each timeline complete
+```
 
 ---
 
 ## References
 
 - [rules.md](./rules.md) - Unified Derivation Rules (Single Source of Truth)
-- [Rescue_flow_2.1.md](./Rescue_flow_2.1.md) - Previous version (Legacy)
+- [ERD.md](../ERD.md) - Entity definitions and data model
 
 ---
 
-## Phase 1 Implementation Notes (2026-02-15)
+## Implementation Notes (Target Design)
 
-- Timeline runtime status canon in backend: `ASSIGNED`, `EN_ROUTE`, `ON_SITE`, `COMPLETED`, `PARTIAL`, `FAILED`, `WITHDRAWN`, `CANCELLED`.
-- Timeline APIs implemented: `GET /api/timelines`, `GET /api/timelines/{id}`, and actions `accept/arrive/complete/fail/withdraw/cancel`.
-- Notification trigger points:
-  - `MISSION_ASSIGNED` on `PATCH /api/missions/{id}/assign`
-  - `MISSION_ACCEPTED` + `MISSION_APPROACHING` on timeline `accept` (`EN_ROUTE`)
-  - `MISSION_COMPLETED` on timeline `complete` (or when request becomes fulfilled)
-  - `MISSION_FAILED` on timeline `fail`
-- Phase 1 scope excludes GPS `Position` and TimelineSupply workflow.
+- Timeline status lifecycle (target): `PLANNED` → `ASSIGNED` → `EN_ROUTE` → `ON_SITE` → `COMPLETED` / `PARTIAL` / `FAILED`; or `WITHDRAWN` / `CANCELLED`.
+- Timeline APIs (target additions): `POST /api/missions/{id}/requests`, `POST /api/missions/{id}/teams`, `PATCH /api/missions/{id}/start`.
+- Notification trigger points (target):
+    - `MISSION_ASSIGNED` on `PATCH /api/missions/{id}/start` (per team)
+    - `MISSION_APPROACHING` on timeline `accept` (`EN_ROUTE`)
+    - `MISSION_COMPLETED` on timeline `complete` (when MissionRequest becomes FULFILLED)
+    - `MISSION_FAILED` on timeline `fail`
+    - `MISSION_ABORTED` on `PATCH /api/missions/{id}/abort`
+- `MissionRequest.fulfillmentPercent` recalculated after every timeline `complete` within same mission.

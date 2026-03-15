@@ -428,6 +428,77 @@ eventBus.on("MISSION_FAILED", async (payload) => {
 });
 
 /**
+ * MISSION_ABORTED: Coordinator aborts an in-progress mission
+ * -> Notify affected Citizens, Team Leaders, and Coordinators
+ */
+eventBus.on("MISSION_ABORTED", async (payload) => {
+  try {
+    const {
+      requestIds = [],
+      missionId,
+      missionCode,
+      citizenIds = [],
+      teamLeaderIds = [],
+      teamNames = [],
+    } = payload;
+
+    const primaryRequestId = requestIds[0] || null;
+    const teamNameText = teamNames.length > 0 ? ` Các đội bị ảnh hưởng: ${teamNames.join(", ")}.` : "";
+    const missionLabel = missionCode || missionId;
+
+    for (const citizenId of citizenIds) {
+      const citizenResult = await notificationService.create({
+        userId: citizenId,
+        role: "CITIZEN",
+        requestId: primaryRequestId,
+        missionId,
+        type: "CANCELLED",
+        message: `⚠️ Nhiệm vụ hỗ trợ của bạn đã bị huỷ bởi điều phối viên. Chúng tôi sẽ cập nhật phương án mới sớm nhất.${teamNameText}`,
+        isRead: false,
+      });
+
+      emitToUser(citizenId, NOTIFICATION_EVENTS.MISSION_ABORTED, citizenResult.data);
+      await emitUnreadCountForUser(citizenId);
+    }
+
+    for (const teamLeaderId of teamLeaderIds) {
+      const teamResult = await notificationService.create({
+        userId: teamLeaderId,
+        role: "TEAM_LEADER",
+        requestId: primaryRequestId,
+        missionId,
+        type: "CANCELLED",
+        message: `🛑 Nhiệm vụ #${missionLabel} đã bị điều phối viên huỷ. Vui lòng dừng thực thi và chờ điều động tiếp theo.`,
+        isRead: false,
+      });
+
+      emitToUser(teamLeaderId, NOTIFICATION_EVENTS.MISSION_ABORTED, teamResult.data);
+      await emitUnreadCountForUser(teamLeaderId);
+    }
+
+    const coordinators = await authService.getCurrentUsersByRole("Rescue Coordinator");
+    for (const coordinator of coordinators) {
+      const userId = coordinator._id || coordinator.id;
+
+      const result = await notificationService.create({
+        userId,
+        role: "COORDINATOR",
+        requestId: primaryRequestId,
+        missionId,
+        type: "CANCELLED",
+        message: `🛑 Nhiệm vụ #${missionLabel} đã được abort.${teamNameText}`,
+        isRead: false,
+      });
+
+      emitToUser(userId, NOTIFICATION_EVENTS.MISSION_ABORTED, result.data);
+      await emitUnreadCountForUser(userId);
+    }
+  } catch (error) {
+    console.error("Error in MISSION_ABORTED listener:", error);
+  }
+});
+
+/**
  * MISSION_WITHDRAWN: Team rejects / withdraws from a mission
  * → Notify all Coordinators to reassign
  */

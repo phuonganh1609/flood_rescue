@@ -17,6 +17,12 @@ Supply Management cho phép tracking supplies qua **3 giai đoạn**:
      assigns              accepts           completes
 ```
 
+Ngoài tracking theo Timeline, hệ thống còn có lớp tổng hợp theo `MissionRequest`:
+
+- `requestSuppliesSnapshot`: snapshot nhu cầu supply của request tại thời điểm add vào mission.
+- `suppliesDelivered`: tổng số supply đã deliver từ các timeline thuộc cùng mission.
+- Khi `suppliesDelivered` đạt snapshot (all items), `MissionRequest` có thể chuyển `FULFILLED`.
+
 ---
 
 ## 2. Entities
@@ -46,6 +52,16 @@ Supply Management cho phép tracking supplies qua **3 giai đoạn**:
 | `carriedQty`     | Team thực tế mang theo |
 | `distributedQty` | Đã phát/sử dụng        |
 | `returnedQty`    | Trả về kho             |
+
+### 2.4 MissionRequest Supply Fulfillment
+
+| Field                      | Description                                                     |
+| -------------------------- | --------------------------------------------------------------- |
+| `requestSuppliesSnapshot`  | Nhu cầu supply snapshot từ Request khi mission planning         |
+| `suppliesDelivered`        | Tổng quantity thực phát từ các Timeline thuộc mission           |
+| `status`                   | `PENDING/IN_PROGRESS/PARTIAL/FULFILLED` theo mức độ đáp ứng     |
+
+> `MissionRequest` là lớp đánh giá fulfillment; `TimelineSupply` là lớp thực thi chi tiết theo từng team.
 
 ---
 
