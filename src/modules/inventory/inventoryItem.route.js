@@ -1,6 +1,7 @@
 import express from 'express';
 import { create,
   getByName,
+  getById,
   getAll,
   update,
   remove,
@@ -10,6 +11,7 @@ const router = express.Router();
 
 router.post('/', authenticate, authorize(['Manager']), create);
 router.get('/list', authenticate, authorize(['Manager']), getAll);
+router.get('/id/:id', authenticate, authorize(['Manager']), getById);
 
 router.get('/:supplyName', authenticate, authorize(['Manager']), getByName);
 router.put('/:id', authenticate, authorize(['Manager']), update);

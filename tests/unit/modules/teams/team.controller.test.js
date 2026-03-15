@@ -144,5 +144,18 @@ describe("TeamController", () => {
       expect(teamService.getTeamById).toHaveBeenCalledWith("507f1f77bcf86cd799439011");
       expect(response.sendSuccess).toHaveBeenCalledWith(mockRes, { data: team });
     });
+
+    it("should return 500 with clear message for unexpected errors", async () => {
+      const req = { params: { teamId: "507f1f77bcf86cd799439011" } };
+
+      teamService.getTeamById.mockRejectedValue(new Error("Cannot read properties of null"));
+
+      await teamController.getTeam(req, mockRes);
+
+      expect(response.sendError).toHaveBeenCalledWith(mockRes, {
+        message: "Unexpected error while processing team request",
+        statusCode: 500,
+      });
+    });
   });
 });

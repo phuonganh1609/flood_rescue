@@ -116,7 +116,7 @@ async insertMany(vehicles) {
     const skip = (page - 1) * limit;
 
     const vehicles = await Vehicle.find({
-      assignedTo: mongoose.Types.ObjectId(teamId),
+      assignedTo: new mongoose.Types.ObjectId(teamId),
       isActive: true,
     })
       .skip(skip)
@@ -126,7 +126,7 @@ async insertMany(vehicles) {
       .sort({ createdAt: -1 });
 
     const total = await Vehicle.countDocuments({
-      assignedTo: mongoose.Types.ObjectId(teamId),
+      assignedTo: new mongoose.Types.ObjectId(teamId),
       isActive: true,
     });
 
