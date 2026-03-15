@@ -1,17 +1,17 @@
 # 📋 TodoList - Flood Rescue System
 
-> **Last Updated:** 2026-03-01
+> **Last Updated:** 2026-03-15
 >
 > Theo dõi tiến độ implementation dựa trên [ERD.md](./ERD.md), [Rescue_flow_2.2.md](./flows/Rescue_flow_2.2.md), [Relief_flow_1.1.md](./flows/Relief_flow_1.1.md), và [Supply_management.md](./Supply_management.md).
 
 ---
 
-## � Phase Progress
+## 🚩 Phase Progress
 
 | Phase       | Description                                                | Progress | Status         |
 | :---------- | :--------------------------------------------------------- | :------- | :------------- |
-| **Phase 1** | **Core Flow** (Mission + Timeline + Team modules)          | ~80%     | 🚧 In Progress |
-| **Phase 2** | **Supply Tracking** (Warehouse + Inventory + Planning)     | ~5%      | 🌑 Pending     |
+| **Phase 1** | **Core Flow** (Mission + Timeline + Team modules)          | ~92%     | 🚧 In Progress |
+| **Phase 2** | **Supply Tracking** (Warehouse + Inventory + Planning)     | ~35%     | 🚧 In Progress |
 | **Phase 3** | **GPS Tracking** (Realtime position updates)               | 0%       | 🌑 Pending     |
 | **Phase 4** | **Role APIs** (Coordinator, Rescue Team, Manager specific) | 0%       | 🌑 Pending     |
 | **Phase 5** | **Admin & Reports** (System config, exports)               | ~20%     | 🚧 In Progress |
@@ -20,17 +20,21 @@
 
 ## 📊 Trạng thái tổng quan
 
-| Module                 | Tiến độ | Ghi chú                                                                 |
-| :--------------------- | :------ | :---------------------------------------------------------------------- |
-| **Authentication**     | ~90%    | Login, Register, JWT, Session. Refactored response format.              |
-| **Request Management** | ~98%    | Unified Flow 2.2, 12 endpoints. Refactored response format.             |
-| **Team Management**    | ~70%    | CRUD skeleton, Member management. Refactored response format.           |
-| **Notification**       | ~85%    | WebSocket + REST API. Refactored response format.                       |
-| **Mission**            | ~80%    | Core CRUD & Lifecycle implemented. Verified.                            |
-| **Timeline**           | ~90%    | Full core lifecycle API + status sync implemented (without GPS/Supply). |
-| **Admin**              | ~30%    | List users (scoped) + Update user role. Refactored response format.     |
-| **Supply Management**  | ~5%     | Chỉ có model cơ bản                                                     |
-| **Position Tracking**  | 0%      | GPS tracking chưa implement                                             |
+| Module                   | Tiến độ | Ghi chú                                                                          |
+| :----------------------- | :------ | :------------------------------------------------------------------------------- |
+| **Authentication**       | ~90%    | Login, Register, JWT, Session. Refactored response format.                       |
+| **Request Management**   | ~98%    | Unified Flow 2.2, 12 endpoints. Bug fixes applied (peopleCount, rejectionReason).|
+| **Team Management**      | ~85%    | Full CRUD, member mgmt, stats aggregation, leader change, delete guards.         |
+| **Team Applications**    | ~90%    | Submit/Approve/Reject/Withdraw lifecycle. Auto role promotion. _(NEW)_           |
+| **Notification**         | ~85%    | WebSocket + REST API. Refactored response format.                                |
+| **Mission**              | ~85%    | Core CRUD & Lifecycle. PAUSED-block bug fixed in Timeline.                       |
+| **Timeline**             | ~90%    | Full core lifecycle API + status sync implemented (without GPS/Supply).          |
+| **Admin**                | ~30%    | List users (scoped) + Update user role. Refactored response format.              |
+| **Supply Catalog**       | ~75%    | CRUD + Excel import. Bug fixes applied (method/repository/schema naming). _(UPDATED)_ |
+| **Warehouse**            | ~65%    | CRUD implemented. Bug fixes applied (import/schema/role naming). _(UPDATED)_  |
+| **Vehicles**             | ~70%    | Full CRUD, assignment, maintenance, stats, Excel import. _(NEW)_                 |
+| **Inventory / Timeline Supply** | ~5% | Model cơ bản. TimelineSupply chưa implement.                             |
+| **Position Tracking**    | 0%      | GPS tracking chưa implement.                                                     |
 
 ## 1. 🔐 Authentication Module
 
@@ -151,26 +155,34 @@
 ### Implemented ✅
 
 - [x] Team model theo ERD (`name`, `leaderId`, `status: AVAILABLE/BUSY`)
-- [x] Team CRUD skeleton (controller, service, repository, validation, routes)
+- [x] Team CRUD (controller, service, repository, validation, routes)
 - [x] `User.teamId` FK cho team membership (thay thế TeamMember model)
 - [x] Routes registered at `/api/teams`
 - [x] Joi validation schemas
-- [x] `PATCH /api/teams/:teamId/leader` — Change team leader
+- [x] `authorizeTeamMember` middleware — bypass cho Coordinator/Admin, check `teamId` cho Rescue Team
+- [x] `authorizeTeamLeader` middleware — bypass cho Coordinator/Admin, check `leaderId` cho Rescue Team
+- [x] Aggregation stats: `memberStats.total`, `memberStats.rescue`, `memberStats.active`
+- [x] Delete guards: không xóa khi BUSY / có active timelines / còn member
+- [x] Cannot remove leader (must change leader first)
+- [x] Cannot change leader khi team BUSY
+- [x] User role auto-updated → `Rescue Team` khi add member
+- [x] Filter theo `name`, `status`, `active` (member count), `leader` (displayName)
+- [x] Sort theo `name`, `status`, `createdAt`, `active`, `leader`
 
-### Endpoints (Skeleton) ✅
+### Endpoints ✅
 
-- [x] `GET /api/teams` — List all teams (Coordinator/Admin)
+- [x] `GET /api/teams` — List all teams với stats (Coordinator/Admin)
 - [x] `POST /api/teams` — Create team (Coordinator/Admin)
-- [x] `GET /api/teams/:teamId` — Get team detail with members
-- [x] `PATCH /api/teams/:teamId` — Update team (Coordinator/Admin)
+- [x] `GET /api/teams/:teamId` — Get team detail với member stats
+- [x] `PATCH /api/teams/:teamId` — Update team name/leader (Coordinator/Admin)
 - [x] `DELETE /api/teams/:teamId` — Delete team (Coordinator/Admin)
-- [x] `POST /api/teams/:teamId/members` — Add member (Coordinator/Admin)
+- [x] `POST /api/teams/:teamId/members` — Add member (Coordinator/Admin/Rescue Team)
 - [x] `DELETE /api/teams/:teamId/members/:userId` — Remove member (Coordinator/Admin)
 - [x] `PATCH /api/teams/:teamId/leader` — Change leader (Coordinator/Admin)
 
 ### Not Implemented ❌
 
-- [ ] Team status management (`AVAILABLE` ↔ `BUSY`) API cho manual override (nếu cần)
+- [ ] Manual override API cho team status (`AVAILABLE` ↔ `BUSY`) nếu cần
 
 ---
 
@@ -179,36 +191,50 @@
 > [!IMPORTANT]
 > Theo [Supply_management.md](./Supply_management.md) - 3 Phase tracking system
 
-### Implemented ✅
+### Supply Catalog (Manager) ✅ Implemented
 
-- [x] Supply model (basic in `inventory/supply.js`)
-- [x] Vehicle model (basic)
+- [x] Supply model: `name`, `category` (FOOD/WATER/MEDICAL/CLOTHING/EQUIPMENT/OTHER), `unit`, `unitWeight`, `description`, `isActive`
+- [x] `POST /api/supplies` — Create supply
+- [x] `GET /api/supplies/list` — List all (filter: category, name, isActive)
+- [x] `GET /api/supplies/:supplyName` — Get by name
+- [x] `PUT /api/supplies/:supplyId` — Update supply
+- [x] `DELETE /api/supplies/:supplyId` — Delete supply
+- [x] `POST /api/supplies/import` — Import từ Excel (multer)
+- [x] `GET /api/supplies/status/:status` — Get supplies grouped by request status
 
-### Not Implemented ❌
+> ✅ **Bug Fixes Applied (2026-03-15):**
+> - Đã bổ sung method `findSupplyById` trong repository
+> - Đã sửa gọi đúng method `findAllSuppliesByCategory`
+> - Đã xoá import thừa `authRepository`
+> - Đã bỏ `status` enum không phù hợp khỏi Supply Catalog schema
 
-#### Supply Catalog (Manager)
+### Warehouse (Manager) ✅ Implemented
 
-- [ ] `GET /supplies` - List supplies
-- [ ] `POST /supplies` - Create supply
-- [ ] `PATCH /supplies/{id}` - Update supply
+- [x] Warehouse model: `name`, `location` (GeoJSON), `status` (FULL/EMPTY/MAINTENANCE)
+- [x] `POST /api/warehouses` — Create warehouse
+- [x] `GET /api/warehouses` — List (filter: name, status)
+- [x] `GET /api/warehouses/name?name=` — Get by name
+- [x] `PUT /api/warehouses/:name` — Update
+- [x] `DELETE /api/warehouses/:name` — Delete
 
-#### Warehouse & Inventory (Manager)
+> ✅ **Bug Fixes Applied (2026-03-15):**
+> - Đã sửa `warehouse.model.js` dùng default import `mongoose`
+> - Đã thêm import `InventoryItem` trong repository
+> - Đã thêm `createdBy` vào Warehouse schema để đồng bộ với service
+> - Đã sửa role route thành `'Rescue Coordinator'`
 
-- [ ] Warehouse model theo ERD
-- [ ] InventoryItem model theo ERD
-- [ ] `GET /warehouses` - List warehouses
-- [ ] `GET /warehouses/{id}/inventory` - Get inventory
-- [ ] `PATCH /inventory/{id}` - Restock
+### Inventory & TimelineSupply ❌ Not Implemented
 
-#### TimelineSupply Tracking
+- [ ] InventoryItem model theo ERD (`warehouseId`, `supplyId`, `quantity`, `reservedQuantity`)
+- [ ] `GET /api/warehouses/:id/inventory` — Get inventory của warehouse
+- [ ] `PATCH /api/inventory/:id` — Restock inventory
+- [ ] TimelineSupply model (Planning/Carrying/Distribution)
+- [ ] `POST /timelines/{id}/supplies/plan` — **Phase 1: Planning** (Reserve)
+- [ ] `PUT /timelines/{id}/supplies/plan` — Update plan
+- [ ] Supply carrying trong `PATCH /timelines/{id}/accept` — **Phase 2: Carrying** (Deduct)
+- [ ] Supply distribution trong `PATCH /timelines/{id}/complete` — **Phase 3: Distribution** (Report + Return)
 
-- [ ] TimelineSupply model theo ERD
-- [ ] `POST /timelines/{id}/supplies/plan` - **Phase 1: Planning** (Reserve)
-- [ ] `PUT /timelines/{id}/supplies/plan` - Update plan
-- [ ] Supply carrying trong `PATCH /timelines/{id}/accept` - **Phase 2: Carrying** (Deduct)
-- [ ] Supply distribution trong `PATCH /timelines/{id}/complete` - **Phase 3: Distribution** (Report + Return)
-
-#### Inventory Rules Logic
+#### Inventory Rules Logic ❌
 
 - [ ] Reserve: `reservedQuantity += plannedQty`
 - [ ] Deduct: `quantity -= carriedQty`, `reservedQuantity -= plannedQty`
@@ -217,7 +243,64 @@
 
 ---
 
-## 7. 📍 Position Tracking Module
+## 7. ?? Vehicles Module _(NEW)_
+
+> Quản lý phương tiện cứu hộ. Role: **Manager** only.
+
+### Implemented ✅
+
+- [x] Vehicle model: `licensePlate` (unique/uppercase), `type`, `brand`, `model`, `year`, `color`, `capacity`, `capacityUnit`, `status`, `assignedTo` (Team ref), `location` (GeoJSON), `currentMission` (Mission ref), `lastMaintenanceDate`, `maintenanceInterval`, `isActive`
+- [x] Types: `AMBULANCE`, `RESCUE BOAT`, `FIRE TRUCK`, `TRUCK`, `VAN`, `MOTORCYCLE`, `OTHERS`
+- [x] Statuses: `ACTIVE`, `INACTIVE`, `MAINTENANCE`, `OUT OF SERVICE`
+- [x] Full CRUD endpoints (xem Section 10 — Manager Module)
+- [x] Assign vehicle to team
+- [x] Mark maintenance done (reset `lastMaintenanceDate`, set status ACTIVE)
+- [x] Stats endpoint (count by status)
+- [x] Get vehicles needing maintenance (30-day threshold)
+- [x] Import từ Excel (multer + xlsx)
+- [x] Event emission: `VEHICLE_CREATED`, `VEHICLE_UPDATED`, `VEHICLE_DELETED`, `VEHICLE_ASSIGNED`, `VEHICLE_MAINTENANCE_UPDATED`
+
+### Not Implemented ❌
+
+- [ ] Unassign vehicle from team
+- [ ] Link vehicle → Timeline (tracking which vehicle is used on which rescue)
+- [ ] Maintenance history log
+- [ ] Fuel tracking
+
+---
+
+## 8. 📄 Team Applications Module _(NEW)_
+
+> Citizen đăng ký gia nhập Rescue Team. Role: **Citizen** (submit/withdraw), **Rescue Coordinator/Admin** (review).
+
+### Implemented ✅
+
+- [x] TeamApplication model: `userId`, `motivation`, `submittedPhoneNumber`, `status` (PENDING/APPROVED/REJECTED/WITHDRAWN), `rejectionReason`, `reviewedBy`, `reviewedAt`
+- [x] Unique partial index: chỉ 1 PENDING application per user
+- [x] Rules:
+  - Chỉ Citizen mới submit
+  - User phải `isActive`
+  - Approve: tự động đổi `user.role` → `Rescue Team`
+  - Chỉ PENDING mới có thể withdraw/approve/reject
+- [x] Event emission: `TEAM_APPLICATION_SUBMITTED`, `TEAM_APPLICATION_WITHDRAWN`, `TEAM_APPLICATION_APPROVED`, `TEAM_APPLICATION_REJECTED`
+
+### Endpoints ✅
+
+- [x] `POST /api/team-applications` — Citizen submit application
+- [x] `GET /api/team-applications/my` — Citizen xem application của mình
+- [x] `GET /api/team-applications` — Coordinator/Admin list tất cả (filter: status)
+- [x] `GET /api/team-applications/:applicationId` — Get detail (owner or reviewer)
+- [x] `PATCH /api/team-applications/:applicationId/withdraw` — Citizen rút đơn
+- [x] `PATCH /api/team-applications/:applicationId/approve` — Coordinator/Admin approve
+- [x] `PATCH /api/team-applications/:applicationId/reject` — Coordinator/Admin reject
+
+### Not Implemented ❌
+
+- [ ] Notification đến Citizen khi application được approve/reject (event emit có sẵn, nhưng notify.listener chưa xử lý)
+
+---
+
+## 9. ?? Position Tracking Module
 
 ### Not Implemented ❌
 
@@ -230,7 +313,7 @@
 
 ---
 
-## 8. 🔔 Notification Module
+## 10. 🔔 Notification Module
 
 ### Implemented ✅
 
@@ -251,7 +334,7 @@
 
 ---
 
-## 9. 👨‍💼 Admin Module
+## 11. 👨‍💼 Admin Module
 
 ### Implemented ✅
 
@@ -272,20 +355,40 @@
 
 ---
 
-## 10. 📊 Manager Module
+## 12. 📊 Manager Module
+
+### Implemented ✅
+
+- [x] `GET /api/vehicles/list` — List vehicles (filter: type, status, licensePlate, brand)
+- [x] `GET /api/vehicles/:licensePlate` — Get vehicle by license plate
+- [x] `GET /api/vehicles/type/:type` — Get by type
+- [x] `GET /api/vehicles/status/:status` — Get by status
+- [x] `GET /api/vehicles/team/:teamId` — Get vehicles assigned to team
+- [x] `GET /api/vehicles/stats` — Vehicle statistics (active/maintenance/inactive/out-of-service counts)
+- [x] `GET /api/vehicles/maintenance/needed` — Vehicles due for maintenance (30-day threshold)
+- [x] `POST /api/vehicles` — Create vehicle
+- [x] `PUT /api/vehicles/:vehicleId` — Update vehicle
+- [x] `PATCH /api/vehicles/:vehicleId/assign` — Assign vehicle to team
+- [x] `PATCH /api/vehicles/:vehicleId/maintenance` — Mark maintenance done (reset lastMaintenanceDate)
+- [x] `DELETE /api/vehicles/:vehicleId` — Delete vehicle
+- [x] `POST /api/vehicles/import` — Import từ Excel
+- [x] Supply Catalog CRUD (xem Section 6)
+- [x] Warehouse CRUD (xem Section 6)
+
+> ✅ **Bug Fixes Applied (2026-03-15):**
+> - Đã bỏ check ObjectId sai cho `licensePlate` ở `getVehicle`
+> - Đã đổi sang `new mongoose.Types.ObjectId(teamId)` trong repository
 
 ### Not Implemented ❌
 
-- [ ] `GET /manager/stocks/supplies` - View supply stock
-- [ ] `GET /manager/stocks/equipments` - View equipment stock
-- [ ] `GET /manager/stocks/vehicles` - View vehicle stock
-- [ ] `POST /manager/allocate/supplies` - Allocate supplies
-- [ ] `POST /manager/stocks/supplies/import` - Import supplies
-- [ ] `POST /manager/stocks/supplies/export` - Export supplies
+- [ ] `POST /manager/allocate/supplies` — Allocate supplies
+- [ ] `GET /manager/stocks/supplies` — View supply stock (InventoryItem)
+- [ ] `GET /manager/stocks/equipments` — View equipment stock
+- [ ] `POST /manager/stocks/supplies/export` — Export supplies report
 
 ---
 
-## 11. 👨‍🚒 Rescue Team APIs
+## 13. 👨‍🚒 Rescue Team APIs
 
 ### Not Implemented ❌
 
@@ -299,7 +402,7 @@
 
 ---
 
-## 12. 👨‍💼 Coordinator APIs
+## 14. 👨‍💼 Coordinator APIs
 
 ### Not Implemented ❌
 
@@ -314,7 +417,7 @@
 
 ---
 
-## 13. 📚 Documentation & UI
+## 15. 📚 Documentation & UI
 
 ### Implemented ✅
 
@@ -331,6 +434,24 @@
 - **On-behalf creation**: Coordinator có thể tạo hộ citizen (có/không tài khoản). Auto-VERIFIED, source=COORDINATOR.
 - **phoneNumber**: Bắt buộc khi đăng ký. Lưu trên cả User và Request.
 - **Phase 1 Timeline Scope**: Chỉ implement core lifecycle + status sync. GPS/Position và Supply workflow để Phase sau.
+- **PAUSED mission**: Timeline accept bị block khi mission PAUSED, nhưng arrive/complete/fail/withdraw không bị block (team đã đang thực thi).
+
+### 🔴 Known Bugs Cần Fix
+
+| Module | Bug | Mức độ |
+| :----- | :-- | :------ |
+| ~~request.model.js~~ | ~~`peopleCount` định nghĩa 2 lần, mất `min/max` validation~~ | ✅ Đã fix |
+| ~~request.model.js~~ | ~~`rejectionReason` field thiếu trong schema~~ | ✅ Đã fix |
+| ~~timeline.service.js~~ | ~~PAUSED mission block cả arrive/complete/fail/withdraw~~ | ✅ Đã fix |
+| ~~supply.service.js~~ | ~~Gọi `findSupplyById` (không tồn tại), `findAllSuppliesCategory` (sai tên)~~ | ✅ Đã fix |
+| ~~supply.service.js~~ | ~~Import `authRepository` nhưng không dùng~~ | ✅ Đã fix |
+| ~~supply.model.js~~ | ~~`status` enum (SUBMITTED/CLOSED/CANCELLED) không hợp lý cho catalog~~ | ✅ Đã fix |
+| ~~warehouse.model.js~~ | ~~`import {mongoose} from 'mongoose'` → sai cú pháp~~ | ✅ Đã fix |
+| ~~warehouse.repository.js~~ | ~~`getInventoryById` ref `InventoryItem` không import~~ | ✅ Đã fix |
+| ~~warehouse.service.js~~ | ~~Truyền `createdBy` nhưng schema không có field này~~ | ✅ Đã fix |
+| ~~warehouse.route.js~~ | ~~`authorize(['Coordinator'])` sai → phải là `'Rescue Coordinator'`~~ | ✅ Đã fix |
+| ~~vehicle.controller.js~~ | ~~`validateObjectId(req.params.licensePlate)` — licensePlate không phải ObjectId~~ | ✅ Đã fix |
+| ~~vehicle.repository.js~~ | ~~`mongoose.Types.ObjectId(teamId)` deprecated~~ | ✅ Đã fix |
 
 ---
 

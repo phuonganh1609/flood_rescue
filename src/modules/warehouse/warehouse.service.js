@@ -1,5 +1,5 @@
-import { warehouseRepository } from './warehouse.responsitory.js';
-import {eventBus} from '../../utils/events.js';
+import { warehouseRepository } from './warehouse.repository.js';
+import { eventBus } from '../../utils/events.js';
 
 class WarehouseService {
   // Warehouse service methods

@@ -146,7 +146,9 @@ controller.getTeam
 
 **Business rules (service):**
 1. `name` phải unique → `400 Team name already exists`.
-2. Nếu có `leaderId`: tạo team xong thì gọi `addMember(leaderId, team._id)` để gán leader là thành viên đầu tiên và đổi role thành `Rescue Team`.
+2. Nếu có `leaderId`: user phải tồn tại → `400 Leader not found`.
+3. Nếu có `leaderId`: user đó chưa thuộc team nào (`teamId = null`) → `400 Leader already belongs to a team`.
+4. Sau khi pass validate, tạo team xong sẽ gọi `addMember(leaderId, team._id)` để gán leader là thành viên đầu tiên và đổi role thành `Rescue Team`.
 
 ---
 
@@ -242,6 +244,8 @@ controller.getTeam
 | teamId/userId không phải ObjectId | 400 | Invalid team ID / Invalid team or user ID |
 | active query không phải số nguyên ≥ 0 | 400 | active must be a non-negative integer |
 | Tên team đã tồn tại | 400 | Team name already exists |
+| leaderId không tồn tại khi tạo team | 400 | Leader not found |
+| leaderId đã thuộc team khác khi tạo team | 400 | Leader already belongs to a team |
 | User không phải Citizen/Rescue Team | 400 | Only users with role 'Citizen' or 'Rescue Team' can be added to a team |
 | User đã có team | 400 | User already belongs to a team |
 | Leader mới không phải member | 400 | New leader must be a member of this team |

@@ -74,9 +74,7 @@ export const addVehicle = async (req, res) => {
  */
 export const getVehicle = async (req, res) => {
   try {
-    if (!validateObjectId(req.params.licensePlate, res)) return;
-
-    const vehicle = await vehicleService.getVehicleByLicensePlate(req.params.licensePlate);
+    const vehicle = await vehicleService.getVehicle(req.params.licensePlate);
     if (!vehicle) {
       return response.sendError(res, {
         message: "Vehicle not found",

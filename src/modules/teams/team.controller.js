@@ -13,6 +13,48 @@ import {
  */
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
+const notFoundErrors = new Set(["Team not found"]);
+
+const badRequestErrors = new Set([
+  "Team name already exists",
+  "Leader not found",
+  "Leader already belongs to a team",
+  "New leader must be a member of this team",
+  "Cannot delete a BUSY team. Wait until the team is AVAILABLE.",
+  "Cannot delete team with active timelines. Complete or cancel them first.",
+  "Cannot delete team with members. Remove all members first.",
+  "User not found",
+  "Only users with role 'Citizen' or 'Rescue Team' can be added to a team",
+  "User already belongs to a team",
+  "Cannot remove yourself from the team",
+  "Cannot remove the team leader. Change leader first.",
+  "Cannot change leader while the team is BUSY",
+  "User is already the leader of this team",
+]);
+
+const sendMappedTeamError = (res, err) => {
+  const errorMessage = err?.message || "Unexpected error while processing team request";
+
+  if (notFoundErrors.has(errorMessage)) {
+    return response.sendError(res, {
+      message: errorMessage,
+      statusCode: 404,
+    });
+  }
+
+  if (badRequestErrors.has(errorMessage)) {
+    return response.sendError(res, {
+      message: errorMessage,
+      statusCode: 400,
+    });
+  }
+
+  return response.sendError(res, {
+    message: "Unexpected error while processing team request",
+    statusCode: 500,
+  });
+};
+
 /**
  * Validate request body against schema
  */
@@ -85,10 +127,7 @@ export const getAllTeams = async (req, res) => {
       meta: pagination,
     });
   } catch (err) {
-    return response.sendError(res, {
-      message: err.message,
-      statusCode: 400,
-    });
+    return sendMappedTeamError(res, err);
   }
 };
 
@@ -108,16 +147,7 @@ export const getTeam = async (req, res) => {
     const team = await teamService.getTeamById(teamId);
     return response.sendSuccess(res, { data: team });
   } catch (err) {
-    if (err.message === "Team not found") {
-      return response.sendError(res, {
-        message: err.message,
-        statusCode: 404,
-      });
-    }
-    return response.sendError(res, {
-      message: err.message,
-      statusCode: 400,
-    });
+    return sendMappedTeamError(res, err);
   }
 };
 
@@ -142,10 +172,7 @@ export const createTeam = async (req, res) => {
       message: "Team created successfully",
     });
   } catch (err) {
-    return response.sendError(res, {
-      message: err.message,
-      statusCode: 400,
-    });
+    return sendMappedTeamError(res, err);
   }
 };
 
@@ -177,16 +204,7 @@ export const updateTeam = async (req, res) => {
       message: "Team updated successfully",
     });
   } catch (err) {
-    if (err.message === "Team not found") {
-      return response.sendError(res, {
-        message: err.message,
-        statusCode: 404,
-      });
-    }
-    return response.sendError(res, {
-      message: err.message,
-      statusCode: 400,
-    });
+    return sendMappedTeamError(res, err);
   }
 };
 
@@ -208,16 +226,7 @@ export const deleteTeam = async (req, res) => {
       message: "Team deleted successfully",
     });
   } catch (err) {
-    if (err.message === "Team not found") {
-      return response.sendError(res, {
-        message: err.message,
-        statusCode: 404,
-      });
-    }
-    return response.sendError(res, {
-      message: err.message,
-      statusCode: 400,
-    });
+    return sendMappedTeamError(res, err);
   }
 };
 
@@ -250,16 +259,7 @@ export const addMember = async (req, res) => {
       message: "Member added successfully",
     });
   } catch (err) {
-    if (err.message === "Team not found") {
-      return response.sendError(res, {
-        message: err.message,
-        statusCode: 404,
-      });
-    }
-    return response.sendError(res, {
-      message: err.message,
-      statusCode: 400,
-    });
+    return sendMappedTeamError(res, err);
   }
 };
 
@@ -282,16 +282,7 @@ export const removeMember = async (req, res) => {
       message: "Member removed successfully",
     });
   } catch (err) {
-    if (err.message === "Team not found") {
-      return response.sendError(res, {
-        message: err.message,
-        statusCode: 404,
-      });
-    }
-    return response.sendError(res, {
-      message: err.message,
-      statusCode: 400,
-    });
+    return sendMappedTeamError(res, err);
   }
 };
 
