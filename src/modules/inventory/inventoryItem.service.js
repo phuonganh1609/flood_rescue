@@ -2,10 +2,27 @@ import {inventoryItemRepository} from './inventoryItem.responsitory.js';
 import { Warehouse } from '../warehouse/warehouse.model.js';
 import Supply from '../supply/supply.model.js';
 import {eventBus} from '../../utils/events.js';
-import mongoose from 'mongoose';
-
-
+import XLSX from "xlsx";
 class InventoryItemService {
+
+    async importExcel(supplies, managerId) {
+    
+      const formattedSupplies = supplies.map((row) => ({
+        name: row.supplyName,
+        warehouse: row.warehouse,
+        quantity: Number(row.quantity),
+        reservedQuantity: Number(row.reservedQuantity),
+        unit: row.unit,
+        status: row.status || "ACTIVE",
+        createdBy: managerId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+    
+      const result = await inventoryItemRepository.insertMany(formattedSupplies);
+    
+      return result;
+    }
  async create (inventoryData, managerID){
         const{ 
             supplyID ,
@@ -85,32 +102,93 @@ class InventoryItemService {
         }
         return deletedInventoryItem;
     };
+async importExcel(rows, managerId) {
 
+  if (!rows || rows.length === 0) {
+    throw new Error("Excel file is empty");
+  }
+
+  const normalize = (s) => s?.trim().toLowerCase();
+
+  // lấy danh sách warehouse và supply
+  const warehouseNames = [...new Set(
+    rows.map(r => normalize(r.warehouse)).filter(Boolean)
+  )];
+
+  const supplyNames = [...new Set(
+    rows.map(r => normalize(r.supplyName)).filter(Boolean)
+  )];
+
+  // query DB
+  const warehouses = await Warehouse.find().lean();
+  const supplies = await Supply.find().lean();
+
+  // map name -> id
+  const warehouseMap = {};
+  warehouses.forEach(w => {
+    warehouseMap[normalize(w.name)] = w._id;
+  });
+
+  const supplyMap = {};
+  supplies.forEach(s => {
+    supplyMap[normalize(s.name)] = s._id;
+  });
+
+  const formattedSupplies = [];
+
+  for (let i = 0; i < rows.length; i++) {
+
+    const row = rows[i];
+    const line = i + 2;
+
+    const supplyName = normalize(row.supplyName);
+    const warehouseName = normalize(row.warehouse);
+
+    if (!supplyName) {
+      throw new Error(`Row ${line}: supplyName is required`);
+    }
+
+    if (!warehouseName) {
+      throw new Error(`Row ${line}: warehouse is required`);
+    }
+
+    const supplyId = supplyMap[supplyName];
+    if (!supplyId) {
+      throw new Error(`Row ${line}: Supply "${row.supplyName}" not found`);
+    }
+
+    const warehouseId = warehouseMap[warehouseName];
+    if (!warehouseId) {
+      throw new Error(`Row ${line}: Warehouse "${row.warehouse}" not found`);
+    }
+
+    formattedSupplies.push({
+      supplyID: supplyId,
+      quantity: Number(row.quantity) || 0,
+      reservedQuantity: Number(row.reservedQuantity) || 0,
+      unit: row.unit?.trim() || "",
+      warehouse: warehouseId,
+      status: row.status || "ACTIVE",
+      createdBy: managerId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+  }
+
+  const result = await inventoryItemRepository.insertMany(formattedSupplies);
+
+  eventBus.emit("INVENTORY_IMPORTED", {
+    count: result.length,
+    userId: managerId,
+  });
+
+  return {
+    message: "Import Excel successfully",
+    inserted: result.length,
+  };
+}
     
 }
 const inventoryItemService = new InventoryItemService();
 export{ inventoryItemService };
-
-
-// const list = async (filter, options) => inventoryResponsitory.findAll(filter, options);
-
-// const update = async (id, payload) => {
-//   if (payload.warehouse) {
-//     const wh = await Warehouse.findById(payload.warehouse).lean();
-//     if (!wh) throw new Error('Warehouse not found');
-//   }
-//   if (payload.supplyID) {
-//     const supply = await Supply.findById(payload.supplyID).lean();
-//     if (!supply) throw new Error('Supply not found');
-//   }
-//   return repository.updateById(id, payload);
-// };
-// const remove = async (id) => repository.deleteById(id);
-
-// export default {
-//   create,
-//   getById,
-//   list,
-//   update,
-//   remove,
-// };

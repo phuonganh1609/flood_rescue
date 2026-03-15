@@ -9,7 +9,7 @@ export const INVENTORY_ITEM_STATUS = {
 
 const inventoryItemSchema = new Schema(
   {
-    supplyID: { type: Schema.Types.ObjectId, ref: 'Supply', unique: true, required: true },
+    supplyID: { type: Schema.Types.ObjectId, ref: 'Supply', required: true },
     description: { type: String },
     quantity: { type: Number, default: 0 },
     reservedQuantity: { type: Number, default: 0 },

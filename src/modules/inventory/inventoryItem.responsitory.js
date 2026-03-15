@@ -4,6 +4,10 @@ import Supply from '../supply/supply.model.js';
 
 class InventoryItemRepository {
 
+  async insertMany(inventoryItems) {
+      return await InventoryItem.insertMany(inventoryItems);
+    }
+
   async create (inventoryData){
     const doc = new InventoryItem(inventoryData);
     return doc.save();

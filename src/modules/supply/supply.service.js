@@ -3,13 +3,14 @@ import { eventBus } from "../../utils/events.js";
 import Supply from "./supply.model.js";
 import { supplyRepository } from "./supply.repository.js";
 import XLSX from "xlsx";
-
+import { normalizeText } from '../../utils/normalizeName.js';
 class SupplyService {
 
 async importExcel(supplies, managerId) {
 
   const formattedSupplies = supplies.map((row) => ({
     name: row.name,
+    nameNormalized: normalizeText(row.name), // ✅ lưu tên không dấu
     category: row.category|| "OTHER",
     unit: row.unit,
     unitWeight: Number(row.unitWeight),
@@ -33,16 +34,25 @@ async importExcel(supplies, managerId) {
             description,
             isActive = true,
         } = supplyData;
-       
-        const newSupply = await supplyRepository.createSupply({
-            name,
-            category,
-            unit,
-            unitWeight,
-            description,
-            isActive,
-            createdBy: managerId,
-        });
+        if (!name || !category || !unit) {
+        throw new Error("Name, category and unit are required");
+    }
+
+    const existing = await supplyRepository.findByName(name);
+    if (existing) {
+        throw new Error(`Supply "${name}" already exists`);
+    }
+
+    const newSupply = await supplyRepository.createSupply({
+        name,
+        nameNormalized: normalizeText(name), // ✅ lưu tên không dấu
+        category,
+        unit,
+        unitWeight,
+        description,
+        isActive,
+        createdBy: managerId,
+    });
         eventBus.emit("SUPPLY_CREATED", {
             supplyId: newSupply._id,
             userId: managerId,

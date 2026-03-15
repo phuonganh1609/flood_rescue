@@ -17,6 +17,7 @@ const SupplySchema = new Schema(
          unique: true,
          required: true 
     },
+    nameNormalized: { type: String },
     category: { 
         type: String, 
         enum: ['FOOD', 'WATER', 'MEDICAL', 'CLOTHING', 'EQUIPMENT', 'OTHER'],

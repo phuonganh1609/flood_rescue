@@ -7,7 +7,7 @@ import {
 } from "./supply.validation.js";
 import XLSX from "xlsx";
 import { supplyRepository } from "./supply.repository.js";
-
+import { normalizeText } from '../../utils/normalizeName.js';
 function validateBody(schema, body, res) {
   const { error, value } = schema.validate(body, { abortEarly: false });
   if (error) {
@@ -94,7 +94,10 @@ export const getAllSupplies = async (req, res) => {
     const filter = {};
     if (req.query.category) filter.category = req.query.category;
     if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
-    if (req.query.name) filter.name = new RegExp(req.query.name, "i");
+     if (req.query.name) {
+      // normalize input rồi search trên field nameNormalized
+      filter.nameNormalized = new RegExp(normalizeText(req.query.name), 'i');
+    }
 
     const result = await supplyService.getAllSupplies(filter, { page, limit });
 

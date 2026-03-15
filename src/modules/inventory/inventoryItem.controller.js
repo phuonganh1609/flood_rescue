@@ -3,6 +3,9 @@ import response from '../../utils/response.js';
 import {inventoryItemService} from './inventoryItem.service.js';
 import { createSchema, updateSchema } from './inventoryItem.validation.js';
 import Supply from '../supply/supply.model.js';
+import XLSX from "xlsx";
+
+
 function validateObjectId(id, res) {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     response.sendError(res, {
@@ -138,5 +141,41 @@ export const remove = async (req, res) => {
     return response.sendSuccess(res, { data: doc, message: 'Inventory item deleted' });
   } catch (err) {
     return response.sendError(res, { message: err.message });
+  }
+};
+//import excel file
+export const importFromExcel = async (req, res) => {
+  try {
+
+    if (!req.file) {
+      return res.status(400).json({
+        message: "File is required"
+      });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    const data = XLSX.utils.sheet_to_json(sheet, {
+      header: ["supplyName", "warehouse", "description", "quantity", "reservedQuantity", "unit", "status"],
+      range: 1
+    });
+
+    const result = await inventoryItemService.importExcel(data, req.user.id);
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Import supplies successfully"
+    });
+
+  } catch (err) {
+
+    return response.sendError(res, {
+      message: "Import Excel failed",
+      statusCode: 500,
+      errors: err.message
+    });
+
   }
 };
