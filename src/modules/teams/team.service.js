@@ -35,21 +35,24 @@ class TeamService {
    * Get team by ID with members
    */
   async getTeamById(teamId) {
-    const team = await teamRepository.findById(teamId);
+    const team = await teamRepository.findByIdWithStats(teamId);
     if (!team) {
       throw new Error("Team not found");
     }
 
-    const members = await teamRepository.findMembers(teamId);
-
-    return { ...team.toObject(), members };
+    return team;
   }
 
   /**
    * Get all teams with pagination and filters
    */
-  async getAllTeams(filter = {}, pagination = { page: 1, limit: 10 }, sort = { createdAt: -1 }) {
-    return await teamRepository.findAll(filter, pagination, sort);
+  async getAllTeams(
+    filter = {},
+    pagination = { page: 1, limit: 10 },
+    sort = { createdAt: -1 },
+    options = {},
+  ) {
+    return await teamRepository.findAllWithStats(filter, pagination, sort, options);
   }
 
   /**

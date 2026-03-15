@@ -33,11 +33,16 @@ const NotifySchema = new Schema(
     requestId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Request",
-      required: true,
+      required: false,
     },
     missionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Mission",
+      required: false,
+    },
+    teamApplicationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TeamApplication",
       required: false,
     },
     isRead: {

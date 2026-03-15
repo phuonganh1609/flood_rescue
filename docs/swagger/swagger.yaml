@@ -2348,8 +2348,19 @@ paths:
           description: "Field to sort by"
           schema:
             type: string
-            enum: [name, status, createdAt]
+            enum: [name, status, createdAt, active, leader]
             default: createdAt
+        - in: query
+          name: active
+          description: Filter by exact active member count (`memberStats.active`)
+          schema:
+            type: integer
+            minimum: 0
+        - in: query
+          name: leader
+          description: Filter by leader display name (case-insensitive). Teams without leader are excluded when this filter is present.
+          schema:
+            type: string
         - in: query
           name: order
           description: "Sort order"
@@ -2359,7 +2370,7 @@ paths:
             default: desc
       responses:
         "200":
-          description: Successful operation
+          description: Successful operation. Each team item includes `teamLeader` and `memberStats`.
     post:
       tags:
         - Teams
@@ -2405,7 +2416,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Successful operation
+          description: Successful operation with team `members`, `teamLeader`, and `memberStats`.
         "403":
           description: Not a member of this team
     patch:
@@ -2565,6 +2576,150 @@ paths:
           description: Cannot remove yourself or the team leader
         "403":
           description: Only the team leader can perform this action
+
+  /api/team-applications:
+    post:
+      tags:
+        - Teams
+      summary: Submit rescue team application
+      description: Citizen submits an application to become Rescue Team. `confirmPhoneNumber` falls back to the current profile phone if omitted.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTeamApplicationRequest"
+      responses:
+        "201":
+          description: Application submitted successfully
+    get:
+      tags:
+        - Teams
+      summary: List all rescue team applications
+      description: Coordinator/Admin lists applications with pagination and optional status filtering.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+      responses:
+        "200":
+          description: Applications retrieved successfully
+
+  /api/team-applications/my:
+    get:
+      tags:
+        - Teams
+      summary: List my rescue team applications
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+      responses:
+        "200":
+          description: User application history retrieved successfully
+
+  /api/team-applications/{applicationId}:
+    get:
+      tags:
+        - Teams
+      summary: Get rescue team application detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Application retrieved successfully
+
+  /api/team-applications/{applicationId}/withdraw:
+    patch:
+      tags:
+        - Teams
+      summary: Withdraw rescue team application
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Application withdrawn successfully
+
+  /api/team-applications/{applicationId}/approve:
+    patch:
+      tags:
+        - Teams
+      summary: Approve rescue team application
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Application approved successfully
+
+  /api/team-applications/{applicationId}/reject:
+    patch:
+      tags:
+        - Teams
+      summary: Reject rescue team application
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectTeamApplicationRequest"
+      responses:
+        "200":
+          description: Application rejected successfully
 
   /api/timelines:
     get:
@@ -2984,23 +3139,60 @@ components:
     AddTeamMemberRequest:
       type: object
       required:
-        - memberName
-        - teamName
+        - userId
       properties:
-        memberName:
+        userId:
           type: string
-          example: "Nguyen Van B"
-        teamName:
+          example: "507f1f77bcf86cd799439011"
+
+    CreateTeamApplicationRequest:
+      type: object
+      required:
+        - motivation
+      properties:
+        motivation:
           type: string
-          example: "Team Alpha"
-        memberRole:
+          example: "I want to support flood rescue operations in my district."
+        confirmPhoneNumber:
           type: string
-          enum:
-            - Leader
-            - Member
-            - Driver
-            - Medic
-          default: Member
+          example: "0909000111"
+
+    RejectTeamApplicationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          example: "Chưa đủ thông tin để đánh giá ở thời điểm hiện tại."
+
+    TeamApplication:
+      type: object
+      properties:
+        _id:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, WITHDRAWN]
+        motivation:
+          type: string
+        submittedPhoneNumber:
+          type: string
+        rejectionReason:
+          type: string
+          nullable: true
+        userId:
+          $ref: "#/components/schemas/User"
+        reviewedBy:
+          $ref: "#/components/schemas/User"
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 
     CreateRequestInput:
       type: object

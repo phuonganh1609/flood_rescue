@@ -22,6 +22,15 @@ async function emitUnreadCountForUser(userId) {
   }
 }
 
+async function getReviewerUsers() {
+  const [coordinators, admins] = await Promise.all([
+    authService.getCurrentUsersByRole("Rescue Coordinator"),
+    authService.getCurrentUsersByRole("Admin"),
+  ]);
+
+  return [...coordinators, ...admins];
+}
+
 /**
  * REQUEST_SUBMITTED: Citizen submits a rescue request
  * → Notify all Coordinators
@@ -98,6 +107,121 @@ eventBus.on("REQUEST_VERIFIED", async (payload) => {
     await emitUnreadCountForUser(citizenId);
   } catch (error) {
     console.error("Error in REQUEST_VERIFIED listener:", error);
+  }
+});
+
+/**
+ * TEAM_APPLICATION_SUBMITTED: Citizen submits application to become Rescue Team
+ * → Notify all Coordinators and Admins
+ */
+eventBus.on("TEAM_APPLICATION_SUBMITTED", async (payload) => {
+  try {
+    const reviewers = await getReviewerUsers();
+
+    for (const reviewer of reviewers) {
+      const userId = reviewer._id || reviewer.id;
+      const role = reviewer.role === "Admin" ? "ADMIN" : "COORDINATOR";
+
+      const result = await notificationService.create({
+        userId,
+        role,
+        teamApplicationId: payload.applicationId,
+        type: "SUBMITTED",
+        message: `📝 ${payload.citizenName} vừa nộp đơn ứng tuyển Rescue Team`,
+        isRead: false,
+      });
+
+      emitToUser(
+        userId,
+        NOTIFICATION_EVENTS.TEAM_APPLICATION_SUBMITTED,
+        result.data,
+      );
+      await emitUnreadCountForUser(userId);
+    }
+  } catch (error) {
+    console.error("Error in TEAM_APPLICATION_SUBMITTED listener:", error);
+  }
+});
+
+/**
+ * TEAM_APPLICATION_APPROVED → Notify applicant
+ */
+eventBus.on("TEAM_APPLICATION_APPROVED", async (payload) => {
+  try {
+    const result = await notificationService.create({
+      userId: payload.citizenId,
+      role: "CITIZEN",
+      teamApplicationId: payload.applicationId,
+      type: "ACCEPTED",
+      message: "✅ Đơn ứng tuyển Rescue Team của bạn đã được phê duyệt",
+      isRead: false,
+    });
+
+    emitToUser(
+      payload.citizenId,
+      NOTIFICATION_EVENTS.TEAM_APPLICATION_APPROVED,
+      result.data,
+    );
+    await emitUnreadCountForUser(payload.citizenId);
+  } catch (error) {
+    console.error("Error in TEAM_APPLICATION_APPROVED listener:", error);
+  }
+});
+
+/**
+ * TEAM_APPLICATION_REJECTED → Notify applicant
+ */
+eventBus.on("TEAM_APPLICATION_REJECTED", async (payload) => {
+  try {
+    const result = await notificationService.create({
+      userId: payload.citizenId,
+      role: "CITIZEN",
+      teamApplicationId: payload.applicationId,
+      type: "REJECTED",
+      message: `❌ Đơn ứng tuyển Rescue Team của bạn đã bị từ chối${payload.reason ? `. Lý do: ${payload.reason}` : ""}`,
+      isRead: false,
+    });
+
+    emitToUser(
+      payload.citizenId,
+      NOTIFICATION_EVENTS.TEAM_APPLICATION_REJECTED,
+      result.data,
+    );
+    await emitUnreadCountForUser(payload.citizenId);
+  } catch (error) {
+    console.error("Error in TEAM_APPLICATION_REJECTED listener:", error);
+  }
+});
+
+/**
+ * TEAM_APPLICATION_WITHDRAWN → Notify Coordinators/Admins
+ */
+eventBus.on("TEAM_APPLICATION_WITHDRAWN", async (payload) => {
+  try {
+    const reviewers = await getReviewerUsers();
+
+    for (const reviewer of reviewers) {
+      const userId = reviewer._id || reviewer.id;
+      const role = reviewer.role === "Admin" ? "ADMIN" : "COORDINATOR";
+
+      const result = await notificationService.create({
+        userId,
+        role,
+        teamApplicationId: payload.applicationId,
+        type: "WITHDRAWN",
+        message: `↩️ ${payload.citizenName} đã rút đơn ứng tuyển Rescue Team`,
+        isRead: false,
+      });
+
+      emitToUser(
+        userId,
+        NOTIFICATION_EVENTS.TEAM_APPLICATION_WITHDRAWN,
+        result.data,
+      );
+      await emitUnreadCountForUser(userId);
+    }
+  } catch (error) {
+    console.error("Error in TEAM_APPLICATION_WITHDRAWN listener:", error);
   }
 });
 

@@ -303,6 +303,36 @@
 | `POST`   | `/api/teams/:id/members`         | Add member to team                | Coord/Admin      |
 | `DELETE` | `/api/teams/:id/members/:userId` | Remove member                     | Coord/Admin      |
 
+**GET /api/teams** hỗ trợ thêm:
+- `leader`: lọc theo tên leader (không phân biệt hoa/thường). Khi dùng filter này, team chưa có leader sẽ bị loại ra.
+- `active`: lọc theo số thành viên active (`memberStats.active`) đúng bằng giá trị truyền vào.
+- `sortBy=leader`: sắp xếp theo `teamLeader.displayName`.
+- `sortBy=active`: sắp xếp theo `memberStats.active`.
+
+**Response teams list/detail** bổ sung:
+- `teamLeader`: thông tin leader (hoặc `null` nếu chưa có leader).
+- `memberStats`: object thống kê thành viên gồm `total`, `rescue`, `active`.
+- Vẫn giữ `leaderId` để tương thích ngược.
+
+### 5.1 Team Application Management
+
+| Method | Endpoint | Description | Auth |
+| :----- | :------- | :---------- | :--- |
+| `POST` | `/api/team-applications` | Citizen nộp đơn ứng tuyển Rescue Team | Authenticated |
+| `GET` | `/api/team-applications/my` | Xem lịch sử đơn của chính mình | Authenticated |
+| `GET` | `/api/team-applications` | Xem toàn bộ đơn, lọc theo status | Coord/Admin |
+| `GET` | `/api/team-applications/:applicationId` | Xem chi tiết đơn | Owner hoặc Coord/Admin |
+| `PATCH` | `/api/team-applications/:applicationId/withdraw` | Citizen rút đơn đang pending | Owner |
+| `PATCH` | `/api/team-applications/:applicationId/approve` | Duyệt đơn và đổi role thành Rescue Team | Coord/Admin |
+| `PATCH` | `/api/team-applications/:applicationId/reject` | Từ chối đơn, có thể kèm reason | Coord/Admin |
+
+**Rules chính:**
+- Chỉ `Citizen` đang `isActive = true` mới được nộp đơn.
+- Mỗi user chỉ có 1 đơn `PENDING` tại một thời điểm.
+- `confirmPhoneNumber` nếu không truyền sẽ tự lấy từ profile hiện tại.
+- Khi `approve`, hệ thống đổi `User.role` thành `Rescue Team`, chưa gán vào team.
+- Có notification khi submit, approve, reject và withdraw.
+
 ### 6. Notification Managementad
 
 - **Method:** `PATCH`
