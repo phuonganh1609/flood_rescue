@@ -5,6 +5,7 @@ import {
   createTeamSchema,
   updateTeamSchema,
   addMemberSchema,
+  changeLeaderSchema,
 } from "./team.validation.js";
 
 /**
@@ -36,23 +37,46 @@ export const getAllTeams = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const { status, name, sortBy, order } = req.query;
+    const { status, name, sortBy, order, active, leader } = req.query;
 
     const filter = {};
     if (status) filter.status = status;
     if (name) filter.name = { $regex: name, $options: "i" };
 
+    const options = {};
+    if (typeof active !== "undefined") {
+      const parsedActive = Number(active);
+      if (!Number.isInteger(parsedActive) || parsedActive < 0) {
+        return response.sendError(res, {
+          message: "active must be a non-negative integer",
+          statusCode: 400,
+        });
+      }
+      options.active = parsedActive;
+    }
+
+    if (leader) {
+      options.leader = leader;
+    }
+
     const sort = {};
     if (sortBy) {
-      const allowedFields = ["name", "status", "createdAt"];
+      const allowedFields = ["name", "status", "createdAt", "active", "leader"];
       if (allowedFields.includes(sortBy)) {
-        sort[sortBy] = order === "asc" ? 1 : -1;
+        const sortDirection = order === "asc" ? 1 : -1;
+        if (sortBy === "active") {
+          sort["memberStats.active"] = sortDirection;
+        } else if (sortBy === "leader") {
+          sort["teamLeader.displayName"] = sortDirection;
+        } else {
+          sort[sortBy] = sortDirection;
+        }
       }
     } else {
       sort.createdAt = -1;
     }
 
-    const result = await teamService.getAllTeams(filter, { page, limit }, sort);
+    const result = await teamService.getAllTeams(filter, { page, limit }, sort, options);
 
     const { data, ...pagination } = result;
 
