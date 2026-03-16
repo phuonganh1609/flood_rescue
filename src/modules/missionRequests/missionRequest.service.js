@@ -20,6 +20,11 @@ class MissionRequestService {
     return missionRequest;
   }
 
+  async getAll(query = {}) {
+    const { status, limit, page, sort } = query;
+    return await missionRequestRepository.findAll({ status, limit, page, sort });
+  }
+
   ensureCanTransition(currentStatus, nextStatus) {
     const terminalStatuses = [
       MISSION_REQUEST_STATUS.FULFILLED,

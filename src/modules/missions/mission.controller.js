@@ -133,6 +133,38 @@ class MissionController {
     }
   }
 
+  async removeRequest(req, res) {
+    try {
+      const data = await missionService.removeRequestFromMission(
+        req.params.id,
+        req.params.requestId,
+      );
+      return sendSuccess(res, {
+        data,
+        message: "Request removed from mission successfully",
+        statusCode: 200,
+      });
+    } catch (error) {
+      return sendError(res, MissionController.toErrorPayload(error));
+    }
+  }
+
+  async removeTeam(req, res) {
+    try {
+      const data = await missionService.removeTeamFromMission(
+        req.params.id,
+        req.params.teamId,
+      );
+      return sendSuccess(res, {
+        data,
+        message: "Team removed from mission successfully",
+        statusCode: 200,
+      });
+    } catch (error) {
+      return sendError(res, MissionController.toErrorPayload(error));
+    }
+  }
+
   async startMission(req, res) {
     try {
       const mission = await missionService.startMission(req.params.id);

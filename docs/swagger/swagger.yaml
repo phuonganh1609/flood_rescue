@@ -1388,6 +1388,130 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /api/missions/{id}/requests/{requestId}:
+    delete:
+      tags:
+        - Missions
+      summary: Remove request from mission
+      description: "Remove one request link from a DRAFT mission. Only PENDING mission-requests can be removed. (Roles: Rescue Coordinator, Admin)"
+      operationId: removeRequestFromMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+        - name: requestId
+          in: path
+          description: Request ID to remove from mission
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request removed from mission successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      missionId:
+                        type: string
+                      requestId:
+                        type: string
+                      removed:
+                        type: boolean
+        "400":
+          description: Mission is not DRAFT or mission-request status is invalid for remove
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission or request link not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/missions/{id}/teams/{teamId}:
+    delete:
+      tags:
+        - Missions
+      summary: Remove team from mission
+      description: "Remove one team link from a DRAFT mission. Only PLANNED or ASSIGNED timelines can be removed. (Roles: Rescue Coordinator, Admin)"
+      operationId: removeTeamFromMission
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Mission ID
+          required: true
+          schema:
+            type: string
+        - name: teamId
+          in: path
+          description: Team ID to remove from mission
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team removed from mission successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      missionId:
+                        type: string
+                      teamId:
+                        type: string
+                      removed:
+                        type: boolean
+        "400":
+          description: Mission is not DRAFT or timeline status is invalid for remove
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Mission or team link not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /api/missions/{id}/start:
     patch:
       tags:

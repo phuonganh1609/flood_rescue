@@ -20,6 +20,31 @@ class MissionRequestRepository {
       .sort({ createdAt: 1 });
   }
 
+  async findAll(query = {}) {
+    const { status, limit = 0, page = 1, sort = { createdAt: -1 } } = query;
+    const filter = {};
+    
+    if (status) {
+      if (Array.isArray(status)) {
+        filter.status = { $in: status };
+      } else {
+        filter.status = status;
+      }
+    }
+    
+    let queryBuilder = MissionRequest.find(filter)
+      .populate("missionId")
+      .populate("requestId")
+      .sort(sort);
+      
+    if (limit > 0) {
+      const skip = (Math.max(1, page) - 1) * limit;
+      queryBuilder = queryBuilder.skip(skip).limit(Number(limit));
+    }
+    
+    return await queryBuilder;
+  }
+
   async findByMissionIdsAndStatus(missionId, statuses = []) {
     return await MissionRequest.find({
       missionId,
@@ -33,6 +58,10 @@ class MissionRequestRepository {
 
   async findByMissionAndRequest(missionId, requestId) {
     return await MissionRequest.findOne({ missionId, requestId });
+  }
+
+  async deleteByMissionAndRequest(missionId, requestId) {
+    return await MissionRequest.deleteOne({ missionId, requestId });
   }
 
   async incrementRescued(id, rescuedCount, timelineId = null, teamId = null) {

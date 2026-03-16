@@ -209,6 +209,96 @@ class MissionService {
     return created;
   }
 
+  async removeRequestFromMission(id, requestId) {
+    const mission = await this.assertMissionExists(id);
+    this.assertMissionDraft(mission, "remove request");
+
+    const missionRequest = await missionRequestRepository.findByMissionAndRequest(
+      id,
+      requestId,
+    );
+
+    if (!missionRequest) {
+      const error = new Error(
+        `Không tìm thấy liên kết request ${requestId} trong mission ${id}`,
+      );
+      error.statusCode = 404;
+      error.errorCode = "MISSION_REQUEST_NOT_FOUND";
+      throw error;
+    }
+
+    if (missionRequest.status !== "PENDING") {
+      const error = new Error(
+        `Không thể xoá request khỏi mission: trạng thái hiện tại là ${missionRequest.status}, yêu cầu PENDING`,
+      );
+      error.statusCode = 400;
+      error.errorCode = "INVALID_MISSION_REQUEST_STATUS_FOR_REMOVE";
+      throw error;
+    }
+
+    const result = await missionRequestRepository.deleteByMissionAndRequest(id, requestId);
+    if (!result?.deletedCount) {
+      const error = new Error(
+        `Không tìm thấy liên kết request ${requestId} trong mission ${id}`,
+      );
+      error.statusCode = 404;
+      error.errorCode = "MISSION_REQUEST_NOT_FOUND";
+      throw error;
+    }
+
+    await timelineService.syncRequestStatus(requestId);
+    await timelineService.syncMissionStatus(id);
+
+    return {
+      missionId: id,
+      requestId,
+      removed: true,
+    };
+  }
+
+  async removeTeamFromMission(id, teamId) {
+    const mission = await this.assertMissionExists(id);
+    this.assertMissionDraft(mission, "remove team");
+
+    const timeline = await Timeline.findOne({ missionId: id, teamId });
+    if (!timeline) {
+      const error = new Error(
+        `Không tìm thấy liên kết team ${teamId} trong mission ${id}`,
+      );
+      error.statusCode = 404;
+      error.errorCode = "TIMELINE_NOT_FOUND";
+      throw error;
+    }
+
+    if (!["PLANNED", "ASSIGNED"].includes(timeline.status)) {
+      const error = new Error(
+        `Không thể xoá team khỏi mission: timeline đang ở trạng thái ${timeline.status}, yêu cầu PLANNED hoặc ASSIGNED`,
+      );
+      error.statusCode = 400;
+      error.errorCode = "INVALID_TIMELINE_STATUS_FOR_REMOVE";
+      throw error;
+    }
+
+    const result = await Timeline.deleteOne({ missionId: id, teamId });
+    if (!result?.deletedCount) {
+      const error = new Error(
+        `Không tìm thấy liên kết team ${teamId} trong mission ${id}`,
+      );
+      error.statusCode = 404;
+      error.errorCode = "TIMELINE_NOT_FOUND";
+      throw error;
+    }
+
+    await timelineService.syncMissionStatus(id);
+    await timelineService.syncTeamStatus(teamId);
+
+    return {
+      missionId: id,
+      teamId,
+      removed: true,
+    };
+  }
+
   async startMission(id) {
     const mission = await this.assertMissionExists(id);
     this.assertMissionDraft(mission, "start mission");

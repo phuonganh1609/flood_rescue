@@ -5,6 +5,8 @@ import {
   updateMissionSchema,
   addRequestsSchema,
   addTeamsSchema,
+  removeRequestParamsSchema,
+  removeTeamParamsSchema,
   startMissionSchema,
   queryMissionSchema,
 } from "./mission.validation.js";
@@ -63,6 +65,18 @@ router.post(
   authorize(["Rescue Coordinator", "Admin"]),
   validate(addTeamsSchema),
   missionController.addTeams,
+);
+router.delete(
+  "/:id/requests/:requestId",
+  authorize(["Rescue Coordinator", "Admin"]),
+  validate(removeRequestParamsSchema, "params"),
+  missionController.removeRequest,
+);
+router.delete(
+  "/:id/teams/:teamId",
+  authorize(["Rescue Coordinator", "Admin"]),
+  validate(removeTeamParamsSchema, "params"),
+  missionController.removeTeam,
 );
 router.patch(
   "/:id/start",

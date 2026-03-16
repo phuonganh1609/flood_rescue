@@ -12,6 +12,12 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get(
+  "/",
+  authorize(["Rescue Coordinator", "Admin"]),
+  missionRequestController.getAll,
+);
+
+router.get(
   "/:id",
   authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
   validate(missionRequestIdParamSchema, "params"),

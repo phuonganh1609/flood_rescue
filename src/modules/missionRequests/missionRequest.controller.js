@@ -12,6 +12,31 @@ class MissionRequestController {
     };
   }
 
+  async getAll(req, res) {
+    try {
+      // Support split by comma if pass from query string: ?status=PENDING,IN_PROGRESS
+      const { status, limit, page, sort } = req.query;
+      let statusFilter = status;
+      if (typeof status === "string" && status.includes(",")) {
+        statusFilter = status.split(",");
+      }
+
+      const data = await missionRequestService.getAll({
+        status: statusFilter,
+        limit,
+        page,
+        sort,
+      });
+
+      return sendSuccess(res, {
+        data,
+        message: "Mission requests retrieved successfully",
+      });
+    } catch (error) {
+      return sendError(res, MissionRequestController.toErrorPayload(error));
+    }
+  }
+
   async getById(req, res) {
     try {
       const data = await missionRequestService.getById(req.params.id);
