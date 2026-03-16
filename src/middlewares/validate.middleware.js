@@ -14,14 +14,26 @@ const validate = (schema, source = "body") => {
     });
 
     if (error) {
-      const errorMessages = error.details.map((detail) => detail.message);
+      const validationDetails = error.details.map((detail) => {
+        const fieldPath = detail.path?.length > 0 ? detail.path.join(".") : "unknown";
+        return {
+          field: fieldPath,
+          message: detail.message,
+          type: detail.type,
+        };
+      });
+
+      const summaryMessage = validationDetails
+        .map((item) => `${item.field}: ${item.message}`)
+        .join("; ");
+
       return res.status(400).json({
         success: false,
-        message: "Validation error",
+        message: summaryMessage || "Dữ liệu gửi lên không hợp lệ",
         data: null,
         error: {
           code: "VALIDATION_ERROR",
-          details: errorMessages,
+          details: validationDetails,
         },
       });
     }

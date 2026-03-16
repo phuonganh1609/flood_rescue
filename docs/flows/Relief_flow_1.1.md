@@ -1,12 +1,14 @@
-# Relief Flow 1.1 (Unified)
+# Relief Flow 1.1 (Redesigned — Multi-Request Mission)
 
-> Phiên bản Unified từ [Relief_flow_1.0.md](./Relief_flow_1.0.md)
+> Phiên bản redesign đồng bộ với [Rescue_flow_2.2.md](./Rescue_flow_2.2.md).
 >
-> **Changes v1.1**:
+> **Changes v1.1 (redesign)**:
 >
-> - Đồng bộ với [rules.md](./rules.md).
-> - Thêm **GPS Tracking** (`EN_ROUTE`, `ON_SITE`) giống Rescue Flow.
-> - Timeline khởi tạo là `ASSIGNED`.
+> - Mission khởi đầu ở `DRAFT`; Coordinator lên kế hoạch trước khi Start.
+> - Coordinator kéo Request vào mission → tạo `MissionRequest` (status=`PENDING`).
+> - Coordinator ghép Team vào mission → tạo `Timeline` (status=`PLANNED`).
+> - **Start Mission** → tất cả `PLANNED` Timeline → `ASSIGNED`; notify teams.
+> - `Timeline` không còn `requestId` FK. `MissionRequest` theo dõi supply fulfillment cho từng request.
 
 ---
 
@@ -56,33 +58,36 @@ stateDiagram-v2
 
 ### 2.1 Timeline States Definitions
 
-| State       | Ý nghĩa                                  |
-| :---------- | :--------------------------------------- |
-| `ASSIGNED`  | Đã gán team (chờ accept)                 |
-| `EN_ROUTE`  | Team đang đi (GPS Tracking)              |
-| `ON_SITE`   | Team đã đến điểm cứu trợ và đang phát đồ |
-| `COMPLETED` | Phát xong (Đủ hàng)                      |
-| `PARTIAL`   | Phát xong (Thiếu hàng)                   |
-| `FAILED`    | Không thể tiếp cận / Hỏng xe             |
-| `WITHDRAWN` | Team từ chối nhiệm vụ                    |
-| `CANCELLED` | Bị huỷ                                   |
+| State       | Ý nghĩa                                                                    |
+| :---------- | :------------------------------------------------------------------------- |
+| `PLANNED`   | Team đã được ghép vào mission; mission chưa start; team chưa được thông báo |
+| `ASSIGNED`  | Mission đã start; team được thông báo; chờ accept                          |
+| `EN_ROUTE`  | Team đang đi (GPS Tracking)                                                |
+| `ON_SITE`   | Team đã đến điểm cứu trợ và đang phát đồ                                   |
+| `COMPLETED` | Phát xong (Đủ hàng)                                                        |
+| `PARTIAL`   | Phát xong (Thiếu hàng)                                                     |
+| `FAILED`    | Không thể tiếp cận / Hỏng xe                                               |
+| `WITHDRAWN` | Team từ chối nhiệm vụ                                                      |
+| `CANCELLED` | Bị huỷ                                                                     |
 
 ### 2.2 Timeline State Diagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ASSIGNED
+    [*] --> PLANNED
+
+    PLANNED --> ASSIGNED : mission started (Start Mission)
+    PLANNED --> CANCELLED : coordinator cancels before start
 
     ASSIGNED --> EN_ROUTE : team accepts
     ASSIGNED --> WITHDRAWN : team rejects
+    ASSIGNED --> CANCELLED : coordinator cancels
 
     EN_ROUTE --> ON_SITE : team arrives (GPS match)
 
     ON_SITE --> COMPLETED : done full
     ON_SITE --> PARTIAL : done partial
     ON_SITE --> FAILED : failed to distribute
-
-    ASSIGNED --> CANCELLED : coordinator cancels
 
     COMPLETED --> [*]
     PARTIAL --> [*]
@@ -97,31 +102,33 @@ stateDiagram-v2
 
 ### 3.1 Mission States Definitions
 
-| State         | Ý nghĩa                                 |
-| :------------ | :-------------------------------------- |
-| `PLANNED`     | Đã tạo mission                          |
-| `IN_PROGRESS` | Có timeline đang chạy                   |
-| `PAUSED`      | Tạm dừng                                |
-| `PARTIAL`     | Hoàn thành một phần (cần thêm timeline) |
-| `COMPLETED`   | Hoàn tất toàn bộ requests               |
-| `ABORTED`     | Huỷ mission                             |
+| State         | Ý nghĩa                                                                    |
+| :------------ | :------------------------------------------------------------------------- |
+| `DRAFT`       | Coordinator đang lên kế hoạch — thêm requests, ghép teams                  |
+| `PLANNED`     | Start Mission đã bấm; notifications gửi; chờ team accept                   |
+| `IN_PROGRESS` | Có timeline đang chạy                                                      |
+| `PAUSED`      | Tạm dừng                                                                   |
+| `PARTIAL`     | Hoàn thành một phần (cần thêm timeline)                                    |
+| `COMPLETED`   | Hoàn tất toàn bộ MissionRequests                                           |
+| `ABORTED`     | Huỷ mission                                                                |
 
 ### 3.2 Mission State Diagram
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PLANNED
+    [*] --> DRAFT
 
-    PLANNED --> IN_PROGRESS : first timeline starts
+    DRAFT --> PLANNED : coordinator starts mission (notifications sent)
+    PLANNED --> IN_PROGRESS : first team accepts (timeline EN_ROUTE)
 
     IN_PROGRESS --> PAUSED : coordinator pauses
     PAUSED --> IN_PROGRESS : coordinator resumes
 
-    IN_PROGRESS --> PARTIAL : timeline completed (partial)
-    PARTIAL --> IN_PROGRESS : new timeline created
+    IN_PROGRESS --> PARTIAL : some MissionRequests partial
+    PARTIAL --> IN_PROGRESS : new team added
 
-    IN_PROGRESS --> COMPLETED : all requests fulfilled
-    PARTIAL --> COMPLETED : remaining requests closed
+    IN_PROGRESS --> COMPLETED : all MissionRequests fulfilled/closed
+    PARTIAL --> COMPLETED : remaining closed manually
 
     IN_PROGRESS --> ABORTED : coordinator aborts
     PAUSED --> ABORTED : coordinator aborts
@@ -134,19 +141,20 @@ stateDiagram-v2
 
 ## 4. Derived Rules Summary
 
-- **Request = FULFILLED** khi `Sum(Timeline.supplied_amount) >= Request.need_amount`.
-- **Request = PARTIALLY_FULFILLED** khi `Sum(...) < Request.need_amount` và hết timeline chạy.
+- **MissionRequest = FULFILLED** khi `suppliesDelivered >= requestSuppliesSnapshot` (all items) và `rescuedCount >= requestPeopleSnapshot`.
+- **Request = FULFILLED** khi MissionRequest tương ứng đạt trạng thái `FULFILLED`.
+- **Request = PARTIALLY_FULFILLED** khi MissionRequest đạt `PARTIAL` (đã deliver nhưng chưa đủ).
 - **Tracking**: Relief Team cũng gửi tọa độ GPS liên tục khi `EN_ROUTE` để Citizen theo dõi.
 
 ### Supply Tracking Rules
 
 Relief Flow sử dụng Supply Management giống Rescue Flow:
 
-| Phase            | Timing                   | Action                                 |
-| ---------------- | ------------------------ | -------------------------------------- |
-| **Planning**     | Coordinator assigns team | Reserve supplies từ Warehouse          |
-| **Carrying**     | Team accepts             | Deduct inventory, confirm `carriedQty` |
-| **Distribution** | Team completes           | Report `distributedQty`, return unused |
+| Phase            | Timing                                              | Action                                                                         |
+| ---------------- | --------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Planning**     | `POST /missions/{id}/teams` — Coordinator assigns team to mission | Reserve supplies từ Warehouse; snapshot vào `MissionRequest.requestSuppliesSnapshot` |
+| **Carrying**     | Team accepts (Timeline → EN_ROUTE)                  | Deduct inventory, confirm `carriedQty` on Timeline                             |
+| **Distribution** | Team completes (Timeline → COMPLETED)               | Report `distributedQty`; aggregate → `MissionRequest.suppliesDelivered`; return unused |
 
 > Chi tiết xem [Supply_management.md](../Supply_management.md)
 
@@ -234,13 +242,32 @@ sequenceDiagram
 
 ## 7. API Endpoints Summary
 
+### Request Management
+
 | Method  | Endpoint                   | Actor               | Description                                       |
 | :------ | :------------------------- | :------------------ | :------------------------------------------------ |
 | `POST`  | `/requests`                | Citizen/Coordinator | Create request (validates 1 active request limit) |
 | `PATCH` | `/requests/{id}/verify`    | Coordinator         | Verify request → `VERIFIED` / `REJECTED`          |
 | `PATCH` | `/requests/{id}/duplicate` | Coordinator         | Mark as duplicate                                 |
 | `PATCH` | `/requests/{id}/location`  | Coordinator         | Update location & verify                          |
-| `PATCH` | `/timelines/{id}/complete` | Team                | Report completion → `COMPLETED` / `PARTIAL`       |
+
+### Mission Planning (new model)
+
+| Method   | Endpoint                      | Actor       | Description                                             |
+| :------- | :---------------------------- | :---------- | :------------------------------------------------------ |
+| `POST`   | `/missions`                   | Coordinator | Create mission in `DRAFT` state                         |
+| `POST`   | `/missions/{id}/requests`     | Coordinator | Add request to mission → creates `MissionRequest(PENDING)` |
+| `POST`   | `/missions/{id}/teams`        | Coordinator | Assign team → creates `Timeline(PLANNED)`               |
+| `PATCH`  | `/missions/{id}/start`        | Coordinator | Start mission → all Timelines `PLANNED→ASSIGNED`, notify teams |
+
+### Team Execution
+
+| Method   | Endpoint                         | Actor | Description                                        |
+| :------- | :------------------------------- | :---- | :------------------------------------------------- |
+| `PATCH`  | `/timelines/{id}/accept`         | Team  | Accept assignment → `ASSIGNED → EN_ROUTE`; Mission `→ IN_PROGRESS` |
+| `PATCH`  | `/timelines/{id}/arrive`         | Team  | Arrive on site → `EN_ROUTE → ON_SITE`              |
+| `PATCH`  | `/timelines/{id}/complete`       | Team  | Report completion `{rescuedCount, suppliesDelivered}` → `ON_SITE → COMPLETED` / `PARTIAL` |
+| `PATCH`  | `/timelines/{id}/withdraw`       | Team  | Withdraw from mission → `WITHDRAWN`                |
 
 ---
 

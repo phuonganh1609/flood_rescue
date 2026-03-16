@@ -231,42 +231,63 @@ eventBus.on("TEAM_APPLICATION_WITHDRAWN", async (payload) => {
  */
 eventBus.on("MISSION_ASSIGNED", async (payload) => {
   try {
-    const { requestId, missionId, citizenId, teamLeaderId, teamName } = payload;
-
-    // Notify Citizen
-    if (citizenId) {
-      const citizenResult = await notificationService.create({
-      userId: citizenId,
-      role: "CITIZEN",
+    const {
       requestId,
-      type: "ACCEPTED",
-      message: `✅ Đội cứu hộ "${teamName}" đã được phân công đến hỗ trợ bạn`,
-      isRead: false,
-    });
+      requestIds = [],
+      missionId,
+      missionCode,
+      citizenId,
+      citizenIds = [],
+      teamLeaderId,
+      teamLeaderIds = [],
+      teamName,
+      teamNames = [],
+    } = payload;
+
+    const normalizedRequestId = requestId || requestIds[0] || null;
+    const normalizedCitizenIds = citizenIds.length > 0 ? citizenIds : citizenId ? [citizenId] : [];
+    const normalizedTeamLeaderIds =
+      teamLeaderIds.length > 0 ? teamLeaderIds : teamLeaderId ? [teamLeaderId] : [];
+    const teamNameText =
+      teamNames.length > 0 ? teamNames.join(", ") : teamName || "đội cứu hộ";
+    const missionLabel = missionCode || missionId;
+
+    for (const currentCitizenId of normalizedCitizenIds) {
+      const citizenResult = await notificationService.create({
+        userId: currentCitizenId,
+        role: "CITIZEN",
+        requestId: normalizedRequestId,
+        missionId,
+        type: "ACCEPTED",
+        message: `✅ ${teamNameText} đã được phân công vào nhiệm vụ hỗ trợ bạn`,
+        isRead: false,
+      });
+
       emitToUser(
-        citizenId,
+        currentCitizenId,
         NOTIFICATION_EVENTS.MISSION_ASSIGNED,
         citizenResult.data,
       );
-      await emitUnreadCountForUser(citizenId);
+      await emitUnreadCountForUser(currentCitizenId);
     }
 
-    // Notify Team Leader
-    if (teamLeaderId) {
+    for (const currentTeamLeaderId of normalizedTeamLeaderIds) {
       const teamResult = await notificationService.create({
-      userId: teamLeaderId,
-      role: "TEAM_LEADER",
-      requestId,
-      type: "ACCEPTED",
-      message: `📋 Bạn có nhiệm vụ cứu hộ mới - Mission #${missionId}`,
-      isRead: false,
-    });
+        userId: currentTeamLeaderId,
+        role: "TEAM_LEADER",
+        requestId: normalizedRequestId,
+        missionId,
+        type: "ACCEPTED",
+        message: `📋 Bạn có nhiệm vụ cứu hộ mới - Mission #${missionLabel}`,
+        isRead: false,
+      });
+
       emitToUser(
-        teamLeaderId,
+        currentTeamLeaderId,
         NOTIFICATION_EVENTS.MISSION_ASSIGNED,
         teamResult.data,
       );
-      await emitUnreadCountForUser(teamLeaderId);
+      await emitUnreadCountForUser(currentTeamLeaderId);
     }
   } catch (error) {
     console.error("Error in MISSION_ASSIGNED listener:", error);
@@ -279,7 +300,8 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
  */
 eventBus.on("MISSION_ACCEPTED", async (payload) => {
   try {
-    const { requestId, missionId, teamName } = payload;
+    const { requestId, requestIds = [], missionId, teamName } = payload;
+    const primaryRequestId = requestId || requestIds[0] || null;
 
     // Notify all coordinators
     const coordinators =
@@ -290,7 +312,8 @@ eventBus.on("MISSION_ACCEPTED", async (payload) => {
       const result = await notificationService.create({
         userId,
         role: "COORDINATOR",
-        requestId,
+        requestId: primaryRequestId,
+        missionId,
         type: "ONGOING",
         message: `👍 Đội "${teamName}" đã nhận nhiệm vụ #${missionId}`,
         isRead: false,
@@ -335,16 +358,21 @@ eventBus.on("MISSION_APPROACHING", async (payload) => {
  */
 eventBus.on("MISSION_COMPLETED", async (payload) => {
   try {
-    const { requestId, missionId, citizenId } = payload;
+    const { requestId, requestIds = [], missionId, citizenId, completionNote } = payload;
+    const primaryRequestId = requestId || requestIds[0] || null;
 
     // Notify Citizen
     if (citizenId) {
       const citizenResult = await notificationService.create({
       userId: citizenId,
       role: "CITIZEN",
-      requestId,
+      requestId: primaryRequestId,
+      missionId,
       type: "COMPLETED",
-      message: "🎉 Cứu hộ thành công! Cảm ơn bạn đã sử dụng dịch vụ",
+      message:
+        completionNote ?
+          `🎉 Cứu hộ thành công! ${completionNote}`
+        : "🎉 Cứu hộ thành công! Cảm ơn bạn đã sử dụng dịch vụ",
       isRead: false,
     });
       emitToUser(
@@ -364,7 +392,8 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
       const result = await notificationService.create({
         userId,
         role: "COORDINATOR",
-        requestId,
+        requestId: primaryRequestId,
+        missionId,
         type: "COMPLETED",
         message: `✅ Nhiệm vụ #${missionId} hoàn thành thành công`,
         isRead: false,
@@ -384,14 +413,16 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
  */
 eventBus.on("MISSION_FAILED", async (payload) => {
   try {
-    const { requestId, missionId, citizenId, reason } = payload;
+    const { requestId, requestIds = [], missionId, citizenId, reason } = payload;
+    const primaryRequestId = requestId || requestIds[0] || null;
 
     // Notify Citizen
     if (citizenId) {
       const citizenResult = await notificationService.create({
       userId: citizenId,
       role: "CITIZEN",
-      requestId,
+      requestId: primaryRequestId,
+      missionId,
       type: "CANCELLED",
       message: `⚠️ Cứu hộ không thành công. ${reason ? `Lý do: ${reason}` : "Đang chờ phân công đội khác"}`,
       isRead: false,
@@ -413,7 +444,8 @@ eventBus.on("MISSION_FAILED", async (payload) => {
       const result = await notificationService.create({
         userId,
         role: "COORDINATOR",
-        requestId,
+        requestId: primaryRequestId,
+        missionId,
         type: "CANCELLED",
         message: `❌ Nhiệm vụ #${missionId} thất bại - cần phân công lại`,
         isRead: false,
@@ -428,12 +460,84 @@ eventBus.on("MISSION_FAILED", async (payload) => {
 });
 
 /**
+ * MISSION_ABORTED: Coordinator aborts an in-progress mission
+ * -> Notify affected Citizens, Team Leaders, and Coordinators
+ */
+eventBus.on("MISSION_ABORTED", async (payload) => {
+  try {
+    const {
+      requestIds = [],
+      missionId,
+      missionCode,
+      citizenIds = [],
+      teamLeaderIds = [],
+      teamNames = [],
+    } = payload;
+
+    const primaryRequestId = requestIds[0] || null;
+    const teamNameText = teamNames.length > 0 ? ` Các đội bị ảnh hưởng: ${teamNames.join(", ")}.` : "";
+    const missionLabel = missionCode || missionId;
+
+    for (const citizenId of citizenIds) {
+      const citizenResult = await notificationService.create({
+        userId: citizenId,
+        role: "CITIZEN",
+        requestId: primaryRequestId,
+        missionId,
+        type: "CANCELLED",
+        message: `⚠️ Nhiệm vụ hỗ trợ của bạn đã bị huỷ bởi điều phối viên. Chúng tôi sẽ cập nhật phương án mới sớm nhất.${teamNameText}`,
+        isRead: false,
+      });
+
+      emitToUser(citizenId, NOTIFICATION_EVENTS.MISSION_ABORTED, citizenResult.data);
+      await emitUnreadCountForUser(citizenId);
+    }
+
+    for (const teamLeaderId of teamLeaderIds) {
+      const teamResult = await notificationService.create({
+        userId: teamLeaderId,
+        role: "TEAM_LEADER",
+        requestId: primaryRequestId,
+        missionId,
+        type: "CANCELLED",
+        message: `🛑 Nhiệm vụ #${missionLabel} đã bị điều phối viên huỷ. Vui lòng dừng thực thi và chờ điều động tiếp theo.`,
+        isRead: false,
+      });
+
+      emitToUser(teamLeaderId, NOTIFICATION_EVENTS.MISSION_ABORTED, teamResult.data);
+      await emitUnreadCountForUser(teamLeaderId);
+    }
+
+    const coordinators = await authService.getCurrentUsersByRole("Rescue Coordinator");
+    for (const coordinator of coordinators) {
+      const userId = coordinator._id || coordinator.id;
+
+      const result = await notificationService.create({
+        userId,
+        role: "COORDINATOR",
+        requestId: primaryRequestId,
+        missionId,
+        type: "CANCELLED",
+        message: `🛑 Nhiệm vụ #${missionLabel} đã được abort.${teamNameText}`,
+        isRead: false,
+      });
+
+      emitToUser(userId, NOTIFICATION_EVENTS.MISSION_ABORTED, result.data);
+      await emitUnreadCountForUser(userId);
+    }
+  } catch (error) {
+    console.error("Error in MISSION_ABORTED listener:", error);
+  }
+});
+
+/**
  * MISSION_WITHDRAWN: Team rejects / withdraws from a mission
  * → Notify all Coordinators to reassign
  */
 eventBus.on("MISSION_WITHDRAWN", async (payload) => {
   try {
-    const { requestId, missionId, teamName, withdrawalReason } = payload;
+    const { requestId, requestIds = [], missionId, teamName, withdrawalReason } = payload;
+    const primaryRequestId = requestId || requestIds[0] || null;
 
     const coordinators =
       await authService.getCurrentUsersByRole("Rescue Coordinator");
@@ -443,7 +547,7 @@ eventBus.on("MISSION_WITHDRAWN", async (payload) => {
       const result = await notificationService.create({
         userId,
         role: "COORDINATOR",
-        requestId,
+        requestId: primaryRequestId,
         missionId,
         type: "WITHDRAWN",
         message: `⚠️ Đội "${teamName}" đã từ chối nhiệm vụ - cần phân công lại${withdrawalReason ? ` (Lý do: ${withdrawalReason})` : ""}`,

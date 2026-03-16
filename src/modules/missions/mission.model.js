@@ -14,6 +14,7 @@ const missionSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: [
+        "DRAFT",
         "PLANNED",
         "IN_PROGRESS",
         "PAUSED",
@@ -21,7 +22,7 @@ const missionSchema = new mongoose.Schema(
         "COMPLETED",
         "ABORTED",
       ],
-      default: "PLANNED",
+      default: "DRAFT",
     },
     priority: {
       type: String,

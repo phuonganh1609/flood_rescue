@@ -77,7 +77,9 @@ flowchart TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ASSIGNED : Coordinator gán team
+    [*] --> PLANNED : Coordinator gán team vào mission
+
+    PLANNED --> ASSIGNED : Coordinator start mission
 
     ASSIGNED --> EN_ROUTE : 🟢 Team accept<br/>PATCH /timelines/:id/accept
     ASSIGNED --> WITHDRAWN : 🔴 Team từ chối<br/>PATCH /timelines/:id/withdraw
@@ -326,7 +328,7 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 
 | # | Method | Endpoint | Action | Body |
 |:--|:-------|:---------|:-------|:-----|
-| 1 | `GET` | `/api/timelines` | Danh sách timeline (auto-filter theo team) | Query: `status`, `missionId`, `requestId`, `page`, `limit` |
+| 1 | `GET` | `/api/timelines` | Danh sách timeline (auto-filter theo team) | Query: `status`, `missionId`, `page`, `limit` |
 | 2 | `GET` | `/api/timelines/:id` | Chi tiết timeline | — |
 | 3 | `PATCH` | `/api/timelines/:id/accept` | Nhận nhiệm vụ (ASSIGNED → EN_ROUTE) | — |
 | 4 | `PATCH` | `/api/timelines/:id/arrive` | Đã đến nơi (EN_ROUTE → ON_SITE) | — |

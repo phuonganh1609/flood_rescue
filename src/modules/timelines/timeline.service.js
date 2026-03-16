@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { eventBus } from "../../utils/events.js";
 import missionRepository from "../missions/mission.repository.js";
+import { missionRequestRepository } from "../missionRequests/missionRequest.repository.js";
 import { requestRepository } from "../requests/request.repository.js";
 import { REQUEST_STATUS } from "../requests/request.model.js";
 import { TEAM_STATUS } from "../teams/team.model.js";
@@ -15,6 +16,7 @@ import {
 } from "./timeline.repository.js";
 
 const TIMELINE_TRANSITIONS = {
+  [TIMELINE_STATUS.PLANNED]: [TIMELINE_STATUS.ASSIGNED, TIMELINE_STATUS.CANCELLED],
   [TIMELINE_STATUS.ASSIGNED]: [
     TIMELINE_STATUS.EN_ROUTE,
     TIMELINE_STATUS.WITHDRAWN,
@@ -37,9 +39,10 @@ function assertTimelineTransition(currentStatus, nextStatus) {
   const allowed = TIMELINE_TRANSITIONS[currentStatus] || [];
   if (!allowed.includes(nextStatus)) {
     const err = new Error(
-      `Invalid timeline transition: ${currentStatus} -> ${nextStatus}`,
+      `Chuyển trạng thái timeline không hợp lệ: ${currentStatus} -> ${nextStatus}`,
     );
     err.statusCode = 400;
+    err.errorCode = "INVALID_TIMELINE_TRANSITION";
     throw err;
   }
 }
@@ -57,7 +60,6 @@ function isObjectId(value) {
 class TimelineService {
   async createTimeline(data) {
     const timeline = await timelineRepository.create(data);
-    await this.syncRequestStatus(extractId(timeline.requestId));
     await this.syncTeamStatus(extractId(timeline.teamId));
     return await timelineRepository.findById(extractId(timeline._id));
   }
@@ -65,39 +67,33 @@ class TimelineService {
   async getTimelineById(timelineId) {
     const timeline = await timelineRepository.findById(timelineId);
     if (!timeline) {
-      const err = new Error("Timeline not found");
+      const err = new Error(`Không tìm thấy timeline với ID: ${timelineId}`);
       err.statusCode = 404;
+      err.errorCode = "TIMELINE_NOT_FOUND";
       throw err;
     }
     return timeline;
   }
 
   async getTimelines(query = {}, user = null) {
-    const { page = 1, limit = 10, missionId, requestId, teamId, status } = query;
+    const { page = 1, limit = 10, missionId, teamId, status } = query;
     const filter = {};
 
     if (missionId) {
       if (!isObjectId(missionId)) {
-        const err = new Error("missionId must be a valid ObjectId");
+        const err = new Error("missionId phải là ObjectId hợp lệ");
         err.statusCode = 400;
+        err.errorCode = "INVALID_OBJECTID_MISSION";
         throw err;
       }
       filter.missionId = missionId;
     }
 
-    if (requestId) {
-      if (!isObjectId(requestId)) {
-        const err = new Error("requestId must be a valid ObjectId");
-        err.statusCode = 400;
-        throw err;
-      }
-      filter.requestId = requestId;
-    }
-
     if (teamId) {
       if (!isObjectId(teamId)) {
-        const err = new Error("teamId must be a valid ObjectId");
+        const err = new Error("teamId phải là ObjectId hợp lệ");
         err.statusCode = 400;
+        err.errorCode = "INVALID_OBJECTID_TEAM";
         throw err;
       }
       filter.teamId = teamId;
@@ -138,14 +134,21 @@ class TimelineService {
     );
 
     if (!transitioned) {
-      const err = new Error("Timeline has already been updated");
+      const err = new Error(
+        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
+      );
       err.statusCode = 409;
+      err.errorCode = "TIMELINE_CONFLICT";
       throw err;
     }
 
+    await missionRequestRepository.markPendingInProgressByMission(
+      extractId(transitioned.missionId),
+    );
     await this.syncAllForTimeline(transitioned);
-    this.emitMissionAccepted(transitioned);
-    this.emitMissionApproaching(transitioned);
+    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
+    await this.emitMissionAcceptedForMission(transitioned);
+    await this.emitMissionApproachingForMission(transitioned);
 
     return transitioned;
   }
@@ -166,8 +169,11 @@ class TimelineService {
     );
 
     if (!transitioned) {
-      const err = new Error("Timeline has already been updated");
+      const err = new Error(
+        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
+      );
       err.statusCode = 409;
+      err.errorCode = "TIMELINE_CONFLICT";
       throw err;
     }
 
@@ -176,7 +182,7 @@ class TimelineService {
   }
 
   async completeTimeline(timelineId, actorUserId, payload) {
-    const { outcome, note, rescuedCount } = payload;
+    const { outcome, note, rescuedCount, completions = [] } = payload;
     const timeline = await this.getTimelineById(timelineId);
     await this.assertMissionNotTerminated(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
@@ -188,6 +194,11 @@ class TimelineService {
 
     assertTimelineTransition(timeline.status, nextStatus);
 
+    const derivedRescuedCount = completions.reduce(
+      (sum, item) => sum + item.rescuedCount,
+      0,
+    );
+
     const transitioned = await timelineRepository.transitionStatus(
       timelineId,
       TIMELINE_STATUS.ON_SITE,
@@ -195,20 +206,69 @@ class TimelineService {
         status: nextStatus,
         completedAt: new Date(),
         note: note || timeline.note,
-        rescuedCount: Number.isFinite(rescuedCount) ? rescuedCount : timeline.rescuedCount || 0,
+        rescuedCount: Number.isFinite(derivedRescuedCount) ? derivedRescuedCount : timeline.rescuedCount || 0,
       },
     );
 
     if (!transitioned) {
-      const err = new Error("Timeline has already been updated");
+      const err = new Error(
+        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
+      );
       err.statusCode = 409;
+      err.errorCode = "TIMELINE_CONFLICT";
       throw err;
     }
 
-    const syncResult = await this.syncAllForTimeline(transitioned);
+    const fulfilledMissionRequests = [];
+    for (const item of completions) {
+      const missionRequest = await missionRequestRepository.findById(item.missionRequestId);
+      if (!missionRequest) {
+        const err = new Error(
+          `Không tìm thấy mission request với ID: ${item.missionRequestId}`,
+        );
+        err.statusCode = 404;
+        err.errorCode = "MISSION_REQUEST_NOT_FOUND";
+        throw err;
+      }
 
-    if (nextStatus === TIMELINE_STATUS.COMPLETED || syncResult.requestStatus === REQUEST_STATUS.FULFILLED) {
-      this.emitMissionCompleted(transitioned);
+      if (extractId(missionRequest.missionId) !== extractId(transitioned.missionId)) {
+        const err = new Error("Mission request không thuộc mission của timeline này");
+        err.statusCode = 400;
+        err.errorCode = "MISSION_REQUEST_MISMATCH";
+        throw err;
+      }
+
+      const updatedMissionRequest = await missionRequestRepository.incrementRescued(
+        item.missionRequestId,
+        item.rescuedCount,
+        extractId(transitioned._id),
+        extractId(transitioned.teamId),
+      );
+
+      if (updatedMissionRequest?.status === "FULFILLED") {
+        fulfilledMissionRequests.push(updatedMissionRequest);
+      }
+    }
+
+    await this.syncAllForTimeline(transitioned);
+    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
+
+    if (nextStatus === TIMELINE_STATUS.COMPLETED) {
+      await this.emitMissionCompletedForMission(
+        transitioned,
+        "completed via timeline",
+      );
+    }
+
+    for (const missionRequest of fulfilledMissionRequests) {
+      const requestId = extractId(missionRequest.requestId);
+      const citizenId = extractId(missionRequest.requestId?.userId);
+      if (!requestId || !citizenId) continue;
+      eventBus.emit("MISSION_COMPLETED", {
+        requestId,
+        missionId: extractId(transitioned.missionId),
+        citizenId,
+      });
     }
 
     return transitioned;
@@ -233,13 +293,17 @@ class TimelineService {
     );
 
     if (!transitioned) {
-      const err = new Error("Timeline has already been updated");
+      const err = new Error(
+        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
+      );
       err.statusCode = 409;
+      err.errorCode = "TIMELINE_CONFLICT";
       throw err;
     }
 
     await this.syncAllForTimeline(transitioned);
-    this.emitMissionFailed(transitioned, failureReason);
+    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
+    await this.emitMissionFailedForMission(transitioned, failureReason);
     return transitioned;
   }
 
@@ -262,13 +326,17 @@ class TimelineService {
     );
 
     if (!transitioned) {
-      const err = new Error("Timeline has already been updated");
+      const err = new Error(
+        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
+      );
       err.statusCode = 409;
+      err.errorCode = "TIMELINE_CONFLICT";
       throw err;
     }
 
-    this.emitMissionWithdrawn(transitioned);
+    await this.emitMissionWithdrawnForMission(transitioned);
     await this.syncAllForTimeline(transitioned);
+    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
     return transitioned;
   }
 
@@ -288,8 +356,11 @@ class TimelineService {
     );
 
     if (!transitioned) {
-      const err = new Error("Timeline has already been updated");
+      const err = new Error(
+        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
+      );
       err.statusCode = 409;
+      err.errorCode = "TIMELINE_CONFLICT";
       throw err;
     }
 
@@ -318,20 +389,23 @@ class TimelineService {
   }
 
   async syncAllForTimeline(timeline) {
-    const requestId = extractId(timeline.requestId);
     const missionId = extractId(timeline.missionId);
     const teamId = extractId(timeline.teamId);
 
-    const [requestStatus] = await Promise.all([
-      this.syncRequestStatus(requestId),
+    const syncTasks = [
       this.syncMissionStatus(missionId),
       this.syncTeamStatus(teamId),
-    ]);
+    ];
+    syncTasks.unshift(Promise.resolve(null));
+
+    const [requestStatus] = await Promise.all(syncTasks);
 
     return { requestStatus };
   }
 
   async syncRequestStatus(requestId) {
+    if (!requestId) return null;
+
     const request = await requestRepository.findRequestById(requestId);
     if (!request) return null;
 
@@ -343,41 +417,49 @@ class TimelineService {
       return request.status;
     }
 
-    const timelines = await timelineRepository.findByRequestId(requestId);
-    const active = timelines.filter((t) => ACTIVE_TIMELINE_STATUSES.includes(t.status));
-    let desiredStatus = request.status;
+    const missionRequests = await missionRequestRepository.findByRequestId(requestId);
+    const missionRequestStatuses = missionRequests.map((item) => item.status);
 
-    if (active.length > 0) {
-      desiredStatus = REQUEST_STATUS.IN_PROGRESS;
-    } else if (timelines.length > 0) {
-      const totalRescued = timelines.reduce(
-        (sum, t) => sum + (Number.isFinite(t.rescuedCount) ? t.rescuedCount : 0),
-        0,
-      );
-      const hasCompleted = timelines.some((t) => t.status === TIMELINE_STATUS.COMPLETED);
-      const hasExecution = timelines.some(
-        (t) =>
-          Boolean(t.startedAt) ||
-          Boolean(t.arrivedAt) ||
-          t.status === TIMELINE_STATUS.PARTIAL ||
-          t.status === TIMELINE_STATUS.FAILED ||
-          t.status === TIMELINE_STATUS.COMPLETED,
-      );
+    if (missionRequestStatuses.length > 0) {
+      let desiredFromMissionRequest = request.status;
 
-      if (hasCompleted || totalRescued >= (request.peopleCount || Number.MAX_SAFE_INTEGER)) {
-        desiredStatus = REQUEST_STATUS.FULFILLED;
-      } else if (hasExecution) {
-        desiredStatus = REQUEST_STATUS.PARTIALLY_FULFILLED;
+      const hasNonTerminal = missionRequestStatuses.some((status) =>
+        ["PENDING", "IN_PROGRESS", "PARTIAL"].includes(status),
+      );
+      if (hasNonTerminal) {
+        desiredFromMissionRequest = REQUEST_STATUS.IN_PROGRESS;
       } else {
-        desiredStatus = REQUEST_STATUS.VERIFIED;
+        const allDone = missionRequestStatuses.every((status) =>
+          ["FULFILLED", "CLOSED", "DROPPED"].includes(status),
+        );
+        if (allDone) {
+          desiredFromMissionRequest = REQUEST_STATUS.FULFILLED;
+        } else {
+          desiredFromMissionRequest = REQUEST_STATUS.VERIFIED;
+        }
       }
+
+      if (desiredFromMissionRequest !== request.status) {
+        await requestRepository.updateRequestStatus(requestId, desiredFromMissionRequest);
+      }
+
+      return desiredFromMissionRequest;
     }
 
-    if (desiredStatus !== request.status) {
-      await requestRepository.updateRequestStatus(requestId, desiredStatus);
-    }
+    return request.status;
+  }
 
-    return desiredStatus;
+  async syncRequestStatusesForMission(missionId) {
+    const missionRequests = await missionRequestRepository.findByMissionId(missionId);
+    const uniqueRequestIds = [
+      ...new Set(
+        missionRequests
+          .map((item) => extractId(item.requestId))
+          .filter(Boolean),
+      ),
+    ];
+
+    await Promise.all(uniqueRequestIds.map((requestId) => this.syncRequestStatus(requestId)));
   }
 
   async syncMissionStatus(missionId) {
@@ -390,10 +472,10 @@ class TimelineService {
 
     const timelines = await timelineRepository.findByMissionId(missionId);
     if (timelines.length === 0) {
-      if (mission.status !== "PLANNED") {
-        await missionRepository.update(missionId, { status: "PLANNED" });
+      if (mission.status !== "DRAFT") {
+        await missionRepository.update(missionId, { status: "DRAFT" });
       }
-      return "PLANNED";
+      return "DRAFT";
     }
 
     const hasExecuting = timelines.some((t) =>
@@ -414,16 +496,18 @@ class TimelineService {
       return "PLANNED";
     }
 
-    const requestIds = [
-      ...new Set(timelines.map((t) => extractId(t.requestId)).filter(Boolean)),
-    ];
-    const relatedRequests = await Promise.all(
-      requestIds.map((id) => requestRepository.findRequestById(id)),
-    );
+    const hasPlanned = timelines.some((t) => t.status === TIMELINE_STATUS.PLANNED);
+    if (hasPlanned) {
+      if (mission.status !== "DRAFT") {
+        await missionRepository.update(missionId, { status: "DRAFT" });
+      }
+      return "DRAFT";
+    }
 
-    const allFulfilled = relatedRequests
-      .filter(Boolean)
-      .every((r) => [REQUEST_STATUS.FULFILLED, REQUEST_STATUS.CLOSED].includes(r.status));
+    const missionRequests = await missionRequestRepository.findByMissionId(missionId);
+    const allFulfilled =
+      missionRequests.length > 0 &&
+      missionRequests.every((item) => ["FULFILLED", "CLOSED", "DROPPED"].includes(item.status));
 
     const desiredStatus = allFulfilled ? "COMPLETED" : "PARTIAL";
     if (mission.status !== desiredStatus) {
@@ -443,14 +527,18 @@ class TimelineService {
   async assertMissionCanExecute(missionId) {
     const mission = await missionRepository.findById(missionId);
     if (!mission) {
-      const err = new Error("Mission not found");
+      const err = new Error(`Không tìm thấy mission với ID: ${missionId}`);
       err.statusCode = 404;
+      err.errorCode = "MISSION_NOT_FOUND";
       throw err;
     }
 
     if (["ABORTED", "COMPLETED", "PAUSED"].includes(mission.status)) {
-      const err = new Error(`Mission is ${mission.status}. Timeline action is not allowed.`);
+      const err = new Error(
+        `Không thể thao tác timeline: mission đang ở trạng thái ${mission.status}`,
+      );
       err.statusCode = 400;
+      err.errorCode = "MISSION_UNAVAILABLE_FOR_EXECUTION";
       throw err;
     }
   }
@@ -460,14 +548,18 @@ class TimelineService {
   async assertMissionNotTerminated(missionId) {
     const mission = await missionRepository.findById(missionId);
     if (!mission) {
-      const err = new Error("Mission not found");
+      const err = new Error(`Không tìm thấy mission với ID: ${missionId}`);
       err.statusCode = 404;
+      err.errorCode = "MISSION_NOT_FOUND";
       throw err;
     }
 
     if (["ABORTED", "COMPLETED"].includes(mission.status)) {
-      const err = new Error(`Mission is ${mission.status}. Timeline action is not allowed.`);
+      const err = new Error(
+        `Không thể thao tác timeline: mission đã kết thúc với trạng thái ${mission.status}`,
+      );
       err.statusCode = 400;
+      err.errorCode = "MISSION_TERMINAL";
       throw err;
     }
   }
@@ -480,68 +572,110 @@ class TimelineService {
   async assertTeamActionAllowed(timeline, actorUserId) {
     const actorTeamId = await this.getUserTeamId(actorUserId);
     if (!actorTeamId) {
-      const err = new Error("Current user is not assigned to any team");
+      const err = new Error("Người dùng hiện tại chưa được gán vào đội cứu hộ nào");
       err.statusCode = 403;
+      err.errorCode = "USER_NO_TEAM_ASSIGNMENT";
       throw err;
     }
 
     const timelineTeamId = extractId(timeline.teamId);
     if (actorTeamId !== timelineTeamId) {
-      const err = new Error("You are not allowed to operate this timeline");
+      const err = new Error(
+        `Không có quyền thao tác timeline này. Đội của bạn: ${actorTeamId}, đội được gán: ${timelineTeamId}`,
+      );
       err.statusCode = 403;
+      err.errorCode = "UNAUTHORIZED_TEAM_ACCESS";
       throw err;
     }
   }
 
-  emitMissionAccepted(timeline) {
+  async emitMissionAcceptedForMission(timeline) {
+    const missionRequests = await missionRequestRepository.findByMissionId(
+      extractId(timeline.missionId),
+    );
+    const requestId = extractId(missionRequests[0]?.requestId) || null;
+
     eventBus.emit("MISSION_ACCEPTED", {
-      requestId: extractId(timeline.requestId),
+      requestId,
       missionId: extractId(timeline.missionId),
       teamName: timeline.teamId?.name || "Rescue Team",
     });
   }
 
-  emitMissionApproaching(timeline) {
-    const citizenId = extractId(timeline.requestId?.userId);
-    if (!citizenId) return;
+  async emitMissionApproachingForMission(timeline) {
+    const missionRequests = await missionRequestRepository.findByMissionId(
+      extractId(timeline.missionId),
+    );
 
-    eventBus.emit("MISSION_APPROACHING", {
-      requestId: extractId(timeline.requestId),
-      citizenId,
-      teamName: timeline.teamId?.name || "Rescue Team",
-    });
+    for (const missionRequest of missionRequests) {
+      const requestId = extractId(missionRequest.requestId);
+      const citizenId = extractId(missionRequest.requestId?.userId);
+      if (!requestId || !citizenId) continue;
+
+      eventBus.emit("MISSION_APPROACHING", {
+        requestId,
+        citizenId,
+        teamName: timeline.teamId?.name || "Rescue Team",
+      });
+    }
   }
 
-  emitMissionCompleted(timeline) {
-    const citizenId = extractId(timeline.requestId?.userId);
-    if (!citizenId) return;
+  async emitMissionFailedForMission(timeline, reason) {
+    const missionRequests = await missionRequestRepository.findByMissionId(
+      extractId(timeline.missionId),
+    );
 
-    eventBus.emit("MISSION_COMPLETED", {
-      requestId: extractId(timeline.requestId),
-      missionId: extractId(timeline.missionId),
-      citizenId,
-    });
+    for (const missionRequest of missionRequests) {
+      const requestId = extractId(missionRequest.requestId);
+      const citizenId = extractId(missionRequest.requestId?.userId);
+      if (!requestId || !citizenId) continue;
+
+      eventBus.emit("MISSION_FAILED", {
+        requestId,
+        missionId: extractId(timeline.missionId),
+        citizenId,
+        reason,
+      });
+    }
   }
 
-  emitMissionFailed(timeline, reason) {
-    const citizenId = extractId(timeline.requestId?.userId);
-    if (!citizenId) return;
+  async emitMissionWithdrawnForMission(timeline) {
+    const missionRequests = await missionRequestRepository.findByMissionId(
+      extractId(timeline.missionId),
+    );
+    const requestIds = [
+      ...new Set(
+        missionRequests
+          .map((item) => extractId(item.requestId))
+          .filter(Boolean),
+      ),
+    ];
 
-    eventBus.emit("MISSION_FAILED", {
-      requestId: extractId(timeline.requestId),
-      missionId: extractId(timeline.missionId),
-      citizenId,
-      reason,
-    });
-  }
-
-  emitMissionWithdrawn(timeline) {
     eventBus.emit("MISSION_WITHDRAWN", {
-      requestId: extractId(timeline.requestId),
+      requestIds,
       missionId: extractId(timeline.missionId),
       teamName: timeline.teamId?.name || "Rescue Team",
       withdrawalReason: timeline.withdrawalReason,
     });
+  }
+
+  async emitMissionCompletedForMission(timeline, completionNote) {
+    const missionRequests = await missionRequestRepository.findByMissionId(
+      extractId(timeline.missionId),
+    );
+
+    for (const missionRequest of missionRequests) {
+      const requestId = extractId(missionRequest.requestId);
+      const citizenId = extractId(missionRequest.requestId?.userId);
+      if (!requestId || !citizenId) continue;
+
+      eventBus.emit("MISSION_COMPLETED", {
+        requestId,
+        missionId: extractId(timeline.missionId),
+        citizenId,
+        completionNote,
+      });
+    }
   }
 }
 

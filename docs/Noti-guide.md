@@ -591,7 +591,7 @@ export type SocketEvent = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
 | :------------------- | :--------------------------------- | :------------------------------------------------ |
 | `REQUEST_VERIFIED`   | Request được xác minh              | ✅ Yêu cầu cứu hộ của bạn đã được xác nhận hợp lệ |
 | `REQUEST_REJECTED`   | Request bị từ chối                 | ❌ Yêu cầu cứu hộ của bạn đã bị từ chối           |
-| `MISSION_ASSIGNED`   | Team được phân công                | ✅ Đội cứu hộ "Alpha" đã được phân công            |
+| `MISSION_ASSIGNED`   | Mission được start và team đã được phân công vào mission | ✅ Đội cứu hộ "Alpha" đã được phân công vào nhiệm vụ |
 | `MISSION_APPROACHING`| Team đang trên đường               | 🚗 Đội cứu hộ "Alpha" đang trên đường đến         |
 | `MISSION_COMPLETED`  | Cứu hộ thành công                  | 🎉 Cứu hộ thành công!                             |
 | `MISSION_FAILED`     | Cứu hộ thất bại                   | ⚠️ Cứu hộ không thành công                        |
@@ -678,7 +678,7 @@ interface SocketNotificationPayload extends Notification {
   "role": "CITIZEN",
   "message": "✅ Đội cứu hộ \"Alpha\" đã được phân công đến hỗ trợ bạn",
   "requestId": "65f1a2b3c4d5e6f7a8b9c0d3",
-  "missionId": null,
+  "missionId": "65f1a2b3c4d5e6f7a8b9c0d4",
   "isRead": false,
   "createdAt": "2026-03-02T10:00:00.000Z",
   "updatedAt": "2026-03-02T10:00:00.000Z",

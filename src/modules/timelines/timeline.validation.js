@@ -4,12 +4,11 @@ import { TIMELINE_STATUS } from "./timeline.model.js";
 const objectId = Joi.string()
   .pattern(/^[0-9a-fA-F]{24}$/)
   .messages({
-    "string.pattern.base": "{{#label}} must be a valid ObjectId",
+    "string.pattern.base": "{{#label}} phải là ObjectId hợp lệ",
   });
 
 const listTimelinesSchema = Joi.object({
   missionId: objectId.label("missionId"),
-  requestId: objectId.label("requestId"),
   teamId: objectId.label("teamId"),
   status: Joi.string().valid(...Object.values(TIMELINE_STATUS)),
   page: Joi.number().integer().min(1).default(1),
@@ -22,6 +21,26 @@ const completeTimelineSchema = Joi.object({
     .required(),
   note: Joi.string().max(1000).allow("", null),
   rescuedCount: Joi.number().integer().min(0).optional(),
+  completions: Joi.array()
+    .items(
+      Joi.object({
+        missionRequestId: objectId.required().label("missionRequestId"),
+        rescuedCount: Joi.number().integer().min(0).required(),
+      }),
+    )
+    .min(1)
+    .required()
+    .custom((value, helpers) => {
+      const ids = value.map((item) => item.missionRequestId);
+      const unique = new Set(ids);
+      if (unique.size !== ids.length) {
+        return helpers.error("array.duplicates");
+      }
+      return value;
+    })
+    .messages({
+      "array.duplicates": "completions chứa missionRequestId bị trùng",
+    }),
 });
 
 const failTimelineSchema = Joi.object({

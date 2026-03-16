@@ -3,7 +3,9 @@ import missionController from "./mission.controller.js";
 import {
   createMissionSchema,
   updateMissionSchema,
-  assignTeamSchema,
+  addRequestsSchema,
+  addTeamsSchema,
+  startMissionSchema,
   queryMissionSchema,
 } from "./mission.validation.js";
 import { authenticate, authorize } from "../../middlewares/authMiddleware.js";
@@ -32,6 +34,11 @@ router.get(
   authorize(["Rescue Coordinator", "Admin"]),
   missionController.getMissionById,
 );
+router.get(
+  "/:id/requests",
+  authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
+  missionController.getMissionRequests,
+);
 router.patch(
   "/:id",
   authorize(["Rescue Coordinator", "Admin"]),
@@ -45,11 +52,23 @@ router.delete(
 );
 
 // Mission actions
-router.patch(
-  "/:id/assign",
+router.post(
+  "/:id/requests",
   authorize(["Rescue Coordinator", "Admin"]),
-  validate(assignTeamSchema),
-  missionController.assignTeam,
+  validate(addRequestsSchema),
+  missionController.addRequests,
+);
+router.post(
+  "/:id/teams",
+  authorize(["Rescue Coordinator", "Admin"]),
+  validate(addTeamsSchema),
+  missionController.addTeams,
+);
+router.patch(
+  "/:id/start",
+  authorize(["Rescue Coordinator", "Admin"]),
+  validate(startMissionSchema),
+  missionController.startMission,
 );
 router.patch(
   "/:id/pause",

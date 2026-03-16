@@ -153,57 +153,73 @@
 
 ## 🚀 Missions
 
-### Create Mission
+### Create Mission (DRAFT)
 
 - **Method:** `POST`
 - **Endpoint:** `/api/missions`
-- **Description:** Phân công nhiệm vụ cứu hộ
-- **Request:** `{ teamId, requestIds, vehicleId }`
-- **Response:** `{ missionId }`
+- **Description:** Coordinator tạo mission ở trạng thái `DRAFT` (chưa notify team)
+- **Request:** `{ type, name?, description?, priority?, startTime?, endTime? }`
+- **Response:** `{ message, data: Mission }`
 - **Auth:** ✅ Coordinator
 
-### Reassign Mission
+### Add Requests to Mission
+
+- **Method:** `POST`
+- **Endpoint:** `/api/missions/{id}/requests`
+- **Description:** Thêm request vào mission, tạo `MissionRequest` cho từng request
+- **Request:** `{ requestIds: string[] }`
+- **Response:** `{ message, data: MissionRequest[] }`
+- **Auth:** ✅ Coordinator
+
+### Assign Teams to Mission
+
+- **Method:** `POST`
+- **Endpoint:** `/api/missions/{id}/teams`
+- **Description:** Gán team vào mission, tạo `Timeline` ở trạng thái `PLANNED`
+- **Request:** `{ teamIds: string[] }`
+- **Response:** `{ message, data: Timeline[] }`
+- **Auth:** ✅ Coordinator
+
+### Start Mission
 
 - **Method:** `PATCH`
-- **Endpoint:** `/api/missions/{id}/reassign`
-- **Description:** Điều phối lại mission
-- **Request:** `{ teamId }`
-- **Response:** `{ success }`
+- **Endpoint:** `/api/missions/{id}/start`
+- **Description:** Bắt đầu mission: tất cả timeline `PLANNED -> ASSIGNED`, emit notify cho Team/Citizen
+- **Request:** `{}`
+- **Response:** `{ message, data: Mission }`
 - **Auth:** ✅ Coordinator
 
-### Get Assigned Missions
+### Mission Query & Control
 
 - **Method:** `GET`
-- **Endpoint:** `/api/missions/assigned`
-- **Description:** Rescue team xem mission được giao
-- **Response:** `Mission[]`
-- **Auth:** ✅ RescueTeam
-
-### Get Mission Detail
+- **Endpoint:** `/api/missions`
+- **Description:** List missions (filter theo status/type/code)
+- **Response:** `{ message, data: Mission[], meta? }`
+- **Auth:** ✅ Coordinator, RescueTeam
 
 - **Method:** `GET`
 - **Endpoint:** `/api/missions/{id}`
 - **Description:** Xem chi tiết mission
-- **Response:** `Mission`
-- **Auth:** ✅ RescueTeam, Coordinator
-
-### Update Mission Status
+- **Response:** `{ message, data: Mission }`
+- **Auth:** ✅ Coordinator, RescueTeam
 
 - **Method:** `PATCH`
-- **Endpoint:** `/api/missions/{id}/status`
-- **Description:** Cập nhật trạng thái mission
-- **Request:** `{ status }`
-- **Response:** `{ success }`
-- **Auth:** ✅ RescueTeam
+- **Endpoint:** `/api/missions/{id}/pause`
+- **Description:** Tạm dừng mission `IN_PROGRESS -> PAUSED`
+- **Response:** `{ message, data: Mission }`
+- **Auth:** ✅ Coordinator
 
-### Submit Mission Report
+- **Method:** `PATCH`
+- **Endpoint:** `/api/missions/{id}/resume`
+- **Description:** Tiếp tục mission `PAUSED -> IN_PROGRESS`
+- **Response:** `{ message, data: Mission }`
+- **Auth:** ✅ Coordinator
 
-- **Method:** `POST`
-- **Endpoint:** `/api/missions/{id}/report`
-- **Description:** Báo cáo kết quả cứu hộ
-- **Request:** `{ summary, obstacles }`
-- **Response:** `{ reportId }`
-- **Auth:** ✅ RescueTeam
+- **Method:** `PATCH`
+- **Endpoint:** `/api/missions/{id}/abort`
+- **Description:** Huỷ mission theo flow chuẩn
+- **Response:** `{ message, data: Mission }`
+- **Auth:** ✅ Coordinator
 
 ### Send Team Position
 

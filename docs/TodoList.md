@@ -24,15 +24,15 @@
 | :----------------------- | :------ | :------------------------------------------------------------------------------- |
 | **Authentication**       | ~90%    | Login, Register, JWT, Session. Refactored response format.                       |
 | **Request Management**   | ~98%    | Unified Flow 2.2, 12 endpoints. Bug fixes applied (peopleCount, rejectionReason).|
-| **Team Management**      | ~85%    | Full CRUD, member mgmt, stats aggregation, leader change, delete guards.         |
-| **Team Applications**    | ~90%    | Submit/Approve/Reject/Withdraw lifecycle. Auto role promotion. _(NEW)_           |
+| **Team Management**      | ~85%    | Full CRUD, member management, stats aggregation, leader change, delete guards.         |
+| **Team Applications**    | ~90%    | Submit/Approve/Reject/Withdraw lifecycle. Auto role promotion.           |
 | **Notification**         | ~85%    | WebSocket + REST API. Refactored response format.                                |
 | **Mission**              | ~85%    | Core CRUD & Lifecycle. PAUSED-block bug fixed in Timeline.                       |
 | **Timeline**             | ~90%    | Full core lifecycle API + status sync implemented (without GPS/Supply).          |
 | **Admin**                | ~30%    | List users (scoped) + Update user role. Refactored response format.              |
-| **Supply Catalog**       | ~75%    | CRUD + Excel import. Bug fixes applied (method/repository/schema naming). _(UPDATED)_ |
-| **Warehouse**            | ~65%    | CRUD implemented. Bug fixes applied (import/schema/role naming). _(UPDATED)_  |
-| **Vehicles**             | ~70%    | Full CRUD, assignment, maintenance, stats, Excel import. _(NEW)_                 |
+| **Supply Catalog**       | ~75%    | CRUD + Excel import. Bug fixes applied (method/repository/schema naming). |
+| **Warehouse**            | ~65%    | CRUD implemented. Bug fixes applied (import/schema/role naming). |
+| **Vehicles**             | ~70%    | Full CRUD, assignment, maintenance, stats, Excel import.                  |
 | **Inventory / Timeline Supply** | ~5% | Model cơ bản. TimelineSupply chưa implement.                             |
 | **Position Tracking**    | 0%      | GPS tracking chưa implement.                                                     |
 
@@ -62,7 +62,7 @@
 
 ### Implemented ✅
 
-- [x] Request model (`Request`) với GeoJSON location, 2dsphere index
+- [x] Request model (`Request`) với GeoJSON location, 2d sphere index
 - [x] Status enum Unified Flow 2.2: `SUBMITTED`, `VERIFIED`, `REJECTED`, `IN_PROGRESS`, `PARTIALLY_FULFILLED`, `FULFILLED`, `CLOSED`, `CANCELLED`
 - [x] State machine validation cho tất cả status transitions
 - [x] `requestSupplies` structured format `[{supplyId, requestedQty}]`
@@ -102,13 +102,15 @@
 
 ### Implemented ✅
 
-- [x] Mission model theo ERD (`PLANNED`, `IN_PROGRESS`, `PAUSED`, `PARTIAL`, `COMPLETED`, `ABORTED`)
+- [x] Mission model theo ERD (`DRAFT`, `PLANNED`, `IN_PROGRESS`, `PAUSED`, `PARTIAL`, `COMPLETED`, `ABORTED`)
 - [x] `POST /missions` - Create mission (Auto-code `MS-DDMMYY-SEQ`)
 - [x] `GET /missions` - List all missions (Filter by status, type, code)
 - [x] `GET /missions/{id}` - Get mission detail
 - [x] `PATCH /missions/{id}` - Update mission details (name, description, priority)
 - [x] `DELETE /missions/{id}` - Delete mission (Guard: No active timelines)
-- [x] `PATCH /missions/{id}/assign` - Assign team (create Timeline)
+- [x] `POST /missions/{id}/requests` - Add requests vào mission (create MissionRequest)
+- [x] `POST /missions/{id}/teams` - Assign teams (create Timeline `PLANNED`)
+- [x] `PATCH /missions/{id}/start` - Start mission (`PLANNED -> ASSIGNED`, emit notifications)
 - [x] `PATCH /missions/{id}/pause` - Pause mission
 - [x] `PATCH /missions/{id}/resume` - Resume mission
 - [x] `PATCH /missions/{id}/abort` - Abort mission
@@ -119,6 +121,21 @@
 
 - [ ] `GET /missions/{id}/supplies` - Get aggregated supplies
 - [ ] Mission report: tổng hợp các timeline và request thuộc mission.
+
+### MissionRequest Tracking
+
+#### Implemented ✅
+
+- [x] Entity `MissionRequest` làm bảng nối Mission-Request (tracking fulfillment theo mission)
+- [x] Lifecycle status: `PENDING`, `IN_PROGRESS`, `PARTIAL`, `FULFILLED`, `CLOSED`, `DROPPED`
+- [x] Snapshot fields: `requestPeopleSnapshot`, `requestSuppliesSnapshot`
+- [x] Aggregation fields: `rescuedCount`, `suppliesDelivered`
+
+#### Not Implemented ❌
+
+- [ ] `GET /missions/{id}/requests` - List MissionRequest theo mission
+- [ ] `GET /mission-requests/{id}` - Chi tiết fulfillment theo request
+- [ ] Manual close/drop APIs cho MissionRequest edge-cases
 
 ---
 
@@ -140,7 +157,7 @@
 - [x] Timeline → Request status sync logic
 - [x] Timeline → Mission status sync logic
 - [x] Team status auto-sync (`AVAILABLE`/`BUSY`) theo active timelines
-- [x] Mission assign flow tích hợp Timeline sync + notification events
+- [x] Mission start flow tích hợp Timeline sync + notification events
 
 ### Not Implemented ❌
 
@@ -243,7 +260,7 @@
 
 ---
 
-## 7. ?? Vehicles Module _(NEW)_
+## 7. 🚗 Vehicles Module
 
 > Quản lý phương tiện cứu hộ. Role: **Manager** only.
 
@@ -300,7 +317,7 @@
 
 ---
 
-## 9. ?? Position Tracking Module
+## 9. 📍 Position Tracking Module
 
 ### Not Implemented ❌
 
@@ -388,36 +405,26 @@
 
 ---
 
-## 13. 👨‍🚒 Rescue Team APIs
+## 13. 🎭 Role Coverage Matrix (Compact)
 
-### Not Implemented ❌
+> Mục này chỉ theo dõi gap theo **vai trò**. Endpoint chi tiết nằm ở các module owner để tránh trùng lặp.
 
-- [ ] `GET /rescueTeam/resources/supplies` - View assigned supplies
-- [ ] `GET /rescueTeam/resources/assets` - View equipment & vehicles
-- [ ] `GET /rescueTeam/missions` - Get assigned missions
-- [ ] `GET /rescueTeam/missions/{id}` - Mission detail
-- [ ] `PATCH /rescueTeam/missions/{id}/status` - Update mission status
-- [ ] `POST /rescueTeam/positions` - Send GPS position
-- [ ] `POST /rescueTeam/missions/{id}/report` - Submit report
-
----
-
-## 14. 👨‍💼 Coordinator APIs
-
-### Not Implemented ❌
-
-- [ ] `GET /coordinator/requests` - View all requests
-- [ ] `PATCH /coordinator/requests/{id}/status` - Update status với unified states
-- [ ] `POST /coordinator/requests/{id}/assign` - Assign to team
-- [ ] `POST /coordinator/missions` - Create mission
-- [ ] `GET /coordinator/missions` - List missions
-- [ ] `PATCH /coordinator/missions/{id}/reassign` - Reassign
-- [ ] `GET /coordinator/missions/{id}/positions` - Monitor positions
-- [ ] `POST /coordinator/missions/{id}/resources` - Allocate resources
+| Role | Capability | Owner Module | Status | Ghi chú |
+| :--- | :--------- | :----------- | :----- | :------ |
+| Citizen | Submit/view/cancel request | Section 2 - Request | ✅ Done | Đã có create + my + cancel |
+| Rescue Team | Execute timeline lifecycle | Section 4 - Timeline | ✅ Done | accept/arrive/complete/fail/withdraw |
+| Rescue Team | View assigned missions/resources | Section 4 + 6 | 🚧 Partial | Chưa có dedicated rescueTeam view APIs |
+| Rescue Team | Send GPS position | Section 9 - Position Tracking | ❌ Pending | Chưa có Position model + endpoint |
+| Rescue Coordinator | Verify/close/duplicate/location request | Section 2 - Request | ✅ Done | Unified states đã áp dụng |
+| Rescue Coordinator | Create/assign/reassign mission | Section 3 - Mission | 🚧 Partial | Reassign endpoint riêng còn thiếu |
+| Rescue Coordinator | Allocate mission resources | Section 6 - Supply/Inventory | ❌ Pending | Chưa có workflow allocate đầy đủ |
+| Manager | Manage vehicles | Section 7 + 12 | ✅ Done | CRUD + assign + maintenance + stats |
+| Manager | Manage supply/warehouse catalog | Section 6 | ✅ Done | CRUD + import |
+| Manager | Stock allocation/reporting | Section 6 + 12 | ❌ Pending | allocate/export/report chưa hoàn tất |
 
 ---
 
-## 15. 📚 Documentation & UI
+## 14. 📚 Documentation & UI
 
 ### Implemented ✅
 

@@ -13,6 +13,7 @@ import notificationRoute from "./modules/notifications/notification.routes.js";
 import teamRoute from "./modules/teams/team.routes.js";
 import teamApplicationRoute from "./modules/teamApplications/teamApplication.routes.js";
 import missionRoute from "./modules/missions/mission.routes.js";
+import missionRequestRoute from "./modules/missionRequests/missionRequest.routes.js";
 import timelineRoute from "./modules/timelines/timeline.routes.js";
 import userRoute from "./modules/users/user.routes.js";
 import "./modules/notifications/notify.listener.js"; // Initialize event listeners
@@ -99,6 +100,7 @@ app.get("/ping", (req, res) => {
 app.use("/api/auth", authRoute);
 app.use("/api/requests", requestRoute);
 app.use("/api/missions", missionRoute);
+app.use("/api/mission-requests", missionRequestRoute);
 app.use("/api/timelines", timelineRoute);
 app.use("/api/notifications", notificationRoute);
 app.use("/api/teams", teamRoute);

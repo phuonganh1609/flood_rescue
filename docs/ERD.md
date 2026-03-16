@@ -15,7 +15,8 @@ erDiagram
     User ||--o{ Notification : "receives"
     User ||--o{ Mission : "coordinates"
 
-    Request ||--o{ Timeline : "has"
+    Mission ||--o{ MissionRequest : "contains"
+    Request ||--o{ MissionRequest : "tracked by"
     Mission ||--o{ Timeline : "has"
     Team ||--o{ Timeline : "assigned to"
     Timeline ||--o{ Position : "tracks"
@@ -83,10 +84,28 @@ erDiagram
         DateTime updatedAt
     }
 
-    Timeline {
+    MissionRequest {
         ObjectId _id PK
         ObjectId missionId FK
         ObjectId requestId FK
+        String status
+        Number peopleNeeded
+        Number peopleRescued
+        Number peopleRemaining
+        Array requestSuppliesSnapshot
+        Array suppliesDelivered
+        Number fulfillmentPercent
+        Array handledByTeamIds
+        ObjectId lastUpdatedByTimelineId FK
+        DateTime closedAt
+        String note
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    Timeline {
+        ObjectId _id PK
+        ObjectId missionId FK
         ObjectId teamId FK
         String status
         GeoJSON route
@@ -263,39 +282,119 @@ Yêu cầu cứu hộ từ Citizen.
 
 Nhiệm vụ cứu hộ được tạo bởi Coordinator.
 
-| Field           | Type     | Description                                               |
-| --------------- | -------- | --------------------------------------------------------- |
-| `_id`           | ObjectId | Primary key                                               |
-| `name`          | String   | Tên mission (required)                                    |
-| `code`          | String   | Mã mission auto-generated (unique, `MS-DDMMYY-SEQ`)       |
-| `description`   | String   | Mô tả mission                                             |
-| `status`        | Enum     | PLANNED, IN_PROGRESS, PAUSED, PARTIAL, COMPLETED, ABORTED |
-| `priority`      | Enum     | Critical, High, Normal                                    |
-| `type`          | Enum     | RESCUE, RELIEF                                            |
-| `coordinatorId` | ObjectId | FK → User (coordinator tạo mission)                       |
+| Field           | Type        | Description                                                           |
+| --------------- | ----------- | --------------------------------------------------------------------- |
+| `_id`           | ObjectId    | Primary key                                                           |
+| `name`          | String      | Tên mission (required)                                                |
+| `code`          | String      | Mã mission auto-generated (unique, `MS-DDMMYY-SEQ`)                   |
+| `description`   | String      | Mô tả mission                                                         |
+| `status`        | Enum        | **DRAFT**, PLANNED, IN_PROGRESS, PAUSED, PARTIAL, COMPLETED, ABORTED  |
+| `priority`      | Enum        | Critical, High, Normal                                                |
+| `type`          | Enum        | RESCUE, RELIEF                                                        |
+| `coordinatorId` | ObjectId    | FK → User (coordinator tạo mission)                                   |
+
+**Mission Status Lifecycle (UI-driven flow):**
+
+| Status        | Ý nghĩa                                                                      |
+| :------------ | :--------------------------------------------------------------------------- |
+| `DRAFT`       | Coordinator đang lên kế hoạch: kéo request vào, ghép team; chưa thông báo   |
+| `PLANNED`     | Start Mission đã bấm; notifications gửi tới teams; chờ team accept đầu tiên  |
+| `IN_PROGRESS` | Mission đã start; ít nhất 1 timeline đang EN_ROUTE / ON_SITE                 |
+| `PAUSED`      | Tạm dừng                                                                     |
+| `PARTIAL`     | Hoàn thành một phần (cần thêm timeline)                                      |
+| `COMPLETED`   | Hoàn tất toàn bộ requests                                                    |
+| `ABORTED`     | Huỷ mission                                                                  |
+
+**Business Rules:**
+
+> [!NOTE]
+> **Multi-Request Mission:** Một Mission có thể phục vụ nhiều Requests. Khi coordinator kéo một Request vào mission, một `MissionRequest` (status=`PENDING`) được tạo để theo dõi fulfillment của request đó. Khi coordinator ghép một Team vào mission, một Timeline (status=`PLANNED`) được tạo để đại diện cho lần tham gia của team đó.
+
+> [!NOTE]
+> **Start Mission:** Khi coordinator bấm "Start", toàn bộ Timeline `PLANNED` của mission đó chuyển sang `ASSIGNED`, notification được gửi tới từng team, mission chuyển sang `PLANNED` (chờ team accept) → `IN_PROGRESS` (khi team đầu tiên accept).
+
+---
+
+#### MissionRequest
+
+Lớp trung gian theo dõi **fulfillment từng Request trong Mission**. Mỗi MissionRequest = 1 Mission × 1 Request, theo dõi cả people rescue lẫn supply delivery.
+
+| Field                     | Type       | Description                                                                   |
+| ------------------------- | ---------- | ----------------------------------------------------------------------------- |
+| `_id`                     | ObjectId   | Primary key                                                                   |
+| `missionId`               | ObjectId   | FK → Mission                                                                  |
+| `requestId`               | ObjectId   | FK → Request                                                                  |
+| `status`                  | Enum       | PENDING, IN_PROGRESS, PARTIAL, FULFILLED, CLOSED, DROPPED                     |
+| `priorityInMission`       | Number?    | Thứ tự ưu tiên trong mission (optional)                                       |
+| `locationSnapshot`        | GeoJSON?   | Snapshot vị trí request lúc thêm vào mission                                  |
+| `peopleNeeded`            | Number     | Số người cần cứu (copy từ Request.peopleCount lúc tạo)                        |
+| `peopleRescued`           | Number     | Số người đã cứu được (cộng dồn từ các Timeline trong cùng mission)            |
+| `peopleRemaining`         | Number     | `peopleNeeded − peopleRescued`                                                |
+| `requestSuppliesSnapshot` | Array      | `[{supplyId, requestedQty}]` – Snapshot supplies cần lúc tạo                  |
+| `suppliesDelivered`       | Array      | `[{supplyId, deliveredQty}]` – Tổng supplies đã giao (cộng dồn)              |
+| `suppliesRemaining`       | Array      | `[{supplyId, remainingQty}]` – Chênh lệch còn thiếu                          |
+| `fulfillmentPercent`      | Number     | 0–100 – Phần trăm hoàn thành tổng hợp                                        |
+| `handledByTeamIds`        | ObjectId[] | Các team đã đóng góp vào xử lý request này trong mission                     |
+| `lastUpdatedByTimelineId` | ObjectId?  | FK → Timeline – Timeline cập nhật gần nhất                                   |
+| `closedAt`                | DateTime?  | Thời điểm đóng (FULFILLED hoặc CLOSED)                                        |
+| `note`                    | String?    | Ghi chú                                                                       |
+| `createdAt`               | DateTime   |                                                                               |
+| `updatedAt`               | DateTime   |                                                                               |
+
+**MissionRequest Status Lifecycle:**
+
+| Status        | Ý nghĩa                                                                                   |
+| :------------ | :---------------------------------------------------------------------------------------- |
+| `PENDING`     | Request đã thêm vào mission, chưa có team nào accept                                       |
+| `IN_PROGRESS` | Có ít nhất 1 Timeline đang active (EN_ROUTE / ON_SITE) xử lý request này trong mission    |
+| `PARTIAL`     | Timeline completed với kết quả partial (còn người hoặc supplies chưa đủ)                  |
+| `FULFILLED`   | Toàn bộ people rescued và supplies delivered đầy đủ theo request                           |
+| `CLOSED`      | Coordinator đóng thủ công (kể cả khi chưa fulfilled 100%)                                 |
+| `DROPPED`     | Coordinator loại request khỏi mission (không xử lý nữa)                                   |
+
+**Business Rules:**
+
+> [!NOTE]
+> **Fulfillment Tracking:** `peopleRescued` và `suppliesDelivered` được cộng dồn mỗi khi một Timeline COMPLETED hoặc PARTIAL trong cùng mission. `fulfillmentPercent` được tính lại tự động sau mỗi cập nhật.
+
+> [!NOTE]
+> **Multi-Team per Request:** Nhiều Timeline (nhiều team) trong cùng mission có thể cùng đóng góp vào một MissionRequest. `handledByTeamIds` ghi nhận tất cả teams đã tham gia.
 
 ---
 
 #### Timeline
 
-Associative entity giữa Mission, Request và Team. Đại diện cho **một lần thực thi cứu hộ**.
+Đại diện cho **một lần team tham gia thực thi mission**. Mỗi Timeline = 1 Team × 1 Mission (không còn gắn trực tiếp với Request).
 
-| Field              | Type               | Description                                                                   |
-| ------------------ | ------------------ | ----------------------------------------------------------------------------- |
-| `_id`              | ObjectId           | Primary key                                                                   |
-| `missionId`        | ObjectId           | FK → Mission                                                                  |
-| `requestId`        | ObjectId           | FK → Request                                                                  |
-| `teamId`           | ObjectId           | FK → Team                                                                     |
-| `status`           | Enum               | ASSIGNED, EN_ROUTE, ON_SITE, COMPLETED, PARTIAL, FAILED, WITHDRAWN, CANCELLED |
-| `route`            | GeoJSON LineString | Đường đi tổng hợp của team                                                    |
-| `rescuedCount`     | Number             | Số người đã cứu được (default: 0)                                             |
-| `assignedAt`       | DateTime           | Thời điểm assign                                                              |
-| `startedAt`        | DateTime           | Thời điểm team accept (EN_ROUTE)                                              |
-| `arrivedAt`        | DateTime           | Thời điểm team đến nơi (ARRIVED)                                              |
-| `completedAt`      | DateTime           | Thời điểm hoàn thành/thất bại                                                 |
-| `failureReason`    | String?            | Lý do thất bại                                                                |
-| `withdrawalReason` | String?            | Lý do rút/từ chối                                                             |
-| `note`             | String?            | Ghi chú                                                                       |
+| Field              | Type               | Description                                                                            |
+| ------------------ | ------------------ | -------------------------------------------------------------------------------------- |
+| `_id`              | ObjectId           | Primary key                                                                            |
+| `missionId`        | ObjectId           | FK → Mission                                                                           |
+| `teamId`           | ObjectId           | FK → Team                                                                              |
+| `status`           | Enum               | **PLANNED**, ASSIGNED, EN_ROUTE, ON_SITE, COMPLETED, PARTIAL, FAILED, WITHDRAWN, CANCELLED |
+| `route`            | GeoJSON LineString | Đường đi tổng hợp của team                                                             |
+| `rescuedCount`     | Number             | Số người đã cứu được (default: 0)                                                      |
+| `assignedAt`       | DateTime           | Thời điểm mission start (PLANNED → ASSIGNED); null khi còn ở PLANNED                  |
+| `startedAt`        | DateTime           | Thời điểm team accept (ASSIGNED → EN_ROUTE)                                            |
+| `arrivedAt`        | DateTime           | Thời điểm team đến nơi (EN_ROUTE → ON_SITE)                                            |
+| `completedAt`      | DateTime           | Thời điểm hoàn thành/thất bại                                                          |
+| `failureReason`    | String?            | Lý do thất bại                                                                         |
+| `withdrawalReason` | String?            | Lý do rút/từ chối                                                                      |
+| `note`             | String?            | Ghi chú                                                                                |
+
+**Timeline Status Lifecycle:**
+
+| Status      | Ý nghĩa                                                                              |
+| :---------- | :----------------------------------------------------------------------------------- |
+| `PLANNED`   | Coordinator đã ghép team vào mission, mission chưa start; team **chưa được thông báo**  |
+| `ASSIGNED`  | Mission đã start; team được thông báo, chờ team accept                               |
+| `EN_ROUTE`  | Team accepted; đang di chuyển đến hiện trường                                        |
+| `ON_SITE`   | Team đã đến và đang xử lý                                                            |
+| `COMPLETED` | Hoàn thành toàn bộ                                                                   |
+| `PARTIAL`   | Hoàn thành một phần                                                                  |
+| `FAILED`    | Thất bại                                                                             |
+| `WITHDRAWN` | Team từ chối sau khi được thông báo                                                  |
+| `CANCELLED` | Coordinator huỷ trước khi team hành động                                             |
 
 ---
 
@@ -416,25 +515,27 @@ Thông báo hệ thống.
 
 ## Relationships Summary
 
-| Relationship              | Cardinality | Description                               |
-| ------------------------- | ----------- | ----------------------------------------- |
-| User → Team               | N:1         | User thuộc 0-1 team                       |
-| Team → User (leader)      | 1:1         | Team có 1 leader                          |
-| User → Request            | 1:N         | Citizen tạo nhiều requests                |
-| Request → Timeline        | 1:N         | Request có nhiều timelines (reassignment) |
-| Mission → Timeline        | 1:N         | Mission có nhiều timelines                |
-| Team → Timeline           | 1:N         | Team được assign nhiều timelines          |
-| Timeline → Position       | 1:N         | Timeline có nhiều positions               |
-| Timeline → TimelineSupply | 1:N         | Timeline có nhiều supplies được track     |
-| Supply → TimelineSupply   | 1:N         | Supply được track trong nhiều timelines   |
-| Supply → InventoryItem    | 1:N         | Supply có inventory tại nhiều warehouses  |
-| Warehouse → InventoryItem | 1:N         | Warehouse chứa nhiều inventory items      |
-| User → Session            | 1:N         | User có nhiều sessions                    |
-| User → Notification       | 1:N         | User nhận nhiều notifications             |
+| Relationship              | Cardinality | Description                                                              |
+| ------------------------- | ----------- | ------------------------------------------------------------------------ |
+| User → Team               | N:1         | User thuộc 0-1 team                                                      |
+| Team → User (leader)      | 1:1         | Team có 1 leader                                                         |
+| User → Request            | 1:N         | Citizen tạo nhiều requests                                               |
+| Mission → MissionRequest  | 1:N         | 1 Mission gom nhiều Requests thông qua MissionRequest                    |
+| Request → MissionRequest  | 1:N         | 1 Request được theo dõi trong nhiều Missions qua MissionRequest          |
+| Mission → Timeline        | 1:N         | Mission có nhiều timelines (1 per team participation)                    |
+| Team → Timeline           | 1:N         | Team được assign nhiều timelines                                         |
+| Timeline → Position       | 1:N         | Timeline có nhiều positions                                              |
+| Timeline → TimelineSupply | 1:N         | Timeline có nhiều supplies được track                                    |
+| Supply → TimelineSupply   | 1:N         | Supply được track trong nhiều timelines                                  |
+| Supply → InventoryItem    | 1:N         | Supply có inventory tại nhiều warehouses                                 |
+| Warehouse → InventoryItem | 1:N         | Warehouse chứa nhiều inventory items                                     |
+| User → Session            | 1:N         | User có nhiều sessions                                                   |
+| User → Notification       | 1:N         | User nhận nhiều notifications                                            |
 
 ---
 
 ## References
 
-- [Rescue_flow_2.1.md](./Rescue_flow_2.1.md) - Flow diagrams
-- [rules.md](./rules.md) - Derive rules for statuses
+- [Rescue_flow_2.2.md](./flows/Rescue_flow_2.2.md) - Flow diagrams (cứu hộ)
+- [Relief_flow_1.1.md](./flows/Relief_flow_1.1.md) - Flow diagrams (cứu trợ)
+- [rules.md](./flows/rules.md) - Derive rules for statuses
