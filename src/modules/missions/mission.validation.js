@@ -29,6 +29,16 @@ const addTeamsSchema = Joi.object({
   note: Joi.string().max(500).allow("", null),
 });
 
+const removeRequestParamsSchema = Joi.object({
+  id: objectId.required().label("missionId"),
+  requestId: objectId.required().label("requestId"),
+});
+
+const removeTeamParamsSchema = Joi.object({
+  id: objectId.required().label("missionId"),
+  teamId: objectId.required().label("teamId"),
+});
+
 const startMissionSchema = Joi.object({
   note: Joi.string().max(500).allow("", null),
 });
@@ -49,11 +59,20 @@ const queryMissionSchema = Joi.object({
   code: Joi.string().trim(),
 });
 
+const getMissionRequestsQuerySchema = Joi.object({
+  teamId: objectId.optional().label("teamId"),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
+});
+
 export {
   createMissionSchema,
   updateMissionSchema,
   addRequestsSchema,
   addTeamsSchema,
+  removeRequestParamsSchema,
+  removeTeamParamsSchema,
   startMissionSchema,
   queryMissionSchema,
+  getMissionRequestsQuerySchema,
 };

@@ -3,6 +3,7 @@ import missionRequestController from "./missionRequest.controller.js";
 import {
   missionRequestActionSchema,
   missionRequestIdParamSchema,
+  progressUpdateSchema,
 } from "./missionRequest.validation.js";
 import { authenticate, authorize } from "../../middlewares/authMiddleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
@@ -10,6 +11,12 @@ import { validate } from "../../middlewares/validate.middleware.js";
 const router = express.Router();
 
 router.use(authenticate);
+
+router.get(
+  "/",
+  authorize(["Rescue Coordinator", "Admin"]),
+  missionRequestController.getAll,
+);
 
 router.get(
   "/:id",
@@ -32,6 +39,14 @@ router.patch(
   validate(missionRequestIdParamSchema, "params"),
   validate(missionRequestActionSchema),
   missionRequestController.dropById,
+);
+
+router.post(
+  "/:id/progress",
+  authorize(["Rescue Team"]),
+  validate(missionRequestIdParamSchema, "params"),
+  validate(progressUpdateSchema),
+  missionRequestController.updateProgress,
 );
 
 export default router;

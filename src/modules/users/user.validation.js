@@ -23,6 +23,7 @@ export const listUsersQuerySchema = Joi.object({
       "any.only": `Role must be one of: ${VALID_ROLES.join(", ")}`,
     }),
   isActive: Joi.boolean(),
+  noTeam: Joi.boolean(),
   search: Joi.string().trim().min(1).max(100).messages({
     "string.min": "Search keyword must be at least 1 character",
     "string.max": "Search keyword must not exceed 100 characters",

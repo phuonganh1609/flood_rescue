@@ -12,6 +12,31 @@ class MissionRequestController {
     };
   }
 
+  async getAll(req, res) {
+    try {
+      // Support split by comma if pass from query string: ?status=PENDING,IN_PROGRESS
+      const { status, limit, page, sort } = req.query;
+      let statusFilter = status;
+      if (typeof status === "string" && status.includes(",")) {
+        statusFilter = status.split(",");
+      }
+
+      const data = await missionRequestService.getAll({
+        status: statusFilter,
+        limit,
+        page,
+        sort,
+      });
+
+      return sendSuccess(res, {
+        data,
+        message: "Mission requests retrieved successfully",
+      });
+    } catch (error) {
+      return sendError(res, MissionRequestController.toErrorPayload(error));
+    }
+  }
+
   async getById(req, res) {
     try {
       const data = await missionRequestService.getById(req.params.id);
@@ -48,6 +73,24 @@ class MissionRequestController {
       return sendSuccess(res, {
         data,
         message: "Mission request dropped successfully",
+      });
+    } catch (error) {
+      return sendError(res, MissionRequestController.toErrorPayload(error));
+    }
+  }
+
+  async updateProgress(req, res) {
+    try {
+      const { id } = req.params;
+      const { peopleRescuedIncrement, suppliesDelivered } = req.body;
+      const data = await missionRequestService.updateProgress(
+        id,
+        { peopleRescuedIncrement, suppliesDelivered },
+        req.user,
+      );
+      return sendSuccess(res, {
+        data,
+        message: "Mission request progress updated successfully",
       });
     } catch (error) {
       return sendError(res, MissionRequestController.toErrorPayload(error));

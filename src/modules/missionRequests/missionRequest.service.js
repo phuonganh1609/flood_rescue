@@ -5,10 +5,117 @@ import { requestRepository } from "../requests/request.repository.js";
 import { REQUEST_STATUS } from "../requests/request.model.js";
 import {
   EXECUTING_TIMELINE_STATUSES,
+  TERMINAL_TIMELINE_STATUSES,
   timelineRepository,
 } from "../timelines/timeline.repository.js";
+import { teamRequestRepository } from "../teamRequests/teamRequest.repository.js";
 
 class MissionRequestService {
+  deriveRequestStatus(missionRequests = []) {
+    if (missionRequests.length === 0) return null;
+
+    const statuses = missionRequests.map((item) => item.status);
+    const hasNonTerminal = statuses.some((status) =>
+      [
+        MISSION_REQUEST_STATUS.PENDING,
+        MISSION_REQUEST_STATUS.IN_PROGRESS,
+        MISSION_REQUEST_STATUS.PARTIAL,
+      ].includes(status),
+    );
+
+    if (hasNonTerminal) {
+      return REQUEST_STATUS.IN_PROGRESS;
+    }
+
+    const allFulfilled = missionRequests.every(
+      (item) => item.status === MISSION_REQUEST_STATUS.FULFILLED,
+    );
+
+    return allFulfilled
+      ? REQUEST_STATUS.FULFILLED
+      : REQUEST_STATUS.PARTIALLY_FULFILLED;
+  }
+
+  deriveMissionStatus(timelines = [], missionRequests = []) {
+    if (timelines.length === 0) {
+      return "DRAFT";
+    }
+
+    const hasExecuting = timelines.some((timeline) =>
+      EXECUTING_TIMELINE_STATUSES.includes(timeline.status),
+    );
+    if (hasExecuting) return "IN_PROGRESS";
+
+    const hasAssigned = timelines.some((timeline) => timeline.status === "ASSIGNED");
+    if (hasAssigned) return "PLANNED";
+
+    const hasPlanned = timelines.some((timeline) => timeline.status === "PLANNED");
+    if (hasPlanned) return "DRAFT";
+
+    const allTimelinesTerminal =
+      timelines.length > 0 &&
+      timelines.every((timeline) => TERMINAL_TIMELINE_STATUSES.includes(timeline.status));
+    if (!allTimelinesTerminal) {
+      return "PARTIAL";
+    }
+
+    const allMissionRequestsTerminal =
+      missionRequests.length > 0 &&
+      missionRequests.every((item) =>
+        [
+          MISSION_REQUEST_STATUS.FULFILLED,
+          MISSION_REQUEST_STATUS.CLOSED,
+          MISSION_REQUEST_STATUS.DROPPED,
+        ].includes(item.status),
+      );
+
+    if (!allMissionRequestsTerminal) {
+      return "PARTIAL";
+    }
+
+    const hasUnmetTarget = missionRequests.some(
+      (item) => (Number(item.fulfillmentPercent) || 0) < 100,
+    );
+
+    return hasUnmetTarget ? "PARTIAL" : "COMPLETED";
+  }
+
+  validateSupplyDeliveryBounds(missionRequest, contributionSummary, incomingSupplies = []) {
+    const requestedSupplies = missionRequest.requestSuppliesSnapshot || [];
+    if (requestedSupplies.length === 0 || incomingSupplies.length === 0) return;
+
+    const requestedMap = new Map();
+    for (const item of requestedSupplies) {
+      const name = item.name?.trim?.();
+      if (!name) continue;
+      requestedMap.set(name, (requestedMap.get(name) || 0) + (Number(item.requestedQty) || 0));
+    }
+
+    const deliveredMap = new Map();
+    for (const item of contributionSummary.totalSuppliesDelivered || []) {
+      const name = item.name?.trim?.();
+      if (!name) continue;
+      deliveredMap.set(name, (deliveredMap.get(name) || 0) + (Number(item.deliveredQty) || 0));
+    }
+
+    for (const supply of incomingSupplies) {
+      const name = supply.name?.trim?.();
+      if (!name || !requestedMap.has(name)) continue;
+
+      const requestedQty = requestedMap.get(name);
+      const deliveredQty = deliveredMap.get(name) || 0;
+
+      if (deliveredQty > requestedQty) {
+        const error = new Error(
+          `Supply ${name} vượt requestedQty tối đa ${requestedQty}.`,
+        );
+        error.statusCode = 422;
+        error.errorCode = "SUPPLY_OVER_DELIVERY";
+        throw error;
+      }
+    }
+  }
+
   async getById(id) {
     const missionRequest = await missionRequestRepository.findById(id);
     if (!missionRequest) {
@@ -18,6 +125,11 @@ class MissionRequestService {
       throw error;
     }
     return missionRequest;
+  }
+
+  async getAll(query = {}) {
+    const { status, limit, page, sort } = query;
+    return await missionRequestRepository.findAll({ status, limit, page, sort });
   }
 
   ensureCanTransition(currentStatus, nextStatus) {
@@ -64,17 +176,7 @@ class MissionRequestService {
     const missionRequests = await missionRequestRepository.findByRequestId(requestId);
     if (missionRequests.length === 0) return request.status;
 
-    const statuses = missionRequests.map((item) => item.status);
-    const hasNonTerminal = statuses.some((status) =>
-      [
-        MISSION_REQUEST_STATUS.PENDING,
-        MISSION_REQUEST_STATUS.IN_PROGRESS,
-        MISSION_REQUEST_STATUS.PARTIAL,
-      ].includes(status),
-    );
-
-    const desiredStatus =
-      hasNonTerminal ? REQUEST_STATUS.IN_PROGRESS : REQUEST_STATUS.FULFILLED;
+    const desiredStatus = this.deriveRequestStatus(missionRequests) || request.status;
 
     if (desiredStatus !== request.status) {
       await requestRepository.updateRequestStatus(requestId, desiredStatus);
@@ -99,44 +201,8 @@ class MissionRequestService {
       return "DRAFT";
     }
 
-    const hasExecuting = timelines.some((timeline) =>
-      EXECUTING_TIMELINE_STATUSES.includes(timeline.status),
-    );
-    if (hasExecuting) {
-      if (mission.status !== "IN_PROGRESS") {
-        await missionRepository.update(missionId, { status: "IN_PROGRESS" });
-      }
-      return "IN_PROGRESS";
-    }
-
-    const hasAssigned = timelines.some((timeline) => timeline.status === "ASSIGNED");
-    if (hasAssigned) {
-      if (mission.status !== "PLANNED") {
-        await missionRepository.update(missionId, { status: "PLANNED" });
-      }
-      return "PLANNED";
-    }
-
-    const hasPlanned = timelines.some((timeline) => timeline.status === "PLANNED");
-    if (hasPlanned) {
-      if (mission.status !== "DRAFT") {
-        await missionRepository.update(missionId, { status: "DRAFT" });
-      }
-      return "DRAFT";
-    }
-
     const missionRequests = await missionRequestRepository.findByMissionId(missionId);
-    const allTerminal =
-      missionRequests.length > 0 &&
-      missionRequests.every((item) =>
-        [
-          MISSION_REQUEST_STATUS.FULFILLED,
-          MISSION_REQUEST_STATUS.CLOSED,
-          MISSION_REQUEST_STATUS.DROPPED,
-        ].includes(item.status),
-      );
-
-    const desiredStatus = allTerminal ? "COMPLETED" : "PARTIAL";
+    const desiredStatus = this.deriveMissionStatus(timelines, missionRequests);
     if (mission.status !== desiredStatus) {
       await missionRepository.update(missionId, { status: desiredStatus });
     }
@@ -178,6 +244,85 @@ class MissionRequestService {
       MISSION_REQUEST_STATUS.DROPPED,
       note,
     );
+    await this.syncAfterMissionRequestUpdate(updated);
+    return updated;
+  }
+
+  async updateProgress(id, { peopleRescuedIncrement = 0, suppliesDelivered = [] } = {}, user) {
+    const missionRequest = await this.getById(id);
+
+    // Chỉ cho phép khi chưa kết thúc
+    this.ensureCanTransition(missionRequest.status, MISSION_REQUEST_STATUS.IN_PROGRESS);
+
+    // Lấy missionId và kiểm tra user.teamId có Timeline trong mission này
+    const missionId =
+      missionRequest.missionId?._id?.toString?.() ||
+      missionRequest.missionId?.toString?.();
+
+    let teamId = null;
+    if (user?.teamId) {
+      teamId = user.teamId.toString();
+    } else if (user?.id) {
+      const UserModel = (await import("../users/user.model.js")).default;
+      const userDoc = await UserModel.findById(user.id).select("teamId");
+      teamId = userDoc?.teamId?.toString() || null;
+    }
+
+    if (!teamId) {
+      const error = new Error("Bạn chưa thuộc team nào.");
+      error.statusCode = 403;
+      error.errorCode = "USER_NOT_IN_TEAM";
+      throw error;
+    }
+
+    // Kiểm tra team có Timeline trong mission này không
+    const TimelineModel = (await import("../timelines/timeline.model.js")).default;
+    const hasTimeline = await TimelineModel.exists({ missionId, teamId });
+    if (!hasTimeline) {
+      const error = new Error("Team của bạn không được assign vào mission này.");
+      error.statusCode = 403;
+      error.errorCode = "TEAM_NOT_ASSIGNED_TO_MISSION";
+      throw error;
+    }
+
+    const normalizedSupplies = (suppliesDelivered || []).map((item) => ({
+      name: item.name?.trim?.(),
+      deliveredQty: Number(item.deliveredQty) || 0,
+    })).filter((item) => item.name && item.deliveredQty > 0);
+
+    if ((Number(peopleRescuedIncrement) || 0) <= 0 && normalizedSupplies.length === 0) {
+      const error = new Error("Payload progress không hợp lệ.");
+      error.statusCode = 400;
+      error.errorCode = "INVALID_PROGRESS_PAYLOAD";
+      throw error;
+    }
+
+    const contributionSummaryBefore = await teamRequestRepository.getContributionSummaryByMissionRequestId(id);
+    const simulatedSummary = {
+      ...contributionSummaryBefore,
+      totalRescued: (Number(contributionSummaryBefore.totalRescued) || 0) + (Number(peopleRescuedIncrement) || 0),
+      totalSuppliesDelivered: [
+        ...(contributionSummaryBefore.totalSuppliesDelivered || []),
+        ...normalizedSupplies,
+      ],
+    };
+    this.validateSupplyDeliveryBounds(missionRequest, simulatedSummary, normalizedSupplies);
+
+    await teamRequestRepository.upsertContribution({
+      missionId,
+      missionRequestId: id,
+      teamId,
+      peopleRescuedIncrement,
+      suppliesDelivered: normalizedSupplies,
+      updatedBy: user?.id || null,
+    });
+
+    const contributionSummary = await teamRequestRepository.getContributionSummaryByMissionRequestId(id);
+    const updated = await missionRequestRepository.syncAggregateFromContributionSummary(
+      id,
+      contributionSummary,
+    );
+
     await this.syncAfterMissionRequestUpdate(updated);
     return updated;
   }

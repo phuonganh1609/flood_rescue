@@ -50,7 +50,7 @@ class MissionController {
 
   async getMissionById(req, res) {
     try {
-      const mission = await missionService.getMissionById(req.params.id);
+      const mission = await missionService.getMissionById(req.params.id, req.user);
       return sendSuccess(res, {
         data: mission,
         message: "Mission details retrieved successfully",
@@ -62,10 +62,20 @@ class MissionController {
 
   async getMissionRequests(req, res) {
     try {
-      const data = await missionService.getMissionRequests(req.params.id);
+      const result = await missionService.getMissionRequests(
+        req.params.id,
+        req.query,
+        req.user,
+      );
       return sendSuccess(res, {
-        data,
+        data: result.data,
         message: "Mission requests retrieved successfully",
+        meta: {
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          totalPages: result.totalPages,
+        },
       });
     } catch (error) {
       return sendError(res, MissionController.toErrorPayload(error));
@@ -126,6 +136,38 @@ class MissionController {
       return sendSuccess(res, {
         data: timelines,
         message: "Teams assigned to mission successfully",
+        statusCode: 200,
+      });
+    } catch (error) {
+      return sendError(res, MissionController.toErrorPayload(error));
+    }
+  }
+
+  async removeRequest(req, res) {
+    try {
+      const data = await missionService.removeRequestFromMission(
+        req.params.id,
+        req.params.requestId,
+      );
+      return sendSuccess(res, {
+        data,
+        message: "Request removed from mission successfully",
+        statusCode: 200,
+      });
+    } catch (error) {
+      return sendError(res, MissionController.toErrorPayload(error));
+    }
+  }
+
+  async removeTeam(req, res) {
+    try {
+      const data = await missionService.removeTeamFromMission(
+        req.params.id,
+        req.params.teamId,
+      );
+      return sendSuccess(res, {
+        data,
+        message: "Team removed from mission successfully",
         statusCode: 200,
       });
     } catch (error) {
