@@ -186,6 +186,53 @@ class MissionRequestService {
     await this.syncAfterMissionRequestUpdate(updated);
     return updated;
   }
+
+  async updateProgress(id, { peopleRescuedIncrement = 0, suppliesDelivered = [] } = {}, user) {
+    const missionRequest = await this.getById(id);
+
+    // Chỉ cho phép khi chưa kết thúc
+    this.ensureCanTransition(missionRequest.status, MISSION_REQUEST_STATUS.IN_PROGRESS);
+
+    // Lấy missionId và kiểm tra user.teamId có Timeline trong mission này
+    const missionId =
+      missionRequest.missionId?._id?.toString?.() ||
+      missionRequest.missionId?.toString?.();
+
+    let teamId = null;
+    if (user?.teamId) {
+      teamId = user.teamId.toString();
+    } else if (user?.id) {
+      const UserModel = (await import("../users/user.model.js")).default;
+      const userDoc = await UserModel.findById(user.id).select("teamId");
+      teamId = userDoc?.teamId?.toString() || null;
+    }
+
+    if (!teamId) {
+      const error = new Error("Bạn chưa thuộc team nào.");
+      error.statusCode = 403;
+      error.errorCode = "USER_NOT_IN_TEAM";
+      throw error;
+    }
+
+    // Kiểm tra team có Timeline trong mission này không
+    const TimelineModel = (await import("../timelines/timeline.model.js")).default;
+    const hasTimeline = await TimelineModel.exists({ missionId, teamId });
+    if (!hasTimeline) {
+      const error = new Error("Team của bạn không được assign vào mission này.");
+      error.statusCode = 403;
+      error.errorCode = "TEAM_NOT_ASSIGNED_TO_MISSION";
+      throw error;
+    }
+
+    const updated = await missionRequestRepository.updateProgress(id, {
+      peopleRescuedIncrement,
+      suppliesDelivered,
+      teamId,
+    });
+
+    await this.syncAfterMissionRequestUpdate(updated);
+    return updated;
+  }
 }
 
 export default new MissionRequestService();

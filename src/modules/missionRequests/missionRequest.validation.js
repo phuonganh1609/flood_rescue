@@ -14,4 +14,16 @@ const missionRequestActionSchema = Joi.object({
   note: Joi.string().max(500).allow("", null),
 });
 
-export { missionRequestIdParamSchema, missionRequestActionSchema };
+const progressUpdateSchema = Joi.object({
+  peopleRescuedIncrement: Joi.number().integer().min(1).optional(),
+  suppliesDelivered: Joi.array()
+    .items(
+      Joi.object({
+        name: Joi.string().trim().required(),
+        deliveredQty: Joi.number().min(0.01).required(),
+      }),
+    )
+    .optional(),
+}).or("peopleRescuedIncrement", "suppliesDelivered");
+
+export { missionRequestIdParamSchema, missionRequestActionSchema, progressUpdateSchema };

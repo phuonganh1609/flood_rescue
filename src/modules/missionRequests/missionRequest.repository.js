@@ -145,6 +145,93 @@ class MissionRequestRepository {
   async updateFulfillment(id, fields) {
     return await MissionRequest.findByIdAndUpdate(id, fields, { new: true });
   }
+
+  async findByMissionIdPaginated(missionId, { teamId = null, page = 1, limit = 10 } = {}) {
+    const filter = { missionId };
+    if (teamId) {
+      filter.handledByTeamIds = teamId;
+    }
+
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      MissionRequest.find(filter)
+        .populate({
+          path: "requestId",
+          select: "userName phoneNumber location peopleCount priority requestSupplies media",
+        })
+        .sort({ createdAt: 1 })
+        .skip(skip)
+        .limit(limit),
+      MissionRequest.countDocuments(filter),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async updateProgress(id, { peopleRescuedIncrement = 0, suppliesDelivered = [], teamId = null, timelineId = null } = {}) {
+    const missionRequest = await MissionRequest.findById(id);
+    if (!missionRequest) return null;
+
+    // Update people rescued
+    if (peopleRescuedIncrement > 0) {
+      missionRequest.peopleRescued += peopleRescuedIncrement;
+      missionRequest.peopleRemaining = Math.max(
+        0,
+        (missionRequest.peopleNeeded || 0) - missionRequest.peopleRescued,
+      );
+      missionRequest.fulfillmentPercent =
+        missionRequest.peopleNeeded > 0
+          ? Math.min(100, Math.round((missionRequest.peopleRescued / missionRequest.peopleNeeded) * 100))
+          : 0;
+    }
+
+    // Merge supplies delivered (additive, không overwrite)
+    if (suppliesDelivered.length > 0) {
+      for (const incoming of suppliesDelivered) {
+        const existing = missionRequest.suppliesDelivered.find(
+          (s) => s.name === incoming.name,
+        );
+        if (existing) {
+          existing.deliveredQty = (existing.deliveredQty || 0) + incoming.deliveredQty;
+        } else {
+          missionRequest.suppliesDelivered.push(incoming);
+        }
+      }
+    }
+
+    // Auto-transition status based on fulfillmentPercent
+    const notTerminal = ![
+      MISSION_REQUEST_STATUS.FULFILLED,
+      MISSION_REQUEST_STATUS.CLOSED,
+      MISSION_REQUEST_STATUS.DROPPED,
+    ].includes(missionRequest.status);
+
+    if (notTerminal) {
+      if (
+        missionRequest.peopleNeeded > 0 &&
+        missionRequest.peopleRescued >= missionRequest.peopleNeeded
+      ) {
+        missionRequest.status = MISSION_REQUEST_STATUS.FULFILLED;
+        missionRequest.closedAt = new Date();
+      } else if (missionRequest.peopleRescued > 0 || missionRequest.suppliesDelivered.length > 0) {
+        missionRequest.status = MISSION_REQUEST_STATUS.PARTIAL;
+      }
+    }
+
+    if (timelineId) missionRequest.lastUpdatedByTimelineId = timelineId;
+    if (teamId && !missionRequest.handledByTeamIds.some((tid) => tid.toString() === teamId.toString())) {
+      missionRequest.handledByTeamIds.push(teamId);
+    }
+
+    await missionRequest.save();
+    return await this.findById(id);
+  }
 }
 
 const missionRequestRepository = new MissionRequestRepository();

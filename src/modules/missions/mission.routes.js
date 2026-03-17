@@ -9,6 +9,7 @@ import {
   removeTeamParamsSchema,
   startMissionSchema,
   queryMissionSchema,
+  getMissionRequestsQuerySchema,
 } from "./mission.validation.js";
 import { authenticate, authorize } from "../../middlewares/authMiddleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
@@ -33,12 +34,13 @@ router.get(
 );
 router.get(
   "/:id",
-  authorize(["Rescue Coordinator", "Admin"]),
+  authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
   missionController.getMissionById,
 );
 router.get(
   "/:id/requests",
   authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
+  validate(getMissionRequestsQuerySchema, "query"),
   missionController.getMissionRequests,
 );
 router.patch(

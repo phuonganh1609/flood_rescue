@@ -59,6 +59,12 @@ const queryMissionSchema = Joi.object({
   code: Joi.string().trim(),
 });
 
+const getMissionRequestsQuerySchema = Joi.object({
+  teamId: objectId.optional().label("teamId"),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
+});
+
 export {
   createMissionSchema,
   updateMissionSchema,
@@ -68,4 +74,5 @@ export {
   removeTeamParamsSchema,
   startMissionSchema,
   queryMissionSchema,
+  getMissionRequestsQuerySchema,
 };

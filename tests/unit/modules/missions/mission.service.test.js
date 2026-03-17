@@ -14,6 +14,7 @@ jest.unstable_mockModule("../../../../src/modules/timelines/timeline.model.js", 
     deleteOne: jest.fn(),
     updateMany: jest.fn(),
     countDocuments: jest.fn(),
+  exists: jest.fn(),
   },
 }));
 
@@ -53,6 +54,7 @@ jest.unstable_mockModule("../../../../src/modules/missionRequests/missionRequest
     findByMissionAndRequest: jest.fn(),
     deleteByMissionAndRequest: jest.fn(),
     create: jest.fn(),
+  findByMissionIdPaginated: jest.fn(),
   },
 }));
 
@@ -263,6 +265,113 @@ describe("MissionService", () => {
       });
 
       expect(Timeline.deleteOne).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getMissionRequests", () => {
+    const paginatedResult = {
+      data: [{ _id: "mr-1", requestId: { _id: "r-1", userName: "Nguyen Van A" } }],
+      total: 1,
+      page: 1,
+      limit: 10,
+      totalPages: 1,
+    };
+
+    it("should return paginated requests without teamId filter (coordinator)", async () => {
+      missionRepository.findById.mockResolvedValue({ _id: "m-1", status: "IN_PROGRESS" });
+      missionRequestRepository.findByMissionIdPaginated.mockResolvedValue(paginatedResult);
+
+      const result = await missionService.getMissionRequests(
+        "m-1",
+        { page: 1, limit: 10 },
+        { role: "Rescue Coordinator" },
+      );
+
+      expect(missionRequestRepository.findByMissionIdPaginated).toHaveBeenCalledWith("m-1", {
+        teamId: null,
+        page: 1,
+        limit: 10,
+      });
+      expect(result).toEqual(paginatedResult);
+    });
+
+    it("should filter by teamId when team is assigned to mission", async () => {
+      missionRepository.findById.mockResolvedValue({ _id: "m-1", status: "IN_PROGRESS" });
+      Timeline.exists.mockResolvedValue(true);
+      missionRequestRepository.findByMissionIdPaginated.mockResolvedValue(paginatedResult);
+
+      const result = await missionService.getMissionRequests(
+        "m-1",
+        { teamId: "team-1", page: 1, limit: 10 },
+        { role: "Rescue Coordinator" },
+      );
+
+      expect(Timeline.exists).toHaveBeenCalledWith({ missionId: "m-1", teamId: "team-1" });
+      expect(missionRequestRepository.findByMissionIdPaginated).toHaveBeenCalledWith("m-1", {
+        teamId: "team-1",
+        page: 1,
+        limit: 10,
+      });
+      expect(result).toEqual(paginatedResult);
+    });
+
+    it("should throw 403 when teamId provided but team not assigned to mission", async () => {
+      missionRepository.findById.mockResolvedValue({ _id: "m-1", status: "IN_PROGRESS" });
+      Timeline.exists.mockResolvedValue(false);
+
+      await expect(
+        missionService.getMissionRequests(
+          "m-1",
+          { teamId: "team-unknown" },
+          { role: "Rescue Coordinator" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        errorCode: "TEAM_NOT_ASSIGNED_TO_MISSION",
+      });
+
+      expect(missionRequestRepository.findByMissionIdPaginated).not.toHaveBeenCalled();
+    });
+
+    it("should throw 403 when Rescue Team user not assigned to mission", async () => {
+      missionRepository.findById.mockResolvedValue({ _id: "m-1", status: "IN_PROGRESS" });
+      Timeline.exists.mockResolvedValue(false);
+
+      await expect(
+        missionService.getMissionRequests(
+          "m-1",
+          {},
+          { id: "u-1", role: "Rescue Team", teamId: "team-x" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 403,
+        errorCode: "MISSION_NOT_ASSIGNED_TO_TEAM",
+      });
+    });
+
+    it("should throw 404 when mission does not exist", async () => {
+      missionRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        missionService.getMissionRequests("no-such-id", {}, null),
+      ).rejects.toMatchObject({
+        statusCode: 404,
+        errorCode: "MISSION_NOT_FOUND",
+      });
+    });
+
+    it("should allow Rescue Team to access mission they are assigned to", async () => {
+      missionRepository.findById.mockResolvedValue({ _id: "m-1", status: "IN_PROGRESS" });
+      Timeline.exists.mockResolvedValue(true);
+      missionRequestRepository.findByMissionIdPaginated.mockResolvedValue(paginatedResult);
+
+      const result = await missionService.getMissionRequests(
+        "m-1",
+        { page: 1, limit: 10 },
+        { id: "u-1", role: "Rescue Team", teamId: "team-1" },
+      );
+
+      expect(result).toEqual(paginatedResult);
     });
   });
 });

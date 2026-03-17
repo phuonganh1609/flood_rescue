@@ -50,7 +50,7 @@ class MissionController {
 
   async getMissionById(req, res) {
     try {
-      const mission = await missionService.getMissionById(req.params.id);
+      const mission = await missionService.getMissionById(req.params.id, req.user);
       return sendSuccess(res, {
         data: mission,
         message: "Mission details retrieved successfully",
@@ -62,10 +62,20 @@ class MissionController {
 
   async getMissionRequests(req, res) {
     try {
-      const data = await missionService.getMissionRequests(req.params.id);
+      const result = await missionService.getMissionRequests(
+        req.params.id,
+        req.query,
+        req.user,
+      );
       return sendSuccess(res, {
-        data,
+        data: result.data,
         message: "Mission requests retrieved successfully",
+        meta: {
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          totalPages: result.totalPages,
+        },
       });
     } catch (error) {
       return sendError(res, MissionController.toErrorPayload(error));

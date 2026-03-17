@@ -23,7 +23,7 @@ class UserService {
    * @param {Object} query - { role, isActive, search, page, limit, sort, requesterRole }
    * @returns {{ data, total, page, limit, totalPages }}
    */
-  async listUsers({ role, isActive, search, page = 1, limit = 10, sort, requesterRole }) {
+  async listUsers({ role, isActive, noTeam, search, page = 1, limit = 10, sort, requesterRole }) {
     const filter = {};
 
     // Apply data scope based on requester's role
@@ -49,6 +49,11 @@ class UserService {
     // Filter by active status
     if (isActive !== undefined) {
       filter.isActive = isActive;
+    }
+
+    // Filter by team assignment when requested.
+    if (noTeam !== undefined) {
+      filter.teamId = noTeam ? null : { $ne: null };
     }
 
     // Search by displayName, phoneNumber, or email

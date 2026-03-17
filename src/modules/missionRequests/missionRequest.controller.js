@@ -78,6 +78,24 @@ class MissionRequestController {
       return sendError(res, MissionRequestController.toErrorPayload(error));
     }
   }
+
+  async updateProgress(req, res) {
+    try {
+      const { id } = req.params;
+      const { peopleRescuedIncrement, suppliesDelivered } = req.body;
+      const data = await missionRequestService.updateProgress(
+        id,
+        { peopleRescuedIncrement, suppliesDelivered },
+        req.user,
+      );
+      return sendSuccess(res, {
+        data,
+        message: "Mission request progress updated successfully",
+      });
+    } catch (error) {
+      return sendError(res, MissionRequestController.toErrorPayload(error));
+    }
+  }
 }
 
 export default new MissionRequestController();

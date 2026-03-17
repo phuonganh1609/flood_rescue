@@ -6,8 +6,30 @@ import { REQUEST_STATUS } from "../requests/request.model.js";
 import { teamRepository } from "../teams/team.repository.js";
 import { missionRequestRepository } from "../missionRequests/missionRequest.repository.js";
 import { eventBus } from "../../utils/events.js";
+import User from "../users/user.model.js";
 
 class MissionService {
+  async assertRescueTeamCanAccessMission(missionId, user) {
+    if (!user || user.role !== "Rescue Team") return;
+
+    const resolvedTeamId =
+      user.teamId || (await User.findById(user.id).select("teamId"))?.teamId;
+
+    const hasAssignment =
+      resolvedTeamId &&
+      (await Timeline.exists({
+        missionId,
+        teamId: resolvedTeamId,
+      }));
+
+    if (!hasAssignment) {
+      const error = new Error("Mission này không được gán cho team của bạn.");
+      error.statusCode = 403;
+      error.errorCode = "MISSION_NOT_ASSIGNED_TO_TEAM";
+      throw error;
+    }
+  }
+
   async assertMissionExists(id) {
     const mission = await missionRepository.findById(id);
     if (!mission) {
@@ -101,13 +123,34 @@ class MissionService {
     });
   }
 
-  async getMissionById(id) {
-    return await this.assertMissionExists(id);
+  async getMissionById(id, user) {
+    const mission = await this.assertMissionExists(id);
+    await this.assertRescueTeamCanAccessMission(mission._id, user);
+    return mission;
   }
 
-  async getMissionRequests(id) {
+  async getMissionRequests(id, query = {}, user = null) {
     await this.assertMissionExists(id);
-    return await missionRequestRepository.findByMissionId(id);
+    await this.assertRescueTeamCanAccessMission(id, user);
+
+    const { teamId, page = 1, limit = 10 } = query;
+
+    if (teamId) {
+      // Kiểm tra team này có Timeline trong mission không
+      const hasAssignment = await Timeline.exists({ missionId: id, teamId });
+      if (!hasAssignment) {
+        const error = new Error("Team này không được assign vào mission.");
+        error.statusCode = 403;
+        error.errorCode = "TEAM_NOT_ASSIGNED_TO_MISSION";
+        throw error;
+      }
+    }
+
+    return await missionRequestRepository.findByMissionIdPaginated(id, {
+      teamId: teamId || null,
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
   }
 
   async updateMission(id, data) {

@@ -24,12 +24,13 @@ export const createUser = async (req, res) => {
  */
 export const listUsers = async (req, res) => {
   try {
-    const { role, isActive, search, page, limit, sort } = req.query;
+    const { role, isActive, noTeam, search, page, limit, sort } = req.query;
     const requesterRole = req.user.role;
 
     const result = await userService.listUsers({
       role,
       isActive,
+      noTeam,
       search,
       page,
       limit,
