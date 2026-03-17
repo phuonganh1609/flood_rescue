@@ -1,4 +1,107 @@
 import MissionRequest, { MISSION_REQUEST_STATUS } from "./missionRequest.model.js";
+import TeamRequest from "../teamRequests/teamRequest.model.js";
+
+function normalizeSupplyName(name) {
+  return typeof name === "string" ? name.trim() : "";
+}
+
+function mergeDeliveredSupplies(baseSupplies = [], deltaSupplies = []) {
+  const merged = [...baseSupplies.map((item) => ({ ...item }))];
+
+  for (const incoming of deltaSupplies) {
+    const normalizedName = normalizeSupplyName(incoming.name);
+    const deliveredQty = Number(incoming.deliveredQty) || 0;
+    if (!normalizedName || deliveredQty <= 0) continue;
+
+    const existing = merged.find((s) => normalizeSupplyName(s.name) === normalizedName);
+    if (existing) {
+      existing.deliveredQty = (existing.deliveredQty || 0) + deliveredQty;
+    } else {
+      merged.push({
+        name: incoming.name,
+        deliveredQty,
+      });
+    }
+  }
+
+  return merged;
+}
+
+function buildRequestedSuppliesMap(requestSuppliesSnapshot = []) {
+  const requestedMap = new Map();
+
+  for (const item of requestSuppliesSnapshot) {
+    const name = normalizeSupplyName(item.name);
+    if (!name) continue;
+
+    requestedMap.set(name, (requestedMap.get(name) || 0) + (Number(item.requestedQty) || 0));
+  }
+
+  return requestedMap;
+}
+
+function calculateAggregateFields(missionRequest, contributionSummary = {}) {
+  const totalRescued = Number(contributionSummary.totalRescued) || 0;
+  const totalSuppliesDelivered = mergeDeliveredSupplies(
+    [],
+    contributionSummary.totalSuppliesDelivered || [],
+  );
+  const teamContributions = contributionSummary.teamContributions || [];
+
+  const peopleNeeded = Number(missionRequest.peopleNeeded) || 0;
+  const peopleRemaining = Math.max(0, peopleNeeded - totalRescued);
+
+  const requestedSuppliesMap = buildRequestedSuppliesMap(
+    missionRequest.requestSuppliesSnapshot || [],
+  );
+  const deliveredSuppliesMap = buildRequestedSuppliesMap(totalSuppliesDelivered);
+
+  const totalSupplyTarget = [...requestedSuppliesMap.values()].reduce(
+    (sum, qty) => sum + qty,
+    0,
+  );
+  const totalSupplyDelivered = [...requestedSuppliesMap.entries()].reduce(
+    (sum, [name, requestedQty]) => sum + Math.min(requestedQty, deliveredSuppliesMap.get(name) || 0),
+    0,
+  );
+
+  const totalTarget = peopleNeeded + totalSupplyTarget;
+  const totalDelivered = Math.min(peopleNeeded, totalRescued) + totalSupplyDelivered;
+  const hasContribution = totalRescued > 0 || totalSuppliesDelivered.length > 0;
+  const isFullyMet = totalTarget === 0 ? false : totalDelivered >= totalTarget;
+
+  let status = MISSION_REQUEST_STATUS.PENDING;
+  if (isFullyMet) {
+    status = MISSION_REQUEST_STATUS.FULFILLED;
+  } else if (hasContribution) {
+    status = MISSION_REQUEST_STATUS.PARTIAL;
+  }
+
+  const handledByTeamIds = teamContributions
+    .filter((row) => {
+      const rescued = Number(row.rescuedCountTotal) || 0;
+      const supplies = Array.isArray(row.suppliesDeliveredTotal)
+        ? row.suppliesDeliveredTotal.length
+        : 0;
+      return rescued > 0 || supplies > 0;
+    })
+    .map((row) => row.teamId?._id?.toString?.() || row.teamId?.toString?.())
+    .filter(Boolean);
+
+  return {
+    peopleRescued: totalRescued,
+    peopleRemaining,
+    suppliesDelivered: totalSuppliesDelivered,
+    fulfillmentPercent:
+      totalTarget > 0
+        ? Math.min(100, Math.round((totalDelivered / totalTarget) * 100))
+        : 0,
+    handledByTeamIds,
+    status,
+    isFullyMet,
+    hasContribution,
+  };
+}
 
 class MissionRequestRepository {
   async create(data) {
@@ -146,10 +249,41 @@ class MissionRequestRepository {
     return await MissionRequest.findByIdAndUpdate(id, fields, { new: true });
   }
 
+  async syncAggregateFromContributionSummary(id, contributionSummary) {
+    const missionRequest = await MissionRequest.findById(id);
+    if (!missionRequest) return null;
+
+    const aggregate = calculateAggregateFields(missionRequest, contributionSummary);
+    const isManualTerminal = [
+      MISSION_REQUEST_STATUS.CLOSED,
+      MISSION_REQUEST_STATUS.DROPPED,
+    ].includes(missionRequest.status);
+
+    missionRequest.peopleRescued = aggregate.peopleRescued;
+    missionRequest.peopleRemaining = aggregate.peopleRemaining;
+    missionRequest.suppliesDelivered = aggregate.suppliesDelivered;
+    missionRequest.fulfillmentPercent = aggregate.fulfillmentPercent;
+    missionRequest.handledByTeamIds = aggregate.handledByTeamIds;
+
+    if (!isManualTerminal) {
+      missionRequest.status = aggregate.status;
+      if (aggregate.status === MISSION_REQUEST_STATUS.FULFILLED) {
+        missionRequest.closedAt = missionRequest.closedAt || new Date();
+      } else {
+        missionRequest.closedAt = null;
+      }
+    }
+
+    await missionRequest.save();
+    return await this.findById(id);
+  }
+
   async findByMissionIdPaginated(missionId, { teamId = null, page = 1, limit = 10 } = {}) {
     const filter = { missionId };
     if (teamId) {
-      filter.handledByTeamIds = teamId;
+      // Filter by TeamRequest assignment (pre-created at mission start — Option A)
+      const assignedMrIds = await TeamRequest.find({ missionId, teamId }).distinct("missionRequestId");
+      filter._id = { $in: assignedMrIds };
     }
 
     const skip = (page - 1) * limit;
@@ -236,4 +370,4 @@ class MissionRequestRepository {
 
 const missionRequestRepository = new MissionRequestRepository();
 
-export { missionRequestRepository };
+export { missionRequestRepository, calculateAggregateFields, mergeDeliveredSupplies };

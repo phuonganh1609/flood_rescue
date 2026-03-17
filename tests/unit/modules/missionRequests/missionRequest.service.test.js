@@ -6,7 +6,14 @@ jest.unstable_mockModule("../../../../src/modules/missionRequests/missionRequest
     updateStatusWithNote: jest.fn(),
     findByRequestId: jest.fn(),
     findByMissionId: jest.fn(),
-    updateProgress: jest.fn(),
+    syncAggregateFromContributionSummary: jest.fn(),
+  },
+}));
+
+jest.unstable_mockModule("../../../../src/modules/teamRequests/teamRequest.repository.js", () => ({
+  teamRequestRepository: {
+    upsertContribution: jest.fn(),
+    getContributionSummaryByMissionRequestId: jest.fn(),
   },
 }));
 
@@ -30,12 +37,14 @@ jest.unstable_mockModule("../../../../src/modules/requests/request.model.js", ()
     CANCELLED: "CANCELLED",
     REJECTED: "REJECTED",
     IN_PROGRESS: "IN_PROGRESS",
+    PARTIALLY_FULFILLED: "PARTIALLY_FULFILLED",
     FULFILLED: "FULFILLED",
   },
 }));
 
 jest.unstable_mockModule("../../../../src/modules/timelines/timeline.repository.js", () => ({
   EXECUTING_TIMELINE_STATUSES: ["EN_ROUTE", "ON_SITE"],
+  TERMINAL_TIMELINE_STATUSES: ["COMPLETED", "PARTIAL", "FAILED", "WITHDRAWN", "CANCELLED"],
   timelineRepository: {
     findByMissionId: jest.fn(),
   },
@@ -55,6 +64,10 @@ jest.unstable_mockModule("../../../../src/modules/users/user.model.js", () => ({
 
 const missionRequestService = (await import("../../../../src/modules/missionRequests/missionRequest.service.js")).default;
 const { missionRequestRepository } = await import("../../../../src/modules/missionRequests/missionRequest.repository.js");
+const { teamRequestRepository } = await import("../../../../src/modules/teamRequests/teamRequest.repository.js");
+const missionRepository = (await import("../../../../src/modules/missions/mission.repository.js")).default;
+const { requestRepository } = await import("../../../../src/modules/requests/request.repository.js");
+const { timelineRepository } = await import("../../../../src/modules/timelines/timeline.repository.js");
 const Timeline = (await import("../../../../src/modules/timelines/timeline.model.js")).default;
 const UserModel = (await import("../../../../src/modules/users/user.model.js")).default;
 
@@ -92,14 +105,18 @@ describe("MissionRequestService", () => {
         "CLOSED",
         "citizen no longer needs support",
       );
-      expect(syncSpy).toHaveBeenCalledWith(expect.objectContaining({ _id: "mr-1", status: "CLOSED" }));
+      expect(syncSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ _id: "mr-1", status: "CLOSED" }),
+      );
       expect(result).toEqual(expect.objectContaining({ status: "CLOSED" }));
     });
 
     it("should throw 404 when mission request is missing", async () => {
       missionRequestRepository.findById.mockResolvedValue(null);
 
-      await expect(missionRequestService.closeById("missing-id", "note")).rejects.toMatchObject({
+      await expect(
+        missionRequestService.closeById("missing-id", "note"),
+      ).rejects.toMatchObject({
         message: "Không tìm thấy mission request với ID: missing-id",
         statusCode: 404,
         errorCode: "MISSION_REQUEST_NOT_FOUND",
@@ -116,7 +133,9 @@ describe("MissionRequestService", () => {
         status: "FULFILLED",
       });
 
-      await expect(missionRequestService.dropById("mr-2", "manual handoff")).rejects.toMatchObject({
+      await expect(
+        missionRequestService.dropById("mr-2", "manual handoff"),
+      ).rejects.toMatchObject({
         message:
           "Không thể chuyển trạng thái mission request: trạng thái hiện tại FULFILLED đã là trạng thái kết thúc",
         statusCode: 400,
@@ -127,21 +146,84 @@ describe("MissionRequestService", () => {
     });
   });
 
+  describe("syncRequestStatus", () => {
+    it("should mark request PARTIALLY_FULFILLED when all mission requests are terminal but unmet", async () => {
+      requestRepository.findRequestById.mockResolvedValue({
+        _id: "req-1",
+        status: "IN_PROGRESS",
+      });
+      missionRequestRepository.findByRequestId.mockResolvedValue([
+        { status: "FULFILLED" },
+        { status: "CLOSED" },
+      ]);
+
+      const result = await missionRequestService.syncRequestStatus("req-1");
+
+      expect(requestRepository.updateRequestStatus).toHaveBeenCalledWith(
+        "req-1",
+        "PARTIALLY_FULFILLED",
+      );
+      expect(result).toBe("PARTIALLY_FULFILLED");
+    });
+  });
+
+  describe("syncMissionStatus", () => {
+    it("should mark mission PARTIAL when all timelines are terminal but unmet targets remain", async () => {
+      missionRepository.findById.mockResolvedValue({
+        _id: "m-1",
+        status: "IN_PROGRESS",
+      });
+      timelineRepository.findByMissionId.mockResolvedValue([
+        { status: "COMPLETED" },
+        { status: "PARTIAL" },
+      ]);
+      missionRequestRepository.findByMissionId.mockResolvedValue([
+        { status: "FULFILLED", fulfillmentPercent: 100 },
+        { status: "CLOSED", fulfillmentPercent: 60 },
+      ]);
+
+      const result = await missionRequestService.syncMissionStatus("m-1");
+
+      expect(missionRepository.update).toHaveBeenCalledWith("m-1", { status: "PARTIAL" });
+      expect(result).toBe("PARTIAL");
+    });
+  });
+
   describe("updateProgress", () => {
     const baseMissionRequest = {
       _id: "mr-p",
       status: "IN_PROGRESS",
       missionId: "m-1",
+      peopleNeeded: 5,
+      requestSuppliesSnapshot: [],
     };
 
-    it("should update progress and return PARTIAL status when people partially rescued", async () => {
+    it("should update progress through TeamRequest and sync aggregate as PARTIAL", async () => {
       const syncSpy = jest
         .spyOn(missionRequestService, "syncAfterMissionRequestUpdate")
         .mockResolvedValue();
 
       missionRequestRepository.findById.mockResolvedValue(baseMissionRequest);
       Timeline.exists.mockResolvedValue(true);
-      missionRequestRepository.updateProgress.mockResolvedValue({
+      teamRequestRepository.getContributionSummaryByMissionRequestId
+        .mockResolvedValueOnce({
+          totalRescued: 0,
+          totalSuppliesDelivered: [],
+          teamContributions: [],
+        })
+        .mockResolvedValueOnce({
+          totalRescued: 3,
+          totalSuppliesDelivered: [],
+          teamContributions: [
+            {
+              teamId: "team-1",
+              rescuedCountTotal: 3,
+              suppliesDeliveredTotal: [],
+            },
+          ],
+        });
+      teamRequestRepository.upsertContribution.mockResolvedValue({ _id: "tr-1" });
+      missionRequestRepository.syncAggregateFromContributionSummary.mockResolvedValue({
         _id: "mr-p",
         status: "PARTIAL",
         peopleRescued: 3,
@@ -151,30 +233,54 @@ describe("MissionRequestService", () => {
         missionId: "m-1",
       });
 
-      const user = { id: "u-1", role: "Rescue Team", teamId: "team-1" };
       const result = await missionRequestService.updateProgress(
         "mr-p",
         { peopleRescuedIncrement: 3 },
-        user,
+        { id: "u-1", role: "Rescue Team", teamId: "team-1" },
       );
 
       expect(Timeline.exists).toHaveBeenCalledWith({ missionId: "m-1", teamId: "team-1" });
-      expect(missionRequestRepository.updateProgress).toHaveBeenCalledWith("mr-p", {
+      expect(teamRequestRepository.upsertContribution).toHaveBeenCalledWith({
+        missionId: "m-1",
+        missionRequestId: "mr-p",
+        teamId: "team-1",
         peopleRescuedIncrement: 3,
         suppliesDelivered: [],
-        teamId: "team-1",
+        updatedBy: "u-1",
       });
+      expect(missionRequestRepository.syncAggregateFromContributionSummary).toHaveBeenCalledWith(
+        "mr-p",
+        expect.objectContaining({ totalRescued: 3 }),
+      );
       expect(syncSpy).toHaveBeenCalled();
       expect(result.status).toBe("PARTIAL");
       expect(result.fulfillmentPercent).toBe(60);
     });
 
-    it("should resolve to FULFILLED when people fully rescued", async () => {
+    it("should resolve to FULFILLED when target is fully met", async () => {
       jest.spyOn(missionRequestService, "syncAfterMissionRequestUpdate").mockResolvedValue();
 
       missionRequestRepository.findById.mockResolvedValue(baseMissionRequest);
       Timeline.exists.mockResolvedValue(true);
-      missionRequestRepository.updateProgress.mockResolvedValue({
+      teamRequestRepository.getContributionSummaryByMissionRequestId
+        .mockResolvedValueOnce({
+          totalRescued: 0,
+          totalSuppliesDelivered: [],
+          teamContributions: [],
+        })
+        .mockResolvedValueOnce({
+          totalRescued: 5,
+          totalSuppliesDelivered: [],
+          teamContributions: [
+            {
+              teamId: "team-1",
+              rescuedCountTotal: 5,
+              suppliesDeliveredTotal: [],
+            },
+          ],
+        });
+      teamRequestRepository.upsertContribution.mockResolvedValue({ _id: "tr-2" });
+      missionRequestRepository.syncAggregateFromContributionSummary.mockResolvedValue({
         _id: "mr-p",
         status: "FULFILLED",
         peopleRescued: 5,
@@ -194,14 +300,37 @@ describe("MissionRequestService", () => {
       expect(result.fulfillmentPercent).toBe(100);
     });
 
-    it("should update suppliesDelivered array", async () => {
+    it("should sync delivered supplies through aggregate recompute", async () => {
       jest.spyOn(missionRequestService, "syncAfterMissionRequestUpdate").mockResolvedValue();
 
-      missionRequestRepository.findById.mockResolvedValue(baseMissionRequest);
+      missionRequestRepository.findById.mockResolvedValue({
+        ...baseMissionRequest,
+        peopleNeeded: 0,
+        requestSuppliesSnapshot: [{ name: "Water", requestedQty: 10 }],
+      });
       Timeline.exists.mockResolvedValue(true);
-      missionRequestRepository.updateProgress.mockResolvedValue({
+      teamRequestRepository.getContributionSummaryByMissionRequestId
+        .mockResolvedValueOnce({
+          totalRescued: 0,
+          totalSuppliesDelivered: [],
+          teamContributions: [],
+        })
+        .mockResolvedValueOnce({
+          totalRescued: 0,
+          totalSuppliesDelivered: [{ name: "Water", deliveredQty: 10 }],
+          teamContributions: [
+            {
+              teamId: "team-1",
+              rescuedCountTotal: 0,
+              suppliesDeliveredTotal: [{ name: "Water", deliveredQty: 10 }],
+            },
+          ],
+        });
+      teamRequestRepository.upsertContribution.mockResolvedValue({ _id: "tr-3" });
+      missionRequestRepository.syncAggregateFromContributionSummary.mockResolvedValue({
         _id: "mr-p",
-        status: "PARTIAL",
+        status: "FULFILLED",
+        fulfillmentPercent: 100,
         suppliesDelivered: [{ name: "Water", deliveredQty: 10 }],
         missionId: "m-1",
       });
@@ -212,12 +341,40 @@ describe("MissionRequestService", () => {
         { id: "u-1", role: "Rescue Team", teamId: "team-1" },
       );
 
-      expect(missionRequestRepository.updateProgress).toHaveBeenCalledWith("mr-p", {
-        peopleRescuedIncrement: 0,
-        suppliesDelivered: [{ name: "Water", deliveredQty: 10 }],
-        teamId: "team-1",
-      });
+      expect(teamRequestRepository.upsertContribution).toHaveBeenCalledWith(
+        expect.objectContaining({
+          suppliesDelivered: [{ name: "Water", deliveredQty: 10 }],
+        }),
+      );
       expect(result.suppliesDelivered).toEqual([{ name: "Water", deliveredQty: 10 }]);
+    });
+
+    it("should reject over-delivery with 422", async () => {
+      missionRequestRepository.findById.mockResolvedValue({
+        ...baseMissionRequest,
+        peopleNeeded: 0,
+        requestSuppliesSnapshot: [{ name: "Water", requestedQty: 10 }],
+      });
+      Timeline.exists.mockResolvedValue(true);
+      teamRequestRepository.getContributionSummaryByMissionRequestId.mockResolvedValueOnce({
+        totalRescued: 0,
+        totalSuppliesDelivered: [{ name: "Water", deliveredQty: 8 }],
+        teamContributions: [],
+      });
+
+      await expect(
+        missionRequestService.updateProgress(
+          "mr-p",
+          { suppliesDelivered: [{ name: "Water", deliveredQty: 3 }] },
+          { id: "u-1", role: "Rescue Team", teamId: "team-1" },
+        ),
+      ).rejects.toMatchObject({
+        statusCode: 422,
+        errorCode: "SUPPLY_OVER_DELIVERY",
+      });
+
+      expect(teamRequestRepository.upsertContribution).not.toHaveBeenCalled();
+      expect(missionRequestRepository.syncAggregateFromContributionSummary).not.toHaveBeenCalled();
     });
 
     it("should throw 403 USER_NOT_IN_TEAM when user has no teamId and DB returns null", async () => {
@@ -237,7 +394,7 @@ describe("MissionRequestService", () => {
         errorCode: "USER_NOT_IN_TEAM",
       });
 
-      expect(missionRequestRepository.updateProgress).not.toHaveBeenCalled();
+      expect(teamRequestRepository.upsertContribution).not.toHaveBeenCalled();
     });
 
     it("should throw 403 TEAM_NOT_ASSIGNED_TO_MISSION when team has no timeline in mission", async () => {
@@ -255,7 +412,7 @@ describe("MissionRequestService", () => {
         errorCode: "TEAM_NOT_ASSIGNED_TO_MISSION",
       });
 
-      expect(missionRequestRepository.updateProgress).not.toHaveBeenCalled();
+      expect(teamRequestRepository.upsertContribution).not.toHaveBeenCalled();
     });
 
     it("should throw 400 MISSION_REQUEST_TERMINAL when missionRequest is already FULFILLED", async () => {
@@ -276,7 +433,7 @@ describe("MissionRequestService", () => {
         errorCode: "MISSION_REQUEST_TERMINAL",
       });
 
-      expect(missionRequestRepository.updateProgress).not.toHaveBeenCalled();
+      expect(teamRequestRepository.upsertContribution).not.toHaveBeenCalled();
     });
 
     it("should retrieve teamId from DB when user.teamId not provided", async () => {
@@ -287,7 +444,25 @@ describe("MissionRequestService", () => {
         select: jest.fn().mockResolvedValue({ teamId: "team-from-db" }),
       });
       Timeline.exists.mockResolvedValue(true);
-      missionRequestRepository.updateProgress.mockResolvedValue({
+      teamRequestRepository.getContributionSummaryByMissionRequestId
+        .mockResolvedValueOnce({
+          totalRescued: 0,
+          totalSuppliesDelivered: [],
+          teamContributions: [],
+        })
+        .mockResolvedValueOnce({
+          totalRescued: 2,
+          totalSuppliesDelivered: [],
+          teamContributions: [
+            {
+              teamId: "team-from-db",
+              rescuedCountTotal: 2,
+              suppliesDeliveredTotal: [],
+            },
+          ],
+        });
+      teamRequestRepository.upsertContribution.mockResolvedValue({ _id: "tr-4" });
+      missionRequestRepository.syncAggregateFromContributionSummary.mockResolvedValue({
         _id: "mr-p",
         status: "PARTIAL",
         missionId: "m-1",
@@ -299,8 +474,7 @@ describe("MissionRequestService", () => {
         { id: "u-no-teamid-in-jwt", role: "Rescue Team" },
       );
 
-      expect(missionRequestRepository.updateProgress).toHaveBeenCalledWith(
-        "mr-p",
+      expect(teamRequestRepository.upsertContribution).toHaveBeenCalledWith(
         expect.objectContaining({ teamId: "team-from-db" }),
       );
     });

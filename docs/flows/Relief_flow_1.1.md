@@ -9,6 +9,8 @@
 > - Coordinator ghép Team vào mission → tạo `Timeline` (status=`PLANNED`).
 > - **Start Mission** → tất cả `PLANNED` Timeline → `ASSIGNED`; notify teams.
 > - `Timeline` không còn `requestId` FK. `MissionRequest` theo dõi supply fulfillment cho từng request.
+> - **V2 TeamRequest-first (Option A):** Start Mission pre-create `TeamRequest` cho mọi cặp (`MissionRequest` x Team assigned).
+> - Team cập nhật phân phối qua `POST /api/missionRequests/:id/progress`; backend ghi contribution theo team và sync aggregate về MissionRequest.
 
 ---
 
@@ -143,8 +145,9 @@ stateDiagram-v2
 
 - **MissionRequest = FULFILLED** khi `suppliesDelivered >= requestSuppliesSnapshot` (all items) và `rescuedCount >= requestPeopleSnapshot`.
 - **Request = FULFILLED** khi MissionRequest tương ứng đạt trạng thái `FULFILLED`.
-- **Request = PARTIALLY_FULFILLED** khi MissionRequest đạt `PARTIAL` (đã deliver nhưng chưa đủ).
+- **Request = PARTIALLY_FULFILLED** khi các MissionRequest đã kết thúc nhưng aggregate còn thiếu so với target.
 - **Tracking**: Relief Team cũng gửi tọa độ GPS liên tục khi `EN_ROUTE` để Citizen theo dõi.
+- **Aggregate source**: MissionRequest aggregate được tính từ tổng contribution của các TeamRequest cùng `missionRequestId`.
 
 ### Supply Tracking Rules
 
@@ -153,8 +156,9 @@ Relief Flow sử dụng Supply Management giống Rescue Flow:
 | Phase            | Timing                                              | Action                                                                         |
 | ---------------- | --------------------------------------------------- | ------------------------------------------------------------------------------ |
 | **Planning**     | `POST /missions/{id}/teams` — Coordinator assigns team to mission | Reserve supplies từ Warehouse; snapshot vào `MissionRequest.requestSuppliesSnapshot` |
+| **Start**        | `PATCH /missions/{id}/start`                         | Pre-create TeamRequest matrix cho mọi MissionRequest x Team assigned |
 | **Carrying**     | Team accepts (Timeline → EN_ROUTE)                  | Deduct inventory, confirm `carriedQty` on Timeline                             |
-| **Distribution** | Team completes (Timeline → COMPLETED)               | Report `distributedQty`; aggregate → `MissionRequest.suppliesDelivered`; return unused |
+| **Distribution** | Team gửi progress (`POST /missionRequests/{id}/progress`) | Ghi TeamRequest contribution; recompute aggregate `MissionRequest.suppliesDelivered`; return unused |
 
 > Chi tiết xem [Supply_management.md](../Supply_management.md)
 
@@ -259,6 +263,8 @@ sequenceDiagram
 | `POST`   | `/missions/{id}/requests`     | Coordinator | Add request to mission → creates `MissionRequest(PENDING)` |
 | `POST`   | `/missions/{id}/teams`        | Coordinator | Assign team → creates `Timeline(PLANNED)`               |
 | `PATCH`  | `/missions/{id}/start`        | Coordinator | Start mission → all Timelines `PLANNED→ASSIGNED`, notify teams |
+| `GET`    | `/missions/{id}/requests`     | Coordinator/Team | List MissionRequests + per-team contribution summary |
+| `POST`   | `/missionRequests/{id}/progress` | Team | Update per-team distributed/rescued contribution |
 
 ### Team Execution
 
@@ -284,3 +290,10 @@ sequenceDiagram
 - Core Timeline lifecycle APIs đã được implement theo Unified v2.2.
 - Request/Mission/Team status được derive/sync từ Timeline runtime status.
 - Trong Phase 1 chưa tích hợp GPS Position và TimelineSupply cho Relief execution.
+
+## V2 Implementation Notes (Option A - TeamRequest)
+
+- Mission start tạo TeamRequest matrix trước khi team nhận task, giúp team thấy requests ngay sau assign.
+- Team update progress đi theo write-path TeamRequest trước, rồi sync MissionRequest aggregate để phục vụ dashboard nhanh.
+- TeamRequest chỉ lưu contribution/audit, không có `status`; trạng thái vận hành dùng Timeline làm source of truth.
+- Trạng thái Request cuối mission hỗ trợ rõ `PARTIALLY_FULFILLED` khi chưa đạt đủ target nhưng đã kết thúc xử lý.

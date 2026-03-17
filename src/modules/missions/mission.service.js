@@ -7,6 +7,7 @@ import { teamRepository } from "../teams/team.repository.js";
 import { missionRequestRepository } from "../missionRequests/missionRequest.repository.js";
 import { eventBus } from "../../utils/events.js";
 import User from "../users/user.model.js";
+import { teamRequestService } from "../teamRequests/teamRequest.service.js";
 
 class MissionService {
   async assertRescueTeamCanAccessMission(missionId, user) {
@@ -382,6 +383,19 @@ class MissionService {
         },
       },
     );
+
+    // Pre-create TeamRequest matrix: every team × every missionRequest (Option A)
+    const missionRequestIds = missionRequests
+      .map((item) => item._id?.toString?.() || item._id)
+      .filter(Boolean);
+    const assignedTeamIds = plannedTimelines
+      .map((tl) => tl.teamId?._id?.toString?.() || tl.teamId?.toString?.())
+      .filter(Boolean);
+    await teamRequestService.createMatrix({
+      missionId: id,
+      missionRequestIds,
+      teamIds: assignedTeamIds,
+    });
 
     const updatedMission = await missionRepository.update(id, { status: "PLANNED" });
 

@@ -10,6 +10,8 @@
 > - Coordinator bấm **Start Mission** → tất cả `PLANNED` Timeline → `ASSIGNED`; notification gửi tới từng team.
 > - `Timeline` không còn `requestId` FK — Timeline đại diện cho team × mission.
 > - `MissionRequest` theo dõi fulfillment (people + supply) cho từng request trong mission.
+> - **V2 TeamRequest-first (Option A):** Start Mission sẽ pre-create `TeamRequest` cho mọi cặp (`MissionRequest` x Team assigned) để audit per-team.
+> - Team cập nhật tiến độ qua `POST /api/missionRequests/:id/progress`; backend ghi contribution vào TeamRequest rồi sync aggregate về MissionRequest.
 
 ---
 
@@ -37,7 +39,7 @@ flowchart TD
 
     ASSIGN_TEAM --> MORE_TEAM{Thêm team khác?}
     MORE_TEAM -- Yes --> ASSIGN_TEAM
-    MORE_TEAM -- No --> START["Coordinator bấm Start Mission\nAll PLANNED → ASSIGNED\nMission: DRAFT → PLANNED\nNotify all Teams + Citizens"]
+    MORE_TEAM -- No --> START["Coordinator bấm Start Mission\nAll PLANNED → ASSIGNED\nPre-create TeamRequest matrix\nMission: DRAFT → PLANNED\nNotify all Teams + Citizens"]
 
     START --> TEAM_RESPOND{Team responds?}
     TEAM_RESPOND -- Withdraw --> WITHDRAWN[Timeline = WITHDRAWN]
@@ -184,6 +186,14 @@ stateDiagram-v2
 | `WITHDRAWN` | Team từ chối sau khi được thông báo                                                 |
 | `CANCELLED` | Coordinator huỷ trước khi team hành động                                            |
 
+### TeamRequest Model (Option A)
+
+TeamRequest dùng để lưu contribution theo team cho từng MissionRequest trong mission.
+
+- Không có `status` riêng trên TeamRequest.
+- Trạng thái vận hành vẫn derive từ `Timeline.status`.
+- TeamRequest chỉ lưu các số liệu audit như people rescued, supplies delivered, thời điểm cập nhật.
+
 ### Request Status
 
 | Status                | Meaning                               |
@@ -294,6 +304,8 @@ sequenceDiagram
 | `GET`    | `/missions/{id}/requests`                    | Coordinator | List MissionRequests of this mission                                 |
 | `POST`   | `/missions/{id}/teams`                       | Coordinator | Assign team to mission → create `Timeline` (PLANNED)                 |
 | `PATCH`  | `/missions/{id}/start`                       | Coordinator | Start mission: all PLANNED → ASSIGNED + notify teams                 |
+| `GET`    | `/missions/{id}/requests`                    | Coordinator/Team | List MissionRequests + team contribution summary                 |
+| `POST`   | `/missionRequests/{id}/progress`             | Team        | Update progress (people/supplies) via TeamRequest then sync aggregate |
 | `PATCH`  | `/missions/{id}/pause`                       | Coordinator | Pause mission                                                         |
 | `PATCH`  | `/missions/{id}/resume`                      | Coordinator | Resume mission                                                        |
 | `PATCH`  | `/missions/{id}/abort`                       | Coordinator | Abort mission → cancel all active timelines                          |
@@ -314,11 +326,12 @@ Luồng mục tiêu sau khi redesign:
 2. Coordinator tạo Mission → `POST /api/missions` → Mission: `DRAFT`.
 3. Coordinator thêm Request(s) vào Mission → `POST /api/missions/{id}/requests` → tạo `MissionRequest (PENDING)`.
 4. Coordinator ghép Team(s) vào Mission → `POST /api/missions/{id}/teams` → tạo `Timeline (PLANNED)`.
-5. Coordinator bấm Start → `PATCH /api/missions/{id}/start` → tất cả Timeline `PLANNED → ASSIGNED`; Mission `DRAFT → PLANNED`; notify teams.
+5. Coordinator bấm Start → `PATCH /api/missions/{id}/start` → tất cả Timeline `PLANNED → ASSIGNED`; pre-create TeamRequest matrix; Mission `DRAFT → PLANNED`; notify teams.
 6. Team thao tác lifecycle: `PATCH /api/timelines/{id}/accept|arrive|complete|fail|withdraw`.
-7. Sau mỗi `complete`, BE cập nhật `MissionRequest.peopleRescued`, `suppliesDelivered`, `fulfillmentPercent`.
-8. Coordinator/Admin huỷ timeline: `PATCH /api/timelines/{id}/cancel`.
-9. Coordinator abort mission: `PATCH /api/missions/{id}/abort` → huỷ tất cả active timelines; emit `MISSION_ABORTED`.
+7. Team cập nhật contribution theo request: `POST /api/missionRequests/{id}/progress`.
+8. Sau mỗi progress update, BE sync aggregate `MissionRequest.peopleRescued`, `suppliesDelivered`, `fulfillmentPercent` từ TeamRequest.
+9. Coordinator/Admin huỷ timeline: `PATCH /api/timelines/{id}/cancel`.
+10. Coordinator abort mission: `PATCH /api/missions/{id}/abort` → huỷ tất cả active timelines; emit `MISSION_ABORTED`.
 
 ### Validation Rules
 
@@ -337,6 +350,7 @@ sequenceDiagram
     participant API as API Server
     participant MR as MissionRequest
     participant T as Timeline
+    participant TR as TeamRequest
     participant N as Notification
 
     C->>API: PATCH /api/requests/{id}/verify
@@ -355,12 +369,15 @@ sequenceDiagram
 
     C->>API: PATCH /api/missions/{id}/start
     API->>T: PLANNED → ASSIGNED (all)
+    API->>TR: pre-create TeamRequest for all (MissionRequest x Team)
     API->>N: emit MISSION_ASSIGNED per team
     API->>API: Mission: DRAFT → PLANNED
     API-->>C: Mission started
 
     Note over T,API: Teams execute via /api/timelines/{id}/accept|arrive|complete|fail|withdraw
-    Note over MR,API: BE updates MissionRequest fulfillment after each timeline complete
+    Note over Team,API: Team gọi POST /api/missionRequests/{id}/progress
+    API->>TR: update per-team contribution + audit trail
+    API->>MR: recompute aggregate fulfillment from TeamRequest
 ```
 
 ---
@@ -382,4 +399,4 @@ sequenceDiagram
     - `MISSION_COMPLETED` on timeline `complete` (when MissionRequest becomes FULFILLED)
     - `MISSION_FAILED` on timeline `fail`
     - `MISSION_ABORTED` on `PATCH /api/missions/{id}/abort`
-- `MissionRequest.fulfillmentPercent` recalculated after every timeline `complete` within same mission.
+- `MissionRequest.fulfillmentPercent` recalculated sau mỗi `POST /api/missionRequests/{id}/progress` dựa trên tổng TeamRequest của cùng MissionRequest.

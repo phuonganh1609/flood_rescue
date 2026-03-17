@@ -4,6 +4,13 @@
 >
 > Dựa trên [Rescue_flow_2.2.md](./Rescue_flow_2.2.md), [Relief_flow_1.1.md](./Relief_flow_1.1.md) và source code hiện tại.
 
+> **V2 update (TeamRequest-first, Option A):**
+>
+> - Khi `PATCH /api/missions/:id/start`, hệ thống pre-create `TeamRequest` cho mọi cặp (`MissionRequest` x Team assigned).
+> - Team update tiến độ qua `POST /api/mission-requests/:id/progress`, backend ghi audit theo TeamRequest và sync aggregate về MissionRequest.
+> - Team có thể xem request trong mission ngay sau khi được assign (không phụ thuộc đã update progress hay chưa).
+> - Nếu tổng `suppliesDelivered` vượt `requestedQty`, API trả lỗi `422 (SUPPLY_OVER_DELIVERY)` để FE hiển thị cảnh báo nghiệp vụ.
+
 ---
 
 ## 1. Tổng quan luồng chính
@@ -305,6 +312,7 @@ Mỗi action của Rescue Team đều phải qua các validation sau:
 | **Team membership** | User phải thuộc team được gán trong timeline | `403` |
 | **Mission status** | Mission không được ở `ABORTED`, `COMPLETED`, `PAUSED` | `400` |
 | **Timeline transition** | Status hiện tại phải hợp lệ cho action | `400` |
+| **Supply over-delivery** | Tổng deliveredQty của supply vượt requestedQty trong MissionRequest snapshot | `422` |
 | **Concurrent guard** | Sử dụng `transitionStatus` để tránh race condition | `409` |
 
 ---
@@ -321,6 +329,7 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 | `complete` (partial) | → PARTIAL | → PARTIALLY_FULFILLED | → PARTIAL | → AVAILABLE | — |
 | `fail` | → FAILED | → PARTIALLY_FULFILLED | sync | → AVAILABLE | MISSION_FAILED |
 | `withdraw` | → WITHDRAWN | → VERIFIED (nếu hết timeline) | sync | → AVAILABLE | MISSION_WITHDRAWN |
+| `missionRequest progress update` | — | MissionRequest aggregate cập nhật từ TeamRequest; Request có thể thành PARTIALLY_FULFILLED khi all terminal nhưng còn thiếu target | sync PARTIAL/COMPLETED | — | optional PROGRESS_UPDATED |
 
 ---
 
@@ -337,9 +346,47 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 | 7 | `PATCH` | `/api/timelines/:id/withdraw` | Từ chối (ASSIGNED → WITHDRAWN) | `{ withdrawalReason, note? }` |
 | 8 | `GET` | `/api/requests` | Xem danh sách requests | Query: `status`, `type`, `page`, `limit` |
 | 9 | `GET` | `/api/requests/:id` | Xem chi tiết request | — |
-| 10 | `GET` | `/api/notifications` | Danh sách thông báo | — |
-| 11 | `PATCH` | `/api/notifications/:id/read` | Đánh dấu đã đọc | — |
-| 12 | `GET` | `/api/notifications/unread-count` | Số thông báo chưa đọc | — |
+| 10 | `GET` | `/api/missions/:id/requests` | Xem requests trong mission (team view + supervisor filter) | Query: `teamId`, `page`, `limit` |
+| 11 | `POST` | `/api/mission-requests/:id/progress` | Team cập nhật rescued/supply cho request | `{ peopleRescuedIncrement?, suppliesDelivered? }` |
+| 12 | `GET` | `/api/team-requests` | Xem audit TeamRequest (team chỉ thấy team của mình) | Query: `missionId`, `missionRequestId`, `teamId`, `page`, `limit` |
+| 13 | `GET` | `/api/team-requests/:id` | Xem chi tiết một TeamRequest | — |
+| 14 | `GET` | `/api/notifications` | Danh sách thông báo | — |
+| 15 | `PATCH` | `/api/notifications/:id/read` | Đánh dấu đã đọc | — |
+| 16 | `GET` | `/api/notifications/unread-count` | Số thông báo chưa đọc | — |
+
+---
+
+## 8. TeamRequest Audit Model (Option A)
+
+`TeamRequest` là join entity giữa Team và MissionRequest để xử lý quan hệ nhiều-nhiều có audit rõ ràng.
+
+### 8.1 Option A pre-create matrix
+
+- Khi mission start thành công, hệ thống tạo trước TeamRequest cho mọi cặp:
+    - mỗi `MissionRequest` trong mission
+    - mỗi team có `Timeline` thuộc mission ở trạng thái `ASSIGNED`
+- Dùng unique key `(missionRequestId, teamId)` để chống duplicate khi retry.
+
+### 8.2 TeamRequest fields chính
+
+- `missionId`
+- `missionRequestId`
+- `teamId`
+- `rescuedCountTotal`
+- `suppliesDeliveredTotal[]`
+- `lastUpdatedAt`
+- `lastUpdatedBy` (optional)
+
+### 8.3 Derivation rule
+
+- Team ghi contribution vào TeamRequest.
+- MissionRequest aggregate (`peopleRescued`, `suppliesDelivered`, `fulfillmentPercent`) = tổng contribution của tất cả TeamRequest cùng `missionRequestId`.
+- TeamRequest không có state machine riêng; trạng thái vận hành dùng `Timeline.status` làm source of truth.
+- Progress endpoint dùng path chuẩn: `POST /api/mission-requests/:id/progress`.
+- Nếu over-delivery supply, API trả `422 SUPPLY_OVER_DELIVERY`.
+- Request final status:
+    - `FULFILLED` nếu đủ target.
+    - `PARTIALLY_FULFILLED` nếu kết thúc mà chưa đủ target.
 
 ---
 

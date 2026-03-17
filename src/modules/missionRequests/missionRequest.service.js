@@ -5,10 +5,117 @@ import { requestRepository } from "../requests/request.repository.js";
 import { REQUEST_STATUS } from "../requests/request.model.js";
 import {
   EXECUTING_TIMELINE_STATUSES,
+  TERMINAL_TIMELINE_STATUSES,
   timelineRepository,
 } from "../timelines/timeline.repository.js";
+import { teamRequestRepository } from "../teamRequests/teamRequest.repository.js";
 
 class MissionRequestService {
+  deriveRequestStatus(missionRequests = []) {
+    if (missionRequests.length === 0) return null;
+
+    const statuses = missionRequests.map((item) => item.status);
+    const hasNonTerminal = statuses.some((status) =>
+      [
+        MISSION_REQUEST_STATUS.PENDING,
+        MISSION_REQUEST_STATUS.IN_PROGRESS,
+        MISSION_REQUEST_STATUS.PARTIAL,
+      ].includes(status),
+    );
+
+    if (hasNonTerminal) {
+      return REQUEST_STATUS.IN_PROGRESS;
+    }
+
+    const allFulfilled = missionRequests.every(
+      (item) => item.status === MISSION_REQUEST_STATUS.FULFILLED,
+    );
+
+    return allFulfilled
+      ? REQUEST_STATUS.FULFILLED
+      : REQUEST_STATUS.PARTIALLY_FULFILLED;
+  }
+
+  deriveMissionStatus(timelines = [], missionRequests = []) {
+    if (timelines.length === 0) {
+      return "DRAFT";
+    }
+
+    const hasExecuting = timelines.some((timeline) =>
+      EXECUTING_TIMELINE_STATUSES.includes(timeline.status),
+    );
+    if (hasExecuting) return "IN_PROGRESS";
+
+    const hasAssigned = timelines.some((timeline) => timeline.status === "ASSIGNED");
+    if (hasAssigned) return "PLANNED";
+
+    const hasPlanned = timelines.some((timeline) => timeline.status === "PLANNED");
+    if (hasPlanned) return "DRAFT";
+
+    const allTimelinesTerminal =
+      timelines.length > 0 &&
+      timelines.every((timeline) => TERMINAL_TIMELINE_STATUSES.includes(timeline.status));
+    if (!allTimelinesTerminal) {
+      return "PARTIAL";
+    }
+
+    const allMissionRequestsTerminal =
+      missionRequests.length > 0 &&
+      missionRequests.every((item) =>
+        [
+          MISSION_REQUEST_STATUS.FULFILLED,
+          MISSION_REQUEST_STATUS.CLOSED,
+          MISSION_REQUEST_STATUS.DROPPED,
+        ].includes(item.status),
+      );
+
+    if (!allMissionRequestsTerminal) {
+      return "PARTIAL";
+    }
+
+    const hasUnmetTarget = missionRequests.some(
+      (item) => (Number(item.fulfillmentPercent) || 0) < 100,
+    );
+
+    return hasUnmetTarget ? "PARTIAL" : "COMPLETED";
+  }
+
+  validateSupplyDeliveryBounds(missionRequest, contributionSummary, incomingSupplies = []) {
+    const requestedSupplies = missionRequest.requestSuppliesSnapshot || [];
+    if (requestedSupplies.length === 0 || incomingSupplies.length === 0) return;
+
+    const requestedMap = new Map();
+    for (const item of requestedSupplies) {
+      const name = item.name?.trim?.();
+      if (!name) continue;
+      requestedMap.set(name, (requestedMap.get(name) || 0) + (Number(item.requestedQty) || 0));
+    }
+
+    const deliveredMap = new Map();
+    for (const item of contributionSummary.totalSuppliesDelivered || []) {
+      const name = item.name?.trim?.();
+      if (!name) continue;
+      deliveredMap.set(name, (deliveredMap.get(name) || 0) + (Number(item.deliveredQty) || 0));
+    }
+
+    for (const supply of incomingSupplies) {
+      const name = supply.name?.trim?.();
+      if (!name || !requestedMap.has(name)) continue;
+
+      const requestedQty = requestedMap.get(name);
+      const deliveredQty = deliveredMap.get(name) || 0;
+
+      if (deliveredQty > requestedQty) {
+        const error = new Error(
+          `Supply ${name} vượt requestedQty tối đa ${requestedQty}.`,
+        );
+        error.statusCode = 422;
+        error.errorCode = "SUPPLY_OVER_DELIVERY";
+        throw error;
+      }
+    }
+  }
+
   async getById(id) {
     const missionRequest = await missionRequestRepository.findById(id);
     if (!missionRequest) {
@@ -69,17 +176,7 @@ class MissionRequestService {
     const missionRequests = await missionRequestRepository.findByRequestId(requestId);
     if (missionRequests.length === 0) return request.status;
 
-    const statuses = missionRequests.map((item) => item.status);
-    const hasNonTerminal = statuses.some((status) =>
-      [
-        MISSION_REQUEST_STATUS.PENDING,
-        MISSION_REQUEST_STATUS.IN_PROGRESS,
-        MISSION_REQUEST_STATUS.PARTIAL,
-      ].includes(status),
-    );
-
-    const desiredStatus =
-      hasNonTerminal ? REQUEST_STATUS.IN_PROGRESS : REQUEST_STATUS.FULFILLED;
+    const desiredStatus = this.deriveRequestStatus(missionRequests) || request.status;
 
     if (desiredStatus !== request.status) {
       await requestRepository.updateRequestStatus(requestId, desiredStatus);
@@ -104,44 +201,8 @@ class MissionRequestService {
       return "DRAFT";
     }
 
-    const hasExecuting = timelines.some((timeline) =>
-      EXECUTING_TIMELINE_STATUSES.includes(timeline.status),
-    );
-    if (hasExecuting) {
-      if (mission.status !== "IN_PROGRESS") {
-        await missionRepository.update(missionId, { status: "IN_PROGRESS" });
-      }
-      return "IN_PROGRESS";
-    }
-
-    const hasAssigned = timelines.some((timeline) => timeline.status === "ASSIGNED");
-    if (hasAssigned) {
-      if (mission.status !== "PLANNED") {
-        await missionRepository.update(missionId, { status: "PLANNED" });
-      }
-      return "PLANNED";
-    }
-
-    const hasPlanned = timelines.some((timeline) => timeline.status === "PLANNED");
-    if (hasPlanned) {
-      if (mission.status !== "DRAFT") {
-        await missionRepository.update(missionId, { status: "DRAFT" });
-      }
-      return "DRAFT";
-    }
-
     const missionRequests = await missionRequestRepository.findByMissionId(missionId);
-    const allTerminal =
-      missionRequests.length > 0 &&
-      missionRequests.every((item) =>
-        [
-          MISSION_REQUEST_STATUS.FULFILLED,
-          MISSION_REQUEST_STATUS.CLOSED,
-          MISSION_REQUEST_STATUS.DROPPED,
-        ].includes(item.status),
-      );
-
-    const desiredStatus = allTerminal ? "COMPLETED" : "PARTIAL";
+    const desiredStatus = this.deriveMissionStatus(timelines, missionRequests);
     if (mission.status !== desiredStatus) {
       await missionRepository.update(missionId, { status: desiredStatus });
     }
@@ -224,11 +285,43 @@ class MissionRequestService {
       throw error;
     }
 
-    const updated = await missionRequestRepository.updateProgress(id, {
-      peopleRescuedIncrement,
-      suppliesDelivered,
+    const normalizedSupplies = (suppliesDelivered || []).map((item) => ({
+      name: item.name?.trim?.(),
+      deliveredQty: Number(item.deliveredQty) || 0,
+    })).filter((item) => item.name && item.deliveredQty > 0);
+
+    if ((Number(peopleRescuedIncrement) || 0) <= 0 && normalizedSupplies.length === 0) {
+      const error = new Error("Payload progress không hợp lệ.");
+      error.statusCode = 400;
+      error.errorCode = "INVALID_PROGRESS_PAYLOAD";
+      throw error;
+    }
+
+    const contributionSummaryBefore = await teamRequestRepository.getContributionSummaryByMissionRequestId(id);
+    const simulatedSummary = {
+      ...contributionSummaryBefore,
+      totalRescued: (Number(contributionSummaryBefore.totalRescued) || 0) + (Number(peopleRescuedIncrement) || 0),
+      totalSuppliesDelivered: [
+        ...(contributionSummaryBefore.totalSuppliesDelivered || []),
+        ...normalizedSupplies,
+      ],
+    };
+    this.validateSupplyDeliveryBounds(missionRequest, simulatedSummary, normalizedSupplies);
+
+    await teamRequestRepository.upsertContribution({
+      missionId,
+      missionRequestId: id,
       teamId,
+      peopleRescuedIncrement,
+      suppliesDelivered: normalizedSupplies,
+      updatedBy: user?.id || null,
     });
+
+    const contributionSummary = await teamRequestRepository.getContributionSummaryByMissionRequestId(id);
+    const updated = await missionRequestRepository.syncAggregateFromContributionSummary(
+      id,
+      contributionSummary,
+    );
 
     await this.syncAfterMissionRequestUpdate(updated);
     return updated;

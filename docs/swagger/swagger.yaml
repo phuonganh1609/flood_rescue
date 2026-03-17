@@ -1236,7 +1236,7 @@ paths:
       tags:
         - Missions
       summary: List requests in a mission
-      description: "Get all MissionRequest records associated with the mission. (Roles: Rescue Coordinator, Admin, Rescue Team)"
+      description: "Get mission requests associated with a mission. Rescue Team can see requests immediately after assignment (Option A pre-create TeamRequest matrix). Supports teamId filter for supervisor/coordinator view. (Roles: Rescue Coordinator, Admin, Rescue Team)"
       operationId: getMissionRequests
       security:
         - bearerAuth: []
@@ -1247,6 +1247,27 @@ paths:
           required: true
           schema:
             type: string
+        - name: teamId
+          in: query
+          required: false
+          description: Optional team filter. Team must be assigned to mission.
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
       responses:
         "200":
           description: Mission requests retrieved successfully
@@ -1265,6 +1286,214 @@ paths:
                       $ref: "#/components/schemas/MissionRequest"
         "404":
           description: Mission not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/mission-requests/{id}/progress:
+    post:
+      tags:
+        - Missions
+      summary: Team updates mission request progress
+      description: "Rescue Team updates contribution for a mission request. Backend writes TeamRequest first and syncs aggregate back to MissionRequest."
+      operationId: updateMissionRequestProgress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: MissionRequest ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MissionRequestProgressInput"
+      responses:
+        "200":
+          description: Mission request progress updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/MissionRequest"
+        "400":
+          description: Invalid payload or invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - team is not assigned to mission or user has no team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: MissionRequest not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: Supply over-delivery (SUPPLY_OVER_DELIVERY)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/team-requests:
+    get:
+      tags:
+        - Missions
+      summary: List TeamRequest audit records
+      description: "List TeamRequest records for per-team contribution audit. Rescue Team only sees its own team records."
+      operationId: listTeamRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: missionId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: missionRequestId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: teamId
+          in: query
+          required: false
+          description: Ignored for Rescue Team role and auto-forced to own team.
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Team requests retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/TeamRequest"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      totalPages:
+                        type: integer
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /api/team-requests/{id}:
+    get:
+      tags:
+        - Missions
+      summary: Get TeamRequest detail
+      description: "Get a TeamRequest record by ID. Rescue Team can only access records of its own team."
+      operationId: getTeamRequestById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Team request retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TeamRequest"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: Team request not found
           content:
             application/json:
               schema:
@@ -4129,8 +4358,39 @@ components:
           maxLength: 500
           nullable: true
 
+    MissionRequestProgressInput:
+      type: object
+      description: At least one field is required.
+      properties:
+        peopleRescuedIncrement:
+          type: integer
+          minimum: 1
+        suppliesDelivered:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamRequestSupplyItem"
+      anyOf:
+        - required: [peopleRescuedIncrement]
+        - required: [suppliesDelivered]
+
+    TeamRequestSupplyItem:
+      type: object
+      required:
+        - name
+        - deliveredQty
+      properties:
+        name:
+          type: string
+          example: Water
+        deliveredQty:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          example: 10
+
     MissionRequest:
       type: object
+      description: Aggregate MissionRequest fields are derived from TeamRequest contributions.
       properties:
         _id:
           type: string
@@ -4159,16 +4419,60 @@ components:
         peopleRemaining:
           type: integer
           minimum: 0
+        suppliesDelivered:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamRequestSupplyItem"
         fulfillmentPercent:
           type: number
           minimum: 0
           maximum: 100
+        handledByTeamIds:
+          type: array
+          items:
+            type: string
         note:
           type: string
           nullable: true
         closedAt:
           type: string
           format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TeamRequest:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "65f1d2c3b4a5968776655aaa"
+        missionId:
+          type: string
+          example: "65f1d2c3b4a5968776655111"
+        missionRequestId:
+          type: string
+          example: "65f1d2c3b4a5968776655777"
+        teamId:
+          type: string
+          example: "65f1d2c3b4a5968776655333"
+        rescuedCountTotal:
+          type: integer
+          minimum: 0
+        suppliesDeliveredTotal:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamRequestSupplyItem"
+        lastUpdatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastUpdatedBy:
+          type: string
           nullable: true
         createdAt:
           type: string

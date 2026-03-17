@@ -20,7 +20,7 @@ const progressUpdateSchema = Joi.object({
     .items(
       Joi.object({
         name: Joi.string().trim().required(),
-        deliveredQty: Joi.number().min(0.01).required(),
+        deliveredQty: Joi.number().positive().required(),
       }),
     )
     .optional(),
