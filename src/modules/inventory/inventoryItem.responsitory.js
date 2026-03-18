@@ -14,7 +14,6 @@ class InventoryItemRepository {
     return doc.save();
   };
 
-<<<<<<< HEAD
    // Tìm nhiều supply theo mảng tên → trả về map name → _id
   async findSuppliesByNames(names) {
     const supplies = await Supply.find({ 
@@ -36,25 +35,6 @@ class InventoryItemRepository {
       licensePlate: { $in: plates }
     }).select('_id licensePlate').lean();
     return new Map(vehicles.map(v => [v.licensePlate, v._id]));
-=======
-  async findByName(supplyName) {
-    // Tìm Supply trước
-    const supply = await Supply.findOne({ name: supplyName });
-    if (!supply) return null;
-
-    // Tìm InventoryItem theo supplyID
-    return await InventoryItem.findOne({ supplyID: supply._id })
-      .populate('supplyID')
-      .populate('warehouse')
-      .lean();
-  }
-
-  async findById(id) {
-    return await InventoryItem.findById(id)
-      .populate('supplyID')
-      .populate('warehouse')
-      .lean();
->>>>>>> 9a36ab565c00f94e710f4902f92649b10d96aa63
   }
 
   async findAll(filter = {}, pagination = { page: 1, limit: 10 }) {
