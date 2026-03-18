@@ -4,9 +4,9 @@ const { Schema } = mongoose;
 // --- Enums ---
 export const VEHICLE_STATUS = {
   ACTIVE: "ACTIVE",
-  INACTIVE: "INACTIVE",
+  IN_USE: "IN_USE",
   MAINTENANCE: "MAINTENANCE",
-  OUT_OF_SERVICE: "OUT OF SERVICE",
+  OUT_OF_SERVICE: "OUT_OF_SERVICE",
 };
 
 export const VEHICLE_TYPE = {

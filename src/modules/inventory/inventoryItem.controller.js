@@ -3,6 +3,8 @@ import response from '../../utils/response.js';
 import {inventoryItemService} from './inventoryItem.service.js';
 import { createSchema, updateSchema } from './inventoryItem.validation.js';
 import Supply from '../supply/supply.model.js';
+import Vehicle from '../vehicles/vehicle.model.js';
+import { Warehouse } from '../warehouse/warehouse.model.js';
 import XLSX from "xlsx";
 
 
@@ -85,6 +87,7 @@ export const getAll = async (req, res) => {
  try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10; 
+    const itemType = req.query.itemType;
 
      
     const filter = {};
@@ -102,6 +105,18 @@ export const getAll = async (req, res) => {
 
       filter.supplyID = { $in: supplies.map(s => s._id) };
 
+    }
+    //search vehicle license plate
+    if (req.query.licensePlate) {
+
+      const vehicles = await Vehicle.find({
+        licensePlate: { $regex: req.query.licensePlate, $options: "i" }
+      }).select("_id");
+
+      filter.vehicleID = { $in: vehicles.map(v => v._id) };
+    }
+    if (itemType) {
+      filter.itemType = itemType;
     }
 
     const result = await inventoryItemService.list(filter, { page, limit });
@@ -143,39 +158,80 @@ export const remove = async (req, res) => {
     return response.sendError(res, { message: err.message });
   }
 };
+
 //import excel file
 export const importFromExcel = async (req, res) => {
   try {
+    const importType = req.query.importType;
+
+    console.log("importType:", importType);
 
     if (!req.file) {
       return res.status(400).json({
-        message: "File is required"
+        message: "File is required",
+      });
+    }
+
+    if (!importType || !["SUPPLY", "VEHICLE"].includes(importType)) {
+      return res.status(400).json({
+        message: "importType phải là SUPPLY hoặc VEHICLE",
       });
     }
 
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-    const data = XLSX.utils.sheet_to_json(sheet, {
-      header: ["supplyName", "warehouse", "description", "quantity", "reservedQuantity", "unit", "status"],
-      range: 1
+    let allData = [];
+
+    if (importType === "SUPPLY") {
+      allData = XLSX.utils.sheet_to_json(sheet, {
+        header: [
+          "supplyName",
+          "warehouse",
+          "description",
+          "quantity",
+          "reservedQuantity",
+          "unit",
+          "status",
+        ],
+        range: 1,
+      }).map((row) => ({ ...row, itemType: "SUPPLY" }));
+    }
+
+    if (importType === "VEHICLE") {
+      allData = XLSX.utils.sheet_to_json(sheet, {
+        header: ["licensePlate", "warehouse", "description", "status"],
+        range: 1,
+      }).map((row) => ({ ...row, itemType: "VEHICLE" }));
+    }
+
+    if (allData.length === 0) {
+      return res.status(400).json({
+        message: "No data found in file",
+      });
+    }
+
+    const result = await inventoryItemService.importExcel(
+      allData,
+      req.user.id
+    );
+
+    if (!result || result.inserted === undefined) {
+      return res.status(500).json({
+        message: "Import failed: result invalid",
+      });
+    }
+
+    return res.json({
+      data: result.data,
+      message: `Import thành công: ${result.inserted} items`,
     });
-
-    const result = await inventoryItemService.importExcel(data, req.user.id);
-
-    return response.sendSuccess(res, {
-      data: result,
-      message: "Import supplies successfully"
-    });
-
   } catch (err) {
+    console.error("IMPORT ERROR:", err.message);
 
-    return response.sendError(res, {
+    return res.status(500).json({
       message: "Import Excel failed",
-      statusCode: 500,
-      errors: err.message
+      error: err.message,
     });
-
   }
 };
