@@ -24,7 +24,11 @@ export const createUser = async (req, res) => {
  */
 export const listUsers = async (req, res) => {
   try {
-    const { role, isActive, noTeam, search, page, limit, sort } = req.query;
+    const { role, isActive, noTeam, search, sort } = req.query;
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
     const requesterRole = req.user.role;
 
     const result = await userService.listUsers({
@@ -38,6 +42,20 @@ export const listUsers = async (req, res) => {
       requesterRole,
     });
 
+    const filter = {};
+
+    if (req.query.userName)
+      filter.userName = new RegExp(req.query.userName, "i");
+
+    if (req.query.displayName !== undefined)
+      filter.displayName = new RegExp(req.query.displayName, "i");
+
+    if (req.query.email)
+      filter.email = new RegExp(req.query.email, "i");
+
+    if (req.query.role)
+      filter.role = new RegExp(req.query.role, "i");
+
     const { data, ...pagination } = result;
 
     return response.sendSuccess(res, {
@@ -45,11 +63,14 @@ export const listUsers = async (req, res) => {
       message: "Users retrieved successfully",
       meta: pagination,
     });
+
   } catch (err) {
+
     return response.sendError(res, {
       message: err.message,
       statusCode: 400,
     });
+
   }
 };
 

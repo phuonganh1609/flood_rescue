@@ -2,11 +2,16 @@ import mongoose from 'mongoose';
 import response from '../../utils/response.js';
 import { inventoryItemService } from './inventoryItem.service.js';
 import { createSchema, updateSchema } from './inventoryItem.validation.js';
+import Supply from '../supply/supply.model.js';
+import Vehicle from '../vehicles/vehicle.model.js';
+import { Warehouse } from '../warehouse/warehouse.model.js';
+import XLSX from "xlsx";
 
-function validateObjectId(id, res, message = 'Invalid ID parameter') {
+
+function validateObjectId(id, res, errorMessage = 'Invalid request ID') {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     response.sendError(res, {
-      message,
+      message: errorMessage,
       statusCode: 400,
     });
     return false;
@@ -133,17 +138,27 @@ export const getByName = async (req, res) => {
 };
 
 export const getAll = async (req, res) => {
-  try {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 10;
+ try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10; 
 
+     
     const filter = {};
     if (req.query.supplyId) filter.supplyID = req.query.supplyId;
     if (req.query.warehouseId) filter.warehouse = req.query.warehouseId;
     if (req.query.quantity !== undefined) filter.quantity = String(req.query.quantity);
     if (req.query.unit) filter.unit = req.query.unit;
     if (req.query.status) filter.status = req.query.status;
-    if (req.query.supplyName) filter.supplyName = req.query.supplyName;
+    // SEARCH SUPPLY NAME
+    if (req.query.supplyName) {
+
+      const supplies = await Supply.find({
+        name: { $regex: req.query.supplyName, $options: "i" }
+      }).select("_id");
+
+      filter.supplyID = { $in: supplies.map(s => s._id) };
+
+    }
 
     const result = await inventoryItemService.list(filter, { page, limit });
     const { data, ...pagination } = result;
@@ -197,5 +212,82 @@ export const remove = async (req, res) => {
     });
   } catch (err) {
     return response.sendError(res, { message: err.message });
+  }
+};
+
+//import excel file
+export const importFromExcel = async (req, res) => {
+  try {
+    const importType = req.query.importType;
+
+    console.log("importType:", importType);
+
+    if (!req.file) {
+      return res.status(400).json({
+        message: "File is required",
+      });
+    }
+
+    if (!importType || !["SUPPLY", "VEHICLE"].includes(importType)) {
+      return res.status(400).json({
+        message: "importType phải là SUPPLY hoặc VEHICLE",
+      });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    let allData = [];
+
+    if (importType === "SUPPLY") {
+      allData = XLSX.utils.sheet_to_json(sheet, {
+        header: [
+          "supplyName",
+          "warehouse",
+          "description",
+          "quantity",
+          "reservedQuantity",
+          "unit",
+          "status",
+        ],
+        range: 1,
+      }).map((row) => ({ ...row, itemType: "SUPPLY" }));
+    }
+
+    if (importType === "VEHICLE") {
+      allData = XLSX.utils.sheet_to_json(sheet, {
+        header: ["licensePlate", "warehouse", "description", "status"],
+        range: 1,
+      }).map((row) => ({ ...row, itemType: "VEHICLE" }));
+    }
+
+    if (allData.length === 0) {
+      return res.status(400).json({
+        message: "No data found in file",
+      });
+    }
+
+    const result = await inventoryItemService.importExcel(
+      allData,
+      req.user.id
+    );
+
+    if (!result || result.inserted === undefined) {
+      return res.status(500).json({
+        message: "Import failed: result invalid",
+      });
+    }
+
+    return res.json({
+      data: result.data,
+      message: `Import thành công: ${result.inserted} items`,
+    });
+  } catch (err) {
+    console.error("IMPORT ERROR:", err.message);
+
+    return res.status(500).json({
+      message: "Import Excel failed",
+      error: err.message,
+    });
   }
 };

@@ -20,7 +20,7 @@ const upload = multer({ storage });
 router.post("/", authenticate, authorize(["Manager"]), addSupply);
 
 // Get all supplies
-router.get("/list", authenticate,  authorize(["Manager"]),getAllSupplies);
+router.get("/list", authenticate,  authorize(["Manager","Admin"]),getAllSupplies);
 
 // get supply by request type (specific route first)
 router.get("/status/:status", authenticate, authorize(["Manager"]), getSupplyByRequestStatus); 
