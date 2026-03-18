@@ -21,6 +21,10 @@
       - [Coordinator nhận các events:](#coordinator-nhận-các-events)
       - [Team Leader nhận các events:](#team-leader-nhận-các-events)
   - [8. Notification Data Schema](#8-notification-data-schema)
+    - [8.1. Notification object (REST API)](#81-notification-object-rest-api)
+    - [8.2. Notification socket payload (WebSocket)](#82-notification-socket-payload-websocket)
+    - [8.3. `missionId` có giá trị ở các events sau](#83-missionid-có-giá-trị-ở-các-events-sau)
+    - [8.4. Special events (không phải Notification object)](#84-special-events-không-phải-notification-object)
   - [9. Hướng dẫn theo Role](#9-hướng-dẫn-theo-role)
     - [9.1. Citizen App](#91-citizen-app)
     - [9.2. Coordinator Dashboard](#92-coordinator-dashboard)
@@ -613,37 +617,117 @@ export type SocketEvent = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS];
 
 ## 8. Notification Data Schema
 
-Mỗi notification object nhận qua WebSocket hoặc REST API có cấu trúc:
+### 8.1. Notification object (REST API)
+
+Trả về từ `GET /api/notifications/me`, `GET /api/notifications/:userId`, `GET /api/notifications/detail/:notificationId`.
 
 ```typescript
 interface Notification {
-  _id: string;                    // MongoDB ObjectId
-  userId: string;                 // Người nhận (ObjectId ref → User)
-  type:                           // Loại notification
-    | "SUBMITTED"
-    | "ACCEPTED"
-    | "REJECTED"
-    | "IN_PROGRESS"
-    | "COMPLETED"
-    | "CANCELLED"
-    | "WITHDRAWN";
-  role:                           // Role của người nhận
+  _id: string;          // MongoDB ObjectId string
+  userId: string;       // ObjectId ref → User (người nhận)
+  type:                 // Loại sự kiện tạo ra notification
+    | "SUBMITTED"       // Request vừa được gửi
+    | "ACCEPTED"        // Request/Mission được chấp nhận / team được phân công
+    | "REJECTED"        // Request bị từ chối
+    | "IN_PROGRESS"     // (reserved, chưa dùng)
+    | "COMPLETED"       // Mission hoàn thành
+    | "CANCELLED"       // Mission thất bại / bị huỷ
+    | "WITHDRAWN";      // Team rút khỏi nhiệm vụ
+  role:                 // Role của người nhận notification
     | "CITIZEN"
     | "COORDINATOR"
     | "TEAM_LEADER"
     | "ADMIN"
     | "MANAGER";
-  message: string;                // Nội dung hiển thị
-  requestId: string;              // Request liên quan (ObjectId ref → Request)
-  missionId?: string;             // Mission liên quan (optional)
-  isRead: boolean;                // Trạng thái đã đọc
-  createdAt: string;              // ISO datetime
-  updatedAt: string;              // ISO datetime
-
-  // Chỉ có khi nhận qua WebSocket:
-  timestamp?: string;             // ISO datetime (injected by emitter)
+  message: string;      // Nội dung hiển thị cho user (có emoji prefix)
+  requestId: string;    // ObjectId ref → Request liên quan
+  missionId?: string;   // ObjectId ref → Mission (chỉ có ở một số events — xem bảng 8.3)
+  isRead: boolean;      // false = chưa đọc, true = đã đọc
+  createdAt: string;    // ISO 8601 datetime
+  updatedAt: string;    // ISO 8601 datetime
+  __v: number;          // Mongoose version key (bỏ qua)
 }
 ```
+
+---
+
+### 8.2. Notification socket payload (WebSocket)
+
+Khi nhận qua socket, BE spread document DB rồi inject thêm `timestamp`:
+
+```typescript
+// notification.emitter.js:
+// io.to(`user:${userId}`).emit(event, { ...data, timestamp: new Date().toISOString() });
+
+interface SocketNotificationPayload extends Notification {
+  // isRead luôn là false (notification vừa được tạo)
+  isRead: false;
+
+  // timestamp: thời điểm server emit (có thể lệch vài ms so với createdAt)
+  timestamp: string;    // ISO 8601 datetime — injected bởi emitter
+}
+```
+
+**Ví dụ thực tế** khi nhận event `MISSION_ASSIGNED` (Citizen):
+
+```json
+{
+  "_id": "65f1a2b3c4d5e6f7a8b9c0d1",
+  "userId": "65f1a2b3c4d5e6f7a8b9c0d2",
+  "type": "ACCEPTED",
+  "role": "CITIZEN",
+  "message": "✅ Đội cứu hộ \"Alpha\" đã được phân công đến hỗ trợ bạn",
+  "requestId": "65f1a2b3c4d5e6f7a8b9c0d3",
+  "missionId": null,
+  "isRead": false,
+  "createdAt": "2026-03-02T10:00:00.000Z",
+  "updatedAt": "2026-03-02T10:00:00.000Z",
+  "__v": 0,
+  "timestamp": "2026-03-02T10:00:00.123Z"
+}
+```
+
+---
+
+### 8.3. `missionId` có giá trị ở các events sau
+
+| Socket Event       | `missionId` |
+| :----------------- | :---------- |
+| `MISSION_ASSIGNED` | ✅ có        |
+| `MISSION_ACCEPTED` | ✅ có        |
+| `MISSION_COMPLETED`| ✅ có        |
+| `MISSION_FAILED`   | ✅ có        |
+| `MISSION_WITHDRAWN`| ✅ có        |
+| `MISSION_REASSIGNED`| ✅ có       |
+| `REQUEST_SUBMITTED`| ❌ null      |
+| `REQUEST_VERIFIED` | ❌ null      |
+| `REQUEST_REJECTED` | ❌ null      |
+| `MISSION_APPROACHING`| ❌ null    |
+
+---
+
+### 8.4. Special events (không phải Notification object)
+
+**`CONNECTED`** — server gửi ngay sau khi xác thực socket thành công:
+
+```typescript
+interface ConnectedPayload {
+  message: string;    // "WebSocket connection established"
+  userId: string;     // ObjectId của user đang kết nối
+  userRole: string;   // "Citizen" | "Rescue Coordinator" | "Rescue Team" | "Admin" | "Manager"
+}
+```
+
+**`UNREAD_COUNT_UPDATE`** — server gửi sau mỗi lần tạo notification mới:
+
+```typescript
+interface UnreadCountPayload {
+  unreadCount: number;  // Số notification chưa đọc hiện tại của user
+  timestamp: string;    // ISO 8601 datetime (injected bởi emitter)
+}
+```
+
+> **Tip:** Dùng `UNREAD_COUNT_UPDATE` để cập nhật badge số thay vì tự đếm local — số này được BE tính trực tiếp từ DB nên luôn chính xác kể cả khi user đang mở nhiều tabs.
 
 ---
 

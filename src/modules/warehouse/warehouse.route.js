@@ -1,7 +1,6 @@
 import express from 'express';
 import {add, getByName, getAll, update, remove } from './warehouse.controller.js';
 import { authenticate, authorize } from '../../middlewares/authMiddleware.js';
-import { get } from 'mongoose';
 
 const router = express.Router();
 
@@ -15,12 +14,12 @@ router.post(
 router.get(
   '/name',
   authenticate,
-  authorize(['Manager', 'Admin', 'Coordinator']),getByName
+  authorize(['Manager', 'Admin', 'Rescue Coordinator']),getByName
 );
 router.get(
   '/',
   authenticate,
-  authorize(['Manager', 'Admin', 'Coordinator']),getAll
+  authorize(['Manager', 'Admin', 'Rescue Coordinator']),getAll
 );
 
 

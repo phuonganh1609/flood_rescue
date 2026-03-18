@@ -1,4 +1,4 @@
-import {mongoose} from 'mongoose';
+import mongoose from 'mongoose';
 import { Schema } from 'mongoose';
 
 export const WAREHOUSE_STATUS = {
@@ -29,6 +29,11 @@ const warehouseSchema = new Schema({
         type: String,
         enum: Object.values(WAREHOUSE_STATUS),
         default: WAREHOUSE_STATUS.EMPTY,
+    },
+    createdBy: {
+      type: mongoose.Types.ObjectId,
+      ref: 'User',
+      required: true,
     },
     createdAt: {
         type: Date,

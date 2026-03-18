@@ -23,6 +23,13 @@ class SupplyRepository {
   }
 
   /**
+   * Find supply by ID
+   */
+  async findSupplyById(supplyId) {
+    return await Supply.findById(supplyId);
+  }
+
+  /**
    * Find all supplies with pagination
    */
   async findAllSupplies(filter = {}, pagination = { page: 1, limit: 10 }) {
