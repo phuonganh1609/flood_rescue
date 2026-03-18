@@ -26,6 +26,7 @@ router.get(
   listUsers,
 );
 
+
 /**
  * PATCH /api/users/:id/role
  * Update user role

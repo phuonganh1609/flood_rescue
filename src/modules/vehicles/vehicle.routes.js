@@ -45,7 +45,7 @@ router.get(
 router.get("/stats", authenticate, authorize(["Manager"]), getVehicleStats);
 
 // Get all vehicles
-router.get("/list", authenticate, authorize(["Manager"]), getAllVehicles);
+router.get("/list", authenticate, authorize(["Manager", "Admin"]), getAllVehicles);
 
 // Get vehicles by type
 router.get(
