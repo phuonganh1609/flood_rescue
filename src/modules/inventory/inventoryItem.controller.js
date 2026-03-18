@@ -8,10 +8,10 @@ import { Warehouse } from '../warehouse/warehouse.model.js';
 import XLSX from "xlsx";
 
 
-function validateObjectId(id, res) {
+function validateObjectId(id, res, errorMessage = 'Invalid request ID') {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     response.sendError(res, {
-      message,
+      message: errorMessage,
       statusCode: 400,
     });
     return false;

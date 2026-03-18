@@ -37,7 +37,7 @@ async importExcel(supplies, managerId) {
         throw new Error("Name, category and unit are required");
     }
 
-    const existing = await supplyRepository.findByName(name);
+    const existing = await supplyRepository.findSupplyByName(name);
     if (existing) {
         throw new Error(`Supply "${name}" already exists`);
     }

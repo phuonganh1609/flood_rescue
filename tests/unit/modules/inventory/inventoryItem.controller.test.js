@@ -39,6 +39,27 @@ jest.unstable_mockModule('../../../../src/modules/inventory/inventoryItem.model.
   },
 }));
 
+jest.unstable_mockModule('../../../../src/modules/supply/supply.model.js', () => ({
+  default: {
+    find: jest.fn(),
+    findById: jest.fn(),
+  },
+}));
+
+jest.unstable_mockModule('../../../../src/modules/vehicles/vehicle.model.js', () => ({
+  default: {
+    find: jest.fn(),
+    findById: jest.fn(),
+  },
+}));
+
+jest.unstable_mockModule('../../../../src/modules/warehouse/warehouse.model.js', () => ({
+  Warehouse: {
+    find: jest.fn(),
+    findById: jest.fn(),
+  },
+}));
+
 jest.unstable_mockModule('../../../../src/modules/inventory/inventoryItem.validation.js', () => ({
   createSchema: {
     validate: jest.fn(({ body }, { abortEarly }) => {

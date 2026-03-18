@@ -256,8 +256,8 @@ describe('SupplyController', () => {
       await supplyController.getAllSupplies(mockReq, mockRes);
 
       const call = supplyService.getAllSupplies.mock.calls[0][0];
-      expect(call.name).toBeInstanceOf(RegExp);
-      expect(call.name.toString()).toContain('rice');
+      expect(call.nameNormalized).toBeInstanceOf(RegExp);
+      expect(call.nameNormalized.toString()).toContain('rice');
     });
 
     it('should use custom page and limit from query', async () => {
