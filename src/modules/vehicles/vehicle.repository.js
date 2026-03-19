@@ -20,9 +20,11 @@ async insertMany(vehicles) {
   /**
    * Find vehicle by license plate
    */
-  async findVehicleByLicensePlate(licensePlate) {
-    return await Vehicle.findOne({ licensePlate: licensePlate.toUpperCase() });
-  }
+  async findVehicleByLicensePlate(licensePlate, session) {
+  return await Vehicle.findOne({
+    licensePlate: { $regex: `^${licensePlate}$`, $options: "i" }
+  }).session(session);
+}
 
   /**
    * Find vehicle by ID with populated references
@@ -139,6 +141,18 @@ async insertMany(vehicles) {
     };
   }
 
+   async updateStatus(vehicleId, status, userId, session = null) {
+    return await Vehicle.findByIdAndUpdate(
+      vehicleId,
+      {
+        status,
+        lastUsedBy: userId
+      },
+      { new: true, session }
+    );
+  }
+
+  
   /**
    * Update vehicle by ID
    */

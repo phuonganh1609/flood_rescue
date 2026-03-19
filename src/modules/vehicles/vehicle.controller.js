@@ -372,3 +372,29 @@ export const importVehiclesFromExcel = async (req, res) => {
 
   }
 };
+
+export const useVehicle = async (req, res) => {
+  try {
+    const result = await vehicleService.useVehicleByPlate(
+      req.params.licensePlate,
+      req.user.id
+    );
+
+    return response.sendSuccess(res, result);
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+export const releaseVehicle = async (req, res) => {
+  try {
+    const result = await vehicleService.releaseVehicleByPlate(
+      req.params.licensePlate,
+      req.user.id
+    );
+
+    return response.sendSuccess(res, result);
+  } catch (err) {
+    handleError(err, res);
+  }
+};

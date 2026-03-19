@@ -2,6 +2,7 @@ import { InventoryItem } from './inventoryItem.model.js';
 import Supply from '../supply/supply.model.js';
 import { Warehouse } from '../warehouse/warehouse.model.js';
 import Vehicle from '../vehicles/vehicle.model.js';
+import mongoose from 'mongoose';
 
 class InventoryItemRepository {
 
@@ -14,7 +15,6 @@ class InventoryItemRepository {
     return doc.save();
   };
 
-<<<<<<< HEAD
    // Tìm nhiều supply theo mảng tên → trả về map name → _id
   async findSuppliesByNames(names) {
     const supplies = await Supply.find({ 
@@ -30,31 +30,12 @@ class InventoryItemRepository {
     return new Map(warehouses.map(w => [w.name, w._id]));
   }
 
-  // ✅ Thêm method mới cho vehicle
+  //  Thêm method mới cho vehicle
   async findVehiclesByPlates(plates) {
     const vehicles = await Vehicle.find({
       licensePlate: { $in: plates }
     }).select('_id licensePlate').lean();
     return new Map(vehicles.map(v => [v.licensePlate, v._id]));
-=======
-  async findByName(supplyName) {
-    // Tìm Supply trước
-    const supply = await Supply.findOne({ name: supplyName });
-    if (!supply) return null;
-
-    // Tìm InventoryItem theo supplyID
-    return await InventoryItem.findOne({ supplyID: supply._id })
-      .populate('supplyID')
-      .populate('warehouse')
-      .lean();
-  }
-
-  async findById(id) {
-    return await InventoryItem.findById(id)
-      .populate('supplyID')
-      .populate('warehouse')
-      .lean();
->>>>>>> 9a36ab565c00f94e710f4902f92649b10d96aa63
   }
 
   async findAll(filter = {}, pagination = { page: 1, limit: 10 }) {
@@ -110,6 +91,36 @@ class InventoryItemRepository {
     async deleteByName(name) {
       return await this.deleteById(name);
     }
+
+    async findBySupplyAndWarehouse(supplyID, warehouseId) {
+      const item = await InventoryItem.findOne({
+        supplyID: new mongoose.Types.ObjectId(supplyID),
+        warehouse: new mongoose.Types.ObjectId(warehouseId),
+      });
+    console.log("FOUND ITEM:", item);
+    return item;
+  }
+
+    async updateInventory(id, updateData) {
+      return await InventoryItem.findByIdAndUpdate(id, updateData, {
+      new: true,
+      });
+    }
+
+    async findVehicleItem(vehicleId, session = null) {
+    return await InventoryItem.findOne({
+      vehicleID: vehicleId
+    }).session(session);
+  }
+
+  async updateStatus(id, status, session = null) {
+    return await InventoryItem.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, session }
+    );
+  }
+
 }
 
 

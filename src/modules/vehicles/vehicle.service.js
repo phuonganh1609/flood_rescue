@@ -1,5 +1,6 @@
 import { vehicleRepository } from "./vehicle.repository.js";
 import { eventBus } from "../../utils/events.js";
+import mongoose from "mongoose";
 import XLSX from "xlsx";
 
 class VehicleService {
@@ -27,6 +28,113 @@ class VehicleService {
   
     return result;
   }
+
+  async useVehicleByPlate(licensePlate, userId) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const cleanPlate = licensePlate.trim();
+
+    const vehicle = await vehicleRepository.findVehicleByLicensePlate(
+      cleanPlate,
+      session
+    );
+
+    if (!vehicle) throw new Error("Vehicle not found");
+
+    if (vehicle.status !== "ACTIVE") {
+      throw new Error("Vehicle is not available");
+    }
+
+    // 👉 update vehicle
+    const updatedVehicle = await vehicleRepository.updateStatus(
+      vehicle._id,
+      "IN_USE",
+      userId,
+      session
+    );
+
+    // 👉 sync inventory nếu có
+    const inventoryItem = await inventoryRepository.findVehicleItem(
+      vehicle._id,
+      session
+    );
+
+    if (inventoryItem) {
+      await inventoryRepository.updateStatus(
+        inventoryItem._id,
+        "IN_USE",
+        session
+      );
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return {
+      data: updatedVehicle,
+      message: "Vehicle is now in use"
+    };
+
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    throw err;
+  }
+}
+
+   async releaseVehicleByPlate(licensePlate, userId) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+    console.log("INPUT:", licensePlate);
+
+    const vehicle = await vehicleRepository.findVehicleByLicensePlate(licensePlate, session);
+
+    console.log("FOUND VEHICLE:", vehicle);
+
+    if (!vehicle) throw new Error("Vehicle not found");
+
+    if (vehicle.status !== "IN_USE") {
+      throw new Error("Vehicle is not in use");
+    }
+
+    const updatedVehicle = await vehicleRepository.updateStatus(
+      vehicle._id,
+      "ACTIVE",
+      userId,
+      session
+    );
+
+    const inventoryItem = await inventoryRepository.findVehicleItem(
+      vehicle._id,
+      session
+    );
+
+    if (inventoryItem) {
+      await inventoryRepository.updateStatus(
+        inventoryItem._id,
+        "ACTIVE",
+        session
+      );
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return {
+      data: updatedVehicle,
+      message: "Vehicle released successfully"
+    };
+
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    throw err;
+  }
+}
 
   async createVehicle(vehicleData, managerId) {
     const {

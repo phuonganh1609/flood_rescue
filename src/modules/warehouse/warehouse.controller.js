@@ -139,3 +139,60 @@ export const remove = async (req, res) => {
     return response.sendError(res, { message: err.message });
   }
 };
+
+export const updateWarehouseStatus = async (req, res) => {
+  try {
+    const result = await warehouseService.updateWarehouseStatus(
+      req.params.id
+    );
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Warehouse status updated"
+    });
+
+  } catch (err) {
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 500
+    });
+  }
+};
+
+
+// set maintenance
+export const setWarehouseMaintenance = async (req, res) => {
+  try {
+    const result = await warehouseService.setMaintenance(req.params.id);
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Warehouse set to maintenance"
+    });
+
+  } catch (err) {
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 500
+    });
+  }
+};
+
+
+// remove maintenance
+export const removeWarehouseMaintenance = async (req, res) => {
+  try {
+    const result = await warehouseService.removeMaintenance(req.params.id);
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Warehouse back to normal"
+    });
+
+  } catch (err) {
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 500
+    });
+  }
+};

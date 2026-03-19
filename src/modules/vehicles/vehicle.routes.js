@@ -14,7 +14,7 @@ import {
   updateVehicle,
   assignVehicleToTeam,
   updateMaintenanceStatus,
-  deleteVehicle,
+  deleteVehicle,releaseVehicle, useVehicle 
 } from "./vehicle.controller.js";
 
 const router = express.Router();
@@ -31,6 +31,14 @@ router.post(
   upload.single("file"),
   importVehiclesFromExcel
 );
+// use vehicle
+router.patch('/:licensePlate/use', useVehicle);
+router.patch(
+  "/:licensePlate/release",
+  authenticate,
+  authorize(["Manager"]), releaseVehicle
+);
+
 // ─── Read ──────────────────────────────────────────────────
 
 // Get vehicles needing maintenance (specific route first)
