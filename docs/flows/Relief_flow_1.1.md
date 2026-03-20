@@ -272,7 +272,7 @@ sequenceDiagram
 | :------- | :------------------------------- | :---- | :------------------------------------------------- |
 | `PATCH`  | `/timelines/{id}/accept`         | Team  | Accept assignment → `ASSIGNED → EN_ROUTE`; Mission `→ IN_PROGRESS` |
 | `PATCH`  | `/timelines/{id}/arrive`         | Team  | Arrive on site → `EN_ROUTE → ON_SITE`              |
-| `PATCH`  | `/timelines/{id}/complete`       | Team  | Report completion `{rescuedCount, suppliesDelivered}` → `ON_SITE → COMPLETED` / `PARTIAL` |
+| `PATCH`  | `/timelines/{id}/complete`       | Team  | Finish → `ON_SITE → COMPLETED` / `PARTIAL`; team phải dùng progress endpoint trước | `{ outcome, note? }` |
 | `PATCH`  | `/timelines/{id}/withdraw`       | Team  | Withdraw from mission → `WITHDRAWN`                |
 
 ---

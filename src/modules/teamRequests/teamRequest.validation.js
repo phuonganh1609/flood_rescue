@@ -18,4 +18,8 @@ const teamRequestIdParamSchema = Joi.object({
   id: objectId.required().label("id"),
 });
 
-export { listTeamRequestsQuerySchema, teamRequestIdParamSchema };
+const completeTeamRequestSchema = Joi.object({
+  note: Joi.string().max(1000).optional().allow(null, ""),
+});
+
+export { listTeamRequestsQuerySchema, teamRequestIdParamSchema, completeTeamRequestSchema };

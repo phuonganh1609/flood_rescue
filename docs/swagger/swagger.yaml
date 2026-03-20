@@ -1231,6 +1231,98 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /api/team-requests/{id}/complete:
+    post:
+      tags:
+        - Missions
+      summary: Complete a TeamRequest (new recommended way)
+      description: |
+        Team completes their work on a specific request within a mission.
+        - System auto-determines outcome (COMPLETED/PARTIAL) based on rescuedCountTotal vs peopleNeeded
+        - Team must be ON_SITE to complete
+        - If this is the last incomplete TeamRequest for the team in the mission, Timeline is auto-completed
+        - Syncs MissionRequest/Request/Mission statuses
+      operationId: completeTeamRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: TeamRequest ID
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 1000
+                  nullable: true
+                  description: Optional note about the completion
+      responses:
+        "200":
+          description: TeamRequest completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Team request completed successfully"
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/TeamRequest"
+                      - type: object
+                        properties:
+                          outcome:
+                            type: string
+                            enum: [COMPLETED, PARTIAL]
+                            description: Auto-determined based on rescued count vs target
+                          completedAt:
+                            type: string
+                            format: date-time
+                          completedBy:
+                            type: string
+        "400":
+          description: Invalid request (already completed, Timeline not ON_SITE, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - not team member or wrong team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: TeamRequest not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /api/missions/{id}/requests:
     get:
       tags:
@@ -3516,7 +3608,7 @@ paths:
     patch:
       tags:
         - Timelines
-      summary: Complete timeline with outcome
+      summary: Complete timeline with outcome (team must update progress before completing)
       security:
         - bearerAuth: []
       parameters:
@@ -4481,20 +4573,6 @@ components:
           type: string
           format: date-time
 
-    TimelineCompletionItem:
-      type: object
-      required:
-        - missionRequestId
-        - rescuedCount
-      properties:
-        missionRequestId:
-          type: string
-          example: "65f1d2c3b4a5968776655777"
-        rescuedCount:
-          type: integer
-          minimum: 0
-          example: 3
-
     Mission:
       type: object
       properties:
@@ -4750,22 +4828,17 @@ components:
       type: object
       required:
         - outcome
-        - completions
       properties:
         outcome:
           type: string
           enum:
             - COMPLETED
             - PARTIAL
+          description: "COMPLETED = hoàn thành, PARTIAL = hoàn thành một phần. Team phải cập nhật progress qua POST /api/mission-requests/:id/progress trước khi gọi complete."
         note:
           type: string
           nullable: true
-        completions:
-          type: array
-          minItems: 1
-          description: List of mission request completion updates for this timeline.
-          items:
-            $ref: "#/components/schemas/TimelineCompletionItem"
+          maxLength: 1000
 
     TimelineFailInput:
       type: object
@@ -4834,7 +4907,7 @@ components:
                 properties:
                   field:
                     type: string
-                    example: "completions.0.missionRequestId"
+                    example: "outcome"
                   message:
                     type: string
                     example: "missionRequestId phải là ObjectId hợp lệ"

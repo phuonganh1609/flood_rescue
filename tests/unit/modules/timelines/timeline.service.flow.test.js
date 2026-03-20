@@ -28,7 +28,6 @@ jest.unstable_mockModule("../../../../src/modules/missionRequests/missionRequest
     markPendingInProgressByMission: jest.fn(),
     findByMissionId: jest.fn(),
     findById: jest.fn(),
-    incrementRescued: jest.fn(),
     findByRequestId: jest.fn(),
   },
 }));
@@ -46,6 +45,7 @@ jest.unstable_mockModule("../../../../src/modules/requests/request.model.js", ()
     CANCELLED: "CANCELLED",
     REJECTED: "REJECTED",
     IN_PROGRESS: "IN_PROGRESS",
+    PARTIALLY_FULFILLED: "PARTIALLY_FULFILLED",
     FULFILLED: "FULFILLED",
     VERIFIED: "VERIFIED",
   },
@@ -105,13 +105,14 @@ const { timelineRepository } = await import("../../../../src/modules/timelines/t
 const missionRepository = (await import("../../../../src/modules/missions/mission.repository.js")).default;
 const { missionRequestRepository } = await import("../../../../src/modules/missionRequests/missionRequest.repository.js");
 const { eventBus } = await import("../../../../src/utils/events.js");
+const { requestRepository } = await import("../../../../src/modules/requests/request.repository.js");
 
 describe("TimelineService flow", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it("should run accept -> arrive -> complete with completions and emit mission events", async () => {
+  it("should run accept -> arrive -> complete (no completions) and emit mission events", async () => {
     const missionId = "m-flow";
     const timelineId = "tl-flow";
     const teamId = "team-flow";
@@ -145,19 +146,6 @@ describe("TimelineService flow", () => {
         requestId: { _id: requestId, userId: { _id: "citizen-flow" } },
       },
     ]);
-    missionRequestRepository.findById.mockResolvedValue({
-      _id: missionRequestId,
-      missionId,
-      requestId: { _id: requestId, userId: { _id: "citizen-flow" } },
-      status: "IN_PROGRESS",
-    });
-    missionRequestRepository.incrementRescued.mockResolvedValue({
-      _id: missionRequestId,
-      missionId,
-      requestId: { _id: requestId, userId: { _id: "citizen-flow" } },
-      status: "FULFILLED",
-    });
-
     jest.spyOn(timelineService, "getUserTeamId").mockResolvedValue(teamId);
     jest.spyOn(timelineService, "syncAllForTimeline").mockResolvedValue({ requestStatus: "IN_PROGRESS" });
     jest.spyOn(timelineService, "syncRequestStatusesForMission").mockResolvedValue();
@@ -170,27 +158,134 @@ describe("TimelineService flow", () => {
     const completed = await timelineService.completeTimeline(timelineId, actorUserId, {
       outcome: "COMPLETED",
       note: "all rescued",
-      completions: [{ missionRequestId, rescuedCount: 2 }],
     });
 
     expect(accepted.status).toBe("EN_ROUTE");
     expect(arrived.status).toBe("ON_SITE");
     expect(completed.status).toBe("COMPLETED");
 
-    expect(missionRequestRepository.incrementRescued).toHaveBeenCalledWith(
-      missionRequestId,
-      2,
-      timelineId,
-      teamId,
-    );
+    expect(timelineService.emitMissionCompletedForMission).toHaveBeenCalled();
+  });
 
-    expect(eventBus.emit).toHaveBeenCalledWith(
-      "MISSION_COMPLETED",
-      expect.objectContaining({
-        requestId,
+  describe("V3: syncRequestStatus — PARTIALLY_FULFILLED when mix FULFILLED+DROPPED", () => {
+    it("should return PARTIALLY_FULFILLED when MissionRequests are mix of FULFILLED and DROPPED", async () => {
+      requestRepository.findRequestById.mockResolvedValue({
+        _id: "req-v3",
+        status: "IN_PROGRESS",
+      });
+      missionRequestRepository.findByRequestId.mockResolvedValue([
+        { status: "FULFILLED" },
+        { status: "DROPPED" },
+      ]);
+
+      const result = await timelineService.syncRequestStatus("req-v3");
+
+      expect(requestRepository.updateRequestStatus).toHaveBeenCalledWith(
+        "req-v3",
+        "PARTIALLY_FULFILLED",
+      );
+      expect(result).toBe("PARTIALLY_FULFILLED");
+    });
+
+    it("should return FULFILLED when all MissionRequests are FULFILLED", async () => {
+      requestRepository.findRequestById.mockResolvedValue({
+        _id: "req-v3b",
+        status: "IN_PROGRESS",
+      });
+      missionRequestRepository.findByRequestId.mockResolvedValue([
+        { status: "FULFILLED" },
+        { status: "FULFILLED" },
+      ]);
+
+      const result = await timelineService.syncRequestStatus("req-v3b");
+
+      expect(requestRepository.updateRequestStatus).toHaveBeenCalledWith(
+        "req-v3b",
+        "FULFILLED",
+      );
+      expect(result).toBe("FULFILLED");
+    });
+
+    it("should not update terminal request statuses (CLOSED/CANCELLED/REJECTED)", async () => {
+      requestRepository.findRequestById.mockResolvedValue({
+        _id: "req-v3c",
+        status: "CLOSED",
+      });
+
+      const result = await timelineService.syncRequestStatus("req-v3c");
+
+      expect(requestRepository.updateRequestStatus).not.toHaveBeenCalled();
+      expect(result).toBe("CLOSED");
+    });
+  });
+
+  describe("V4: cancelTimeline — should sync Request status", () => {
+    it("should call syncRequestStatusesForMission after cancelling", async () => {
+      const timelineId = "tl-cancel";
+      const missionId = "m-cancel";
+      const teamId = "team-cancel";
+
+      timelineRepository.findById.mockResolvedValue({
+        _id: timelineId,
         missionId,
-        citizenId: "citizen-flow",
-      }),
-    );
+        teamId: { _id: teamId },
+        status: "ASSIGNED",
+      });
+      timelineRepository.transitionStatus.mockResolvedValue({
+        _id: timelineId,
+        missionId,
+        teamId: { _id: teamId },
+        status: "CANCELLED",
+      });
+
+      jest.spyOn(timelineService, "syncAllForTimeline").mockResolvedValue({});
+      const syncReqSpy = jest.spyOn(timelineService, "syncRequestStatusesForMission").mockResolvedValue();
+
+      await timelineService.cancelTimeline(timelineId, {});
+
+      expect(syncReqSpy).toHaveBeenCalledWith(missionId);
+    });
+  });
+
+  describe("V1: completeTimeline — no completions, only status transition", () => {
+    it("should complete with PARTIAL outcome without processing any completions", async () => {
+      const timelineId = "tl-partial";
+      const missionId = "m-partial";
+      const teamId = "team-partial";
+      const actorUserId = "user-partial";
+
+      timelineRepository.findById.mockResolvedValue({
+        _id: timelineId,
+        missionId,
+        teamId: { _id: teamId },
+        status: "ON_SITE",
+        note: null,
+      });
+      missionRepository.findById.mockResolvedValue({ _id: missionId, status: "IN_PROGRESS" });
+      timelineRepository.transitionStatus.mockResolvedValue({
+        _id: timelineId,
+        missionId,
+        teamId: { _id: teamId },
+        status: "PARTIAL",
+        completedAt: new Date(),
+      });
+
+      jest.spyOn(timelineService, "getUserTeamId").mockResolvedValue(teamId);
+      jest.spyOn(timelineService, "syncAllForTimeline").mockResolvedValue({});
+      jest.spyOn(timelineService, "syncRequestStatusesForMission").mockResolvedValue();
+      jest.spyOn(timelineService, "emitMissionCompletedForMission").mockResolvedValue();
+
+      const result = await timelineService.completeTimeline(timelineId, actorUserId, {
+        outcome: "PARTIAL",
+        note: "could not rescue all",
+      });
+
+      expect(result.status).toBe("PARTIAL");
+      // Should NOT call emitMissionCompletedForMission for PARTIAL outcome
+      expect(timelineService.emitMissionCompletedForMission).not.toHaveBeenCalled();
+      // Should still sync
+      expect(timelineService.syncAllForTimeline).toHaveBeenCalled();
+      expect(timelineService.syncRequestStatusesForMission).toHaveBeenCalledWith(missionId);
+    });
   });
 });

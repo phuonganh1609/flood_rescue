@@ -185,6 +185,8 @@ sequenceDiagram
 
 ### 4.3 Complete / Partial (Hoàn thành nhiệm vụ)
 
+> **Lưu ý:** Team phải cập nhật tiến độ (rescued/supply) qua `POST /api/mission-requests/:id/progress` **trước** khi gọi complete. API complete chỉ chuyển trạng thái timeline, không ghi rescuedCount.
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -192,34 +194,27 @@ sequenceDiagram
     participant API as ⚙️ API Server
 
     Note over Team: Đang ở hiện trường (ON_SITE)
+    Note over Team: Đã cập nhật progress qua<br/>POST /api/mission-requests/:id/progress
 
     alt Cứu hộ thành công hoàn toàn
         Team->>API: PATCH /api/timelines/:id/complete
-        Note right of Team: { outcome: "COMPLETED",<br/>completions: [{ missionRequestId, rescuedCount }],<br/>note?: "..." }
+        Note right of Team: { outcome: "COMPLETED", note?: "..." }
 
         API->>API: Validate: status phải là ON_SITE
         API->>API: Timeline = COMPLETED, completedAt = now()
-        API->>API: Tính tổng rescuedCount tất cả timeline
-
-        alt Tổng rescued >= peopleCount
-            API->>API: Request = FULFILLED
-            Note right of API: Emit MISSION_COMPLETED → Citizen
-        else Tổng rescued < peopleCount
-            API->>API: Request = PARTIALLY_FULFILLED
-            Note right of API: Coordinator sẽ tạo Timeline mới
-        end
-
+        API->>API: Sync Request status (derive từ MissionRequest aggregate)
         API->>API: Sync Mission status
         API->>API: Sync Team → AVAILABLE
+        API->>API: Emit MISSION_COMPLETED
         API-->>Team: 200 OK
 
     else Cứu hộ được một phần
         Team->>API: PATCH /api/timelines/:id/complete
-        Note right of Team: { outcome: "PARTIAL",<br/>completions: [{ missionRequestId, rescuedCount }],<br/>note?: "..." }
+        Note right of Team: { outcome: "PARTIAL", note?: "..." }
 
         API->>API: Timeline = PARTIAL, completedAt = now()
-        API->>API: Request = PARTIALLY_FULFILLED
-        API->>API: Sync Mission → PARTIAL
+        API->>API: Sync Request status
+        API->>API: Sync Mission status
         API->>API: Sync Team → AVAILABLE
         API-->>Team: 200 OK
         Note right of API: Coordinator tạo Timeline #2 cho team mới
@@ -354,8 +349,8 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 |:-------|:---------|:--------|:--------|:-----|:-------|
 | `accept` | → EN_ROUTE | MissionRequest `PENDING` → `IN_PROGRESS`; Request → `IN_PROGRESS` | → IN_PROGRESS | → BUSY | MISSION_ACCEPTED, MISSION_APPROACHING |
 | `arrive` | → ON_SITE | — | — | — | — |
-| `complete` (full) | → COMPLETED | → FULFILLED (nếu đủ) | → COMPLETED / PARTIAL | → AVAILABLE | MISSION_COMPLETED |
-| `complete` (partial) | → PARTIAL | → PARTIALLY_FULFILLED | → PARTIAL | → AVAILABLE | — |
+| `complete` (full) | → COMPLETED | Sync Request từ MissionRequest aggregate (FULFILLED / PARTIALLY_FULFILLED) | → COMPLETED / PARTIAL | → AVAILABLE | MISSION_COMPLETED |
+| `complete` (partial) | → PARTIAL | Sync Request từ MissionRequest aggregate | → PARTIAL | → AVAILABLE | — |
 | `fail` | → FAILED | → PARTIALLY_FULFILLED | sync | → AVAILABLE | MISSION_FAILED |
 | `withdraw` | → WITHDRAWN | → VERIFIED (nếu hết timeline) | sync | → AVAILABLE | MISSION_WITHDRAWN |
 | `missionRequest progress update` | — | MissionRequest aggregate cập nhật từ TeamRequest; Request có thể thành PARTIALLY_FULFILLED khi all terminal nhưng còn thiếu target | sync PARTIAL/COMPLETED | — | — |
@@ -370,18 +365,19 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 | 2 | `GET` | `/api/timelines/:id` | Chi tiết timeline | — |
 | 3 | `PATCH` | `/api/timelines/:id/accept` | Nhận nhiệm vụ (ASSIGNED → EN_ROUTE) | — |
 | 4 | `PATCH` | `/api/timelines/:id/arrive` | Đã đến nơi (EN_ROUTE → ON_SITE) | — |
-| 5 | `PATCH` | `/api/timelines/:id/complete` | Hoàn thành (ON_SITE → COMPLETED/PARTIAL) | `{ outcome, completions: [{ missionRequestId, rescuedCount }], note? }` (`rescuedCount` top-level sẽ bị reject `400`) |
-| 6 | `PATCH` | `/api/timelines/:id/fail` | Thất bại (ON_SITE → FAILED) | `{ failureReason, note? }` |
-| 7 | `PATCH` | `/api/timelines/:id/withdraw` | Từ chối (ASSIGNED → WITHDRAWN) | `{ withdrawalReason, note? }` |
-| 8 | `GET` | `/api/requests` | Xem danh sách requests | Query: `status`, `type`, `page`, `limit` |
-| 9 | `GET` | `/api/requests/:id` | Xem chi tiết request | — |
-| 10 | `GET` | `/api/missions/:id/requests` | Xem requests trong mission (team view + supervisor filter) | Query: `teamId`, `page`, `limit` |
-| 11 | `POST` | `/api/mission-requests/:id/progress` | Team cập nhật rescued/supply cho request | `{ peopleRescuedIncrement?, suppliesDelivered? }` |
-| 12 | `GET` | `/api/team-requests` | Xem audit TeamRequest (team chỉ thấy team của mình) | Query: `missionId`, `missionRequestId`, `teamId`, `page`, `limit` |
-| 13 | `GET` | `/api/team-requests/:id` | Xem chi tiết một TeamRequest | — |
-| 14 | `GET` | `/api/notifications` | Danh sách thông báo | — |
-| 15 | `PATCH` | `/api/notifications/:id/read` | Đánh dấu đã đọc | — |
-| 16 | `GET` | `/api/notifications/unread-count` | Số thông báo chưa đọc | — |
+| 5 | `POST` | `/api/team-requests/:id/complete` | **[NEW]** Hoàn thành TeamRequest (recommended). Outcome tự động xác định dựa trên rescued count vs target. Auto-complete Timeline nếu là TeamRequest cuối cùng. | `{ note? }` |
+| 6 | `PATCH` | `/api/timelines/:id/complete` | **[DEPRECATED]** Hoàn thành Timeline (cách cũ, vẫn hoạt động). Team phải cập nhật progress trước khi complete. | `{ outcome, note? }` |
+| 7 | `PATCH` | `/api/timelines/:id/fail` | Thất bại (ON_SITE → FAILED) | `{ failureReason, note? }` |
+| 8 | `PATCH` | `/api/timelines/:id/withdraw` | Từ chối (ASSIGNED → WITHDRAWN) | `{ withdrawalReason, note? }` |
+| 9 | `GET` | `/api/requests` | Xem danh sách requests | Query: `status`, `type`, `page`, `limit` |
+| 10 | `GET` | `/api/requests/:id` | Xem chi tiết request | — |
+| 11 | `GET` | `/api/missions/:id/requests` | Xem requests trong mission (team view + supervisor filter) | Query: `teamId`, `page`, `limit` |
+| 12 | `POST` | `/api/mission-requests/:id/progress` | Team cập nhật rescued/supply cho request | `{ peopleRescuedIncrement?, suppliesDelivered? }` |
+| 13 | `GET` | `/api/team-requests` | Xem audit TeamRequest (team chỉ thấy team của mình) | Query: `missionId`, `missionRequestId`, `teamId`, `page`, `limit` |
+| 14 | `GET` | `/api/team-requests/:id` | Xem chi tiết một TeamRequest | — |
+| 15 | `GET` | `/api/notifications` | Danh sách thông báo | — |
+| 16 | `PATCH` | `/api/notifications/:id/read` | Đánh dấu đã đọc | — |
+| 17 | `GET` | `/api/notifications/unread-count` | Số thông báo chưa đọc | — |
 
 ---
 
@@ -405,8 +401,40 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 - `suppliesDeliveredTotal[]`
 - `lastUpdatedAt`
 - `lastUpdatedBy` (optional)
+- **[NEW]** `completedAt` — Thời điểm team complete TeamRequest này
+- **[NEW]** `completedBy` — User ID của người complete
+- **[NEW]** `outcome` — `COMPLETED` hoặc `PARTIAL` (auto-determined)
+- **[NEW]** `note` — Ghi chú khi complete
 
-### 8.3 Derivation rule
+### 8.3 TeamRequest Complete Flow (NEW - Recommended)
+
+**Endpoint:** `POST /api/team-requests/:id/complete`
+
+**Luồng:**
+1. Team gọi progress endpoint để cập nhật `rescuedCountTotal` và `suppliesDeliveredTotal`
+2. Team gọi complete endpoint cho từng TeamRequest riêng biệt
+3. Hệ thống tự động xác định outcome:
+   - `rescuedCountTotal >= peopleNeeded` → `COMPLETED`
+   - `rescuedCountTotal < peopleNeeded` → `PARTIAL`
+4. Đánh dấu TeamRequest với `completedAt`, `completedBy`, `outcome`, `note`
+5. Kiểm tra xem còn TeamRequest nào chưa complete của team trong mission không
+6. Nếu đây là TeamRequest cuối cùng → tự động complete Timeline với outcome tương ứng
+7. Sync MissionRequest/Request/Mission statuses
+
+**Validations:**
+- TeamRequest chưa được complete trước đó
+- User phải thuộc team của TeamRequest
+- Timeline phải ở trạng thái `ON_SITE`
+- Team phải có Timeline trong mission
+
+**Ưu điểm so với Timeline complete:**
+- Outcome tự động xác định dựa trên data thực tế
+- Team complete từng request riêng biệt (granular control)
+- Timeline tự động complete khi tất cả TeamRequest xong
+- Audit rõ ràng hơn (biết team complete request nào, khi nào)
+- Multi-team scenario: team khác vẫn có thể tiếp tục với TeamRequest riêng của họ
+
+### 8.4 Derivation rule
 
 - Team ghi contribution vào TeamRequest.
 - MissionRequest aggregate (`peopleRescued`, `suppliesDelivered`, `fulfillmentPercent`) = tổng contribution của tất cả TeamRequest cùng `missionRequestId`.

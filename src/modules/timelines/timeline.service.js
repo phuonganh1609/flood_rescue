@@ -182,7 +182,7 @@ class TimelineService {
   }
 
   async completeTimeline(timelineId, actorUserId, payload) {
-    const { outcome, note, completions = [] } = payload;
+    const { outcome, note } = payload;
     const timeline = await this.getTimelineById(timelineId);
     await this.assertMissionNotTerminated(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
@@ -193,11 +193,6 @@ class TimelineService {
       : TIMELINE_STATUS.COMPLETED;
 
     assertTimelineTransition(timeline.status, nextStatus);
-
-    const derivedRescuedCount = completions.reduce(
-      (sum, item) => sum + item.rescuedCount,
-      0,
-    );
 
     const transitioned = await timelineRepository.transitionStatus(
       timelineId,
@@ -218,37 +213,6 @@ class TimelineService {
       throw err;
     }
 
-    const fulfilledMissionRequests = [];
-    for (const item of completions) {
-      const missionRequest = await missionRequestRepository.findById(item.missionRequestId);
-      if (!missionRequest) {
-        const err = new Error(
-          `Không tìm thấy mission request với ID: ${item.missionRequestId}`,
-        );
-        err.statusCode = 404;
-        err.errorCode = "MISSION_REQUEST_NOT_FOUND";
-        throw err;
-      }
-
-      if (extractId(missionRequest.missionId) !== extractId(transitioned.missionId)) {
-        const err = new Error("Mission request không thuộc mission của timeline này");
-        err.statusCode = 400;
-        err.errorCode = "MISSION_REQUEST_MISMATCH";
-        throw err;
-      }
-
-      const updatedMissionRequest = await missionRequestRepository.incrementRescued(
-        item.missionRequestId,
-        item.rescuedCount,
-        extractId(transitioned._id),
-        extractId(transitioned.teamId),
-      );
-
-      if (updatedMissionRequest?.status === "FULFILLED") {
-        fulfilledMissionRequests.push(updatedMissionRequest);
-      }
-    }
-
     await this.syncAllForTimeline(transitioned);
     await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
 
@@ -260,17 +224,43 @@ class TimelineService {
       );
     }
 
-    for (const missionRequest of fulfilledMissionRequests) {
-      const requestId = extractId(missionRequest.requestId);
-      const citizenId = extractId(missionRequest.requestId?.userId);
-      if (!requestId || !citizenId) continue;
-      eventBus.emit("MISSION_COMPLETED", {
-        requestId,
-        missionId: extractId(transitioned.missionId),
-        citizenId,
-        teamId: extractId(transitioned.teamId),
+    return transitioned;
+  }
+
+  async completeTimelineFromTeamRequest(timelineId, outcome, note, actorUserId) {
+    const timeline = await this.getTimelineById(timelineId);
+
+    const nextStatus =
+      outcome === "PARTIAL" ? TIMELINE_STATUS.PARTIAL : TIMELINE_STATUS.COMPLETED;
+
+    const transitioned = await timelineRepository.transitionStatus(
+      timelineId,
+      TIMELINE_STATUS.ON_SITE,
+      {
+        status: nextStatus,
+        completedAt: new Date(),
+        note: note || timeline.note,
+      },
+    );
+
+    if (!transitioned) {
+      const err = new Error(
+        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
+      );
+      err.statusCode = 409;
+      err.errorCode = "TIMELINE_CONFLICT";
+      throw err;
+    }
+
+    await this.syncAllForTimeline(transitioned);
+    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
+
+    if (nextStatus === TIMELINE_STATUS.COMPLETED) {
+      await this.emitMissionCompletedForMission(
+        transitioned,
+        "completed via TeamRequest",
         actorUserId,
-      });
+      );
     }
 
     return transitioned;
@@ -367,6 +357,7 @@ class TimelineService {
     }
 
     await this.syncAllForTimeline(transitioned);
+    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
     return transitioned;
   }
 
@@ -435,7 +426,12 @@ class TimelineService {
           ["FULFILLED", "CLOSED", "DROPPED"].includes(status),
         );
         if (allDone) {
-          desiredFromMissionRequest = REQUEST_STATUS.FULFILLED;
+          const allFulfilled = missionRequestStatuses.every(
+            (status) => status === "FULFILLED",
+          );
+          desiredFromMissionRequest = allFulfilled
+            ? REQUEST_STATUS.FULFILLED
+            : REQUEST_STATUS.PARTIALLY_FULFILLED;
         } else {
           desiredFromMissionRequest = REQUEST_STATUS.VERIFIED;
         }
