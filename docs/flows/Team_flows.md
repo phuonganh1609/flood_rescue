@@ -7,7 +7,9 @@
 > **V2 update (TeamRequest-first, Option A):**
 >
 > - Khi `PATCH /api/missions/:id/start`, hệ thống pre-create `TeamRequest` cho mọi cặp (`MissionRequest` x Team assigned).
+> - Sau `start`, mission vẫn ở `PLANNED`; mission chỉ chuyển `IN_PROGRESS` khi có ít nhất một timeline vào `EN_ROUTE`/`ON_SITE` (thường sau `accept`).
 > - Team update tiến độ qua `POST /api/mission-requests/:id/progress`, backend ghi audit theo TeamRequest và sync aggregate về MissionRequest.
+> - Team chỉ được update progress khi đã `accept` (có timeline đang executing: `EN_ROUTE`/`ON_SITE`).
 > - Team có thể xem request trong mission ngay sau khi được assign (không phụ thuộc đã update progress hay chưa).
 > - Nếu tổng `suppliesDelivered` vượt `requestedQty`, API trả lỗi `422 (SUPPLY_OVER_DELIVERY)` để FE hiển thị cảnh báo nghiệp vụ.
 
@@ -56,11 +58,11 @@ flowchart TD
 
     EXECUTE --> OUTCOME{Kết quả?}
 
-    OUTCOME -- Thành công hết --> COMPLETE[PATCH /timelines/:id/complete<br/>outcome=COMPLETED<br/>rescuedCount=N]
-    OUTCOME -- Cứu được một phần --> PARTIAL_COMP[PATCH /timelines/:id/complete<br/>outcome=PARTIAL<br/>rescuedCount=M]
+    OUTCOME -- Thành công hết --> COMPLETE[PATCH /timelines/:id/complete<br/>outcome=COMPLETED<br/>completions: object]
+    OUTCOME -- Cứu được một phần --> PARTIAL_COMP[PATCH /timelines/:id/complete<br/>outcome=PARTIAL<br/>completions: object]
     OUTCOME -- Thất bại --> FAIL_ACT[PATCH /timelines/:id/fail<br/>failureReason=...]
 
-    COMPLETE --> CHECK{rescuedCount >= peopleCount?}
+    COMPLETE --> CHECK{Σ completions.rescuedCount >= peopleCount?}
     CHECK -- Yes --> FULFILLED([✅ Request = FULFILLED<br/>Team = AVAILABLE])
     CHECK -- No --> PARTIAL_REQ([⚠️ Request = PARTIALLY_FULFILLED<br/>Team = AVAILABLE<br/>Coordinator tạo Timeline mới])
 
@@ -88,14 +90,14 @@ stateDiagram-v2
 
     PLANNED --> ASSIGNED : Coordinator start mission
 
-    ASSIGNED --> EN_ROUTE : 🟢 Team accept<br/>PATCH /timelines/:id/accept
-    ASSIGNED --> WITHDRAWN : 🔴 Team từ chối<br/>PATCH /timelines/:id/withdraw
+    ASSIGNED --> EN_ROUTE : 🟢 Team accept (accept)
+    ASSIGNED --> WITHDRAWN : 🔴 Team từ chối (withdraw)
 
-    EN_ROUTE --> ON_SITE : 📍 Team arrives<br/>PATCH /timelines/:id/arrive
+    EN_ROUTE --> ON_SITE : 📍 Team arrives (arrive)
 
-    ON_SITE --> COMPLETED : ✅ Cứu hộ thành công<br/>PATCH /timelines/:id/complete<br/>{outcome: COMPLETED}
-    ON_SITE --> PARTIAL : ⚠️ Cứu được một phần<br/>PATCH /timelines/:id/complete<br/>{outcome: PARTIAL}
-    ON_SITE --> FAILED : ❌ Thất bại<br/>PATCH /timelines/:id/fail
+    ON_SITE --> COMPLETED : ✅ Cứu hộ thành công (complete full)
+    ON_SITE --> PARTIAL : ⚠️ Cứu được một phần (complete partial)
+    ON_SITE --> FAILED : ❌ Thất bại (fail)
 
     note right of ASSIGNED : Coordinator có thể cancel → CANCELLED
 
@@ -193,7 +195,7 @@ sequenceDiagram
 
     alt Cứu hộ thành công hoàn toàn
         Team->>API: PATCH /api/timelines/:id/complete
-        Note right of Team: { outcome: "COMPLETED",<br/>rescuedCount: 5, note?: "..." }
+        Note right of Team: { outcome: "COMPLETED",<br/>completions: [{ missionRequestId, rescuedCount }],<br/>note?: "..." }
 
         API->>API: Validate: status phải là ON_SITE
         API->>API: Timeline = COMPLETED, completedAt = now()
@@ -213,7 +215,7 @@ sequenceDiagram
 
     else Cứu hộ được một phần
         Team->>API: PATCH /api/timelines/:id/complete
-        Note right of Team: { outcome: "PARTIAL",<br/>rescuedCount: 2, note?: "..." }
+        Note right of Team: { outcome: "PARTIAL",<br/>completions: [{ missionRequestId, rescuedCount }],<br/>note?: "..." }
 
         API->>API: Timeline = PARTIAL, completedAt = now()
         API->>API: Request = PARTIALLY_FULFILLED
@@ -250,7 +252,32 @@ sequenceDiagram
     Note over API: Coordinator quyết định retry hoặc cancel
 ```
 
-### 4.5 View Missions & Timelines (Xem nhiệm vụ)
+### 4.5 Update Progress theo MissionRequest (TeamRequest-first)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Team as 👨‍🚒 Rescue Team App
+    participant API as ⚙️ API Server
+
+    Team->>API: POST /api/mission-requests/:id/progress
+    Note right of Team: { peopleRescuedIncrement?, suppliesDelivered? }
+
+    API->>API: Validate MissionRequest chưa terminal
+    API->>API: Validate Mission không ABORTED/COMPLETED/PAUSED
+    API->>API: Validate user thuộc Rescue Team và có teamId
+    API->>API: Validate team có timeline trong mission
+    API->>API: Validate team đã accept (có EN_ROUTE/ON_SITE)
+    API->>API: Chặn nếu timeline context của team đã terminal
+    API->>API: Validate payload hợp lệ và không over-delivery
+    API->>API: Upsert TeamRequest contribution
+    API->>API: Recompute aggregate -> MissionRequest
+    API->>API: Sync Request status + Mission status
+
+    API-->>Team: 200 OK
+```
+
+### 4.6 View Missions & Timelines (Xem nhiệm vụ)
 
 ```mermaid
 sequenceDiagram
@@ -272,7 +299,7 @@ sequenceDiagram
     API-->>Team: Request detail (location, peopleCount, description...)
 ```
 
-### 4.6 Notifications (Thông báo)
+### 4.7 Notifications (Thông báo)
 
 ```mermaid
 sequenceDiagram
@@ -310,10 +337,12 @@ Mỗi action của Rescue Team đều phải qua các validation sau:
 | **Authentication** | User phải đăng nhập (JWT) | `401` |
 | **Authorization** | User phải có role `Rescue Team` | `403` |
 | **Team membership** | User phải thuộc team được gán trong timeline | `403` |
-| **Mission status** | Mission không được ở `ABORTED`, `COMPLETED`, `PAUSED` | `400` |
+| **Mission status (timeline actions)** | `accept`, `arrive`, `complete`, `fail`, `withdraw` đều chặn khi mission ở `ABORTED`, `COMPLETED`, `PAUSED` | `400` |
+| **Progress precondition** | Team phải `accept` trước khi update progress (cần timeline `EN_ROUTE`/`ON_SITE`) | `400` |
+| **Progress terminal guard** | Không cho update progress khi timeline context của team đã terminal | `400` |
 | **Timeline transition** | Status hiện tại phải hợp lệ cho action | `400` |
 | **Supply over-delivery** | Tổng deliveredQty của supply vượt requestedQty trong MissionRequest snapshot | `422` |
-| **Concurrent guard** | Sử dụng `transitionStatus` để tránh race condition | `409` |
+| **Concurrent guard (timeline only)** | `transitionStatus` tránh race condition cho timeline actions | `409` |
 
 ---
 
@@ -323,13 +352,13 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 
 | Action | Timeline | Request | Mission | Team | Events |
 |:-------|:---------|:--------|:--------|:-----|:-------|
-| `accept` | → EN_ROUTE | → IN_PROGRESS | → IN_PROGRESS | → BUSY | MISSION_ACCEPTED, MISSION_APPROACHING |
+| `accept` | → EN_ROUTE | MissionRequest `PENDING` → `IN_PROGRESS`; Request → `IN_PROGRESS` | → IN_PROGRESS | → BUSY | MISSION_ACCEPTED, MISSION_APPROACHING |
 | `arrive` | → ON_SITE | — | — | — | — |
 | `complete` (full) | → COMPLETED | → FULFILLED (nếu đủ) | → COMPLETED / PARTIAL | → AVAILABLE | MISSION_COMPLETED |
 | `complete` (partial) | → PARTIAL | → PARTIALLY_FULFILLED | → PARTIAL | → AVAILABLE | — |
 | `fail` | → FAILED | → PARTIALLY_FULFILLED | sync | → AVAILABLE | MISSION_FAILED |
 | `withdraw` | → WITHDRAWN | → VERIFIED (nếu hết timeline) | sync | → AVAILABLE | MISSION_WITHDRAWN |
-| `missionRequest progress update` | — | MissionRequest aggregate cập nhật từ TeamRequest; Request có thể thành PARTIALLY_FULFILLED khi all terminal nhưng còn thiếu target | sync PARTIAL/COMPLETED | — | optional PROGRESS_UPDATED |
+| `missionRequest progress update` | — | MissionRequest aggregate cập nhật từ TeamRequest; Request có thể thành PARTIALLY_FULFILLED khi all terminal nhưng còn thiếu target | sync PARTIAL/COMPLETED | — | — |
 
 ---
 
@@ -341,7 +370,7 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 | 2 | `GET` | `/api/timelines/:id` | Chi tiết timeline | — |
 | 3 | `PATCH` | `/api/timelines/:id/accept` | Nhận nhiệm vụ (ASSIGNED → EN_ROUTE) | — |
 | 4 | `PATCH` | `/api/timelines/:id/arrive` | Đã đến nơi (EN_ROUTE → ON_SITE) | — |
-| 5 | `PATCH` | `/api/timelines/:id/complete` | Hoàn thành (ON_SITE → COMPLETED/PARTIAL) | `{ outcome, rescuedCount, note? }` |
+| 5 | `PATCH` | `/api/timelines/:id/complete` | Hoàn thành (ON_SITE → COMPLETED/PARTIAL) | `{ outcome, completions: [{ missionRequestId, rescuedCount }], note? }` (`rescuedCount` top-level sẽ bị reject `400`) |
 | 6 | `PATCH` | `/api/timelines/:id/fail` | Thất bại (ON_SITE → FAILED) | `{ failureReason, note? }` |
 | 7 | `PATCH` | `/api/timelines/:id/withdraw` | Từ chối (ASSIGNED → WITHDRAWN) | `{ withdrawalReason, note? }` |
 | 8 | `GET` | `/api/requests` | Xem danh sách requests | Query: `status`, `type`, `page`, `limit` |
@@ -383,6 +412,7 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 - MissionRequest aggregate (`peopleRescued`, `suppliesDelivered`, `fulfillmentPercent`) = tổng contribution của tất cả TeamRequest cùng `missionRequestId`.
 - TeamRequest không có state machine riêng; trạng thái vận hành dùng `Timeline.status` làm source of truth.
 - Progress endpoint dùng path chuẩn: `POST /api/mission-requests/:id/progress`.
+- Progress không cho phép trước `accept`; team cần đang có timeline `EN_ROUTE`/`ON_SITE` trong mission.
 - Nếu over-delivery supply, API trả `422 SUPPLY_OVER_DELIVERY`.
 - Request final status:
     - `FULFILLED` nếu đủ target.

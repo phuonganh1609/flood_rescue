@@ -147,7 +147,7 @@ class TimelineService {
     );
     await this.syncAllForTimeline(transitioned);
     await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
-    await this.emitMissionAcceptedForMission(transitioned);
+    await this.emitMissionAcceptedForMission(transitioned, actorUserId);
     await this.emitMissionApproachingForMission(transitioned);
 
     return transitioned;
@@ -182,7 +182,7 @@ class TimelineService {
   }
 
   async completeTimeline(timelineId, actorUserId, payload) {
-    const { outcome, note, rescuedCount, completions = [] } = payload;
+    const { outcome, note, completions = [] } = payload;
     const timeline = await this.getTimelineById(timelineId);
     await this.assertMissionNotTerminated(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
@@ -206,7 +206,6 @@ class TimelineService {
         status: nextStatus,
         completedAt: new Date(),
         note: note || timeline.note,
-        rescuedCount: Number.isFinite(derivedRescuedCount) ? derivedRescuedCount : timeline.rescuedCount || 0,
       },
     );
 
@@ -257,6 +256,7 @@ class TimelineService {
       await this.emitMissionCompletedForMission(
         transitioned,
         "completed via timeline",
+        actorUserId,
       );
     }
 
@@ -268,6 +268,8 @@ class TimelineService {
         requestId,
         missionId: extractId(transitioned.missionId),
         citizenId,
+        teamId: extractId(transitioned.teamId),
+        actorUserId,
       });
     }
 
@@ -303,7 +305,7 @@ class TimelineService {
 
     await this.syncAllForTimeline(transitioned);
     await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
-    await this.emitMissionFailedForMission(transitioned, failureReason);
+    await this.emitMissionFailedForMission(transitioned, failureReason, actorUserId);
     return transitioned;
   }
 
@@ -334,7 +336,7 @@ class TimelineService {
       throw err;
     }
 
-    await this.emitMissionWithdrawnForMission(transitioned);
+    await this.emitMissionWithdrawnForMission(transitioned, actorUserId);
     await this.syncAllForTimeline(transitioned);
     await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
     return transitioned;
@@ -543,8 +545,8 @@ class TimelineService {
     }
   }
 
-  // Lighter check — only blocks truly terminal states.
-  // Used for arrive/complete/fail/withdraw where the team is already executing.
+  // Used for arrive/complete/fail/withdraw.
+  // Team actions are blocked when mission is paused or terminal.
   async assertMissionNotTerminated(missionId) {
     const mission = await missionRepository.findById(missionId);
     if (!mission) {
@@ -554,12 +556,12 @@ class TimelineService {
       throw err;
     }
 
-    if (["ABORTED", "COMPLETED"].includes(mission.status)) {
+    if (["ABORTED", "COMPLETED", "PAUSED"].includes(mission.status)) {
       const err = new Error(
-        `Không thể thao tác timeline: mission đã kết thúc với trạng thái ${mission.status}`,
+        `Không thể thao tác timeline: mission đang ở trạng thái ${mission.status}`,
       );
       err.statusCode = 400;
-      err.errorCode = "MISSION_TERMINAL";
+      err.errorCode = "MISSION_UNAVAILABLE_FOR_EXECUTION";
       throw err;
     }
   }
@@ -589,7 +591,7 @@ class TimelineService {
     }
   }
 
-  async emitMissionAcceptedForMission(timeline) {
+  async emitMissionAcceptedForMission(timeline, actorUserId) {
     const missionRequests = await missionRequestRepository.findByMissionId(
       extractId(timeline.missionId),
     );
@@ -598,6 +600,8 @@ class TimelineService {
     eventBus.emit("MISSION_ACCEPTED", {
       requestId,
       missionId: extractId(timeline.missionId),
+      teamId: extractId(timeline.teamId),
+      actorUserId,
       teamName: timeline.teamId?.name || "Rescue Team",
     });
   }
@@ -620,7 +624,7 @@ class TimelineService {
     }
   }
 
-  async emitMissionFailedForMission(timeline, reason) {
+  async emitMissionFailedForMission(timeline, reason, actorUserId) {
     const missionRequests = await missionRequestRepository.findByMissionId(
       extractId(timeline.missionId),
     );
@@ -634,12 +638,14 @@ class TimelineService {
         requestId,
         missionId: extractId(timeline.missionId),
         citizenId,
+        teamId: extractId(timeline.teamId),
+        actorUserId,
         reason,
       });
     }
   }
 
-  async emitMissionWithdrawnForMission(timeline) {
+  async emitMissionWithdrawnForMission(timeline, actorUserId) {
     const missionRequests = await missionRequestRepository.findByMissionId(
       extractId(timeline.missionId),
     );
@@ -654,12 +660,14 @@ class TimelineService {
     eventBus.emit("MISSION_WITHDRAWN", {
       requestIds,
       missionId: extractId(timeline.missionId),
+      teamId: extractId(timeline.teamId),
+      actorUserId,
       teamName: timeline.teamId?.name || "Rescue Team",
       withdrawalReason: timeline.withdrawalReason,
     });
   }
 
-  async emitMissionCompletedForMission(timeline, completionNote) {
+  async emitMissionCompletedForMission(timeline, completionNote, actorUserId) {
     const missionRequests = await missionRequestRepository.findByMissionId(
       extractId(timeline.missionId),
     );
@@ -673,6 +681,8 @@ class TimelineService {
         requestId,
         missionId: extractId(timeline.missionId),
         citizenId,
+        teamId: extractId(timeline.teamId),
+        actorUserId,
         completionNote,
       });
     }

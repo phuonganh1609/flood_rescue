@@ -1,8 +1,8 @@
-# Mobile Functional Requirements
+# Functional Requirements
 
 ## 1. Mục tiêu tài liệu
 
-Tài liệu này tổng hợp các **functional requirements** của hệ thống Flood Rescue & Relief dành cho đội phát triển mobile.
+Tài liệu này tổng hợp các **functional requirements** của hệ thống Flood Rescue & Relief. 
 
 - Nguồn tổng hợp: docs flow nghiệp vụ + tài liệu API + swagger.
 - Phạm vi role: **Citizen, Rescue Team, Rescue Coordinator, Manager, Admin**.
@@ -21,7 +21,7 @@ Tài liệu này tổng hợp các **functional requirements** của hệ thốn
 
 ---
 
-## 3. Luồng nghiệp vụ tổng quan (cho mobile)
+## 3. Luồng nghiệp vụ tổng quan
 
 1. Citizen gửi request mới (rescue/relief) hoặc Coordinator tạo request thay mặt.
 2. Coordinator xác minh request (verify/reject), chuẩn hóa vị trí/priority khi cần.
@@ -113,8 +113,8 @@ Tài liệu này tổng hợp các **functional requirements** của hệ thốn
 - FR-NOTI-03: Người dùng đánh dấu đã đọc từng notification.
 - FR-NOTI-04: Người dùng xóa một notification.
 - FR-NOTI-05: Người dùng xóa toàn bộ notification của chính mình.
-- FR-NOTI-06: Ứng dụng mobile nhận sự kiện real-time qua socket (ví dụ: mission assigned, request verified, mission completed, unread count update).
-- FR-NOTI-07: Ứng dụng mobile phải đồng bộ badge unread theo event và theo API.
+- FR-NOTI-06: Ứng dụng nhận sự kiện real-time qua socket (ví dụ: mission assigned, request verified, mission completed, unread count update).
+- FR-NOTI-07: Ứng dụng phải đồng bộ badge unread theo event và theo API.
 
 ## 4.8 Resources, Supplies, Warehouse, Inventory
 
@@ -135,7 +135,7 @@ Tài liệu này tổng hợp các **functional requirements** của hệ thốn
 
 ---
 
-## 5. Quy tắc nghiệp vụ trọng yếu cần phản ánh trong mobile
+## 5. Quy tắc nghiệp vụ trọng yếu cần phản ánh đúng trong thiết kế state machine và luồng xử lý
 
 ## 5.1 State machine cốt lõi
 
@@ -168,11 +168,11 @@ Tài liệu này tổng hợp các **functional requirements** của hệ thốn
 
 ## 5.5 Realtime bắt buộc
 
-- Mobile cần xử lý nhận event real-time và cập nhật UI ngay cho các use case điều phối/thông báo quan trọng.
+- Cần xử lý nhận event real-time và cập nhật UI ngay cho các use case điều phối/thông báo quan trọng.
 
 ---
 
-## 6. Danh sách user flows nên có trên mobile
+## 6. Danh sách user flows nên
 
 ## 6.1 Citizen
 

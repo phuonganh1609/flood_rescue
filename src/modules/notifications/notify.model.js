@@ -15,6 +15,7 @@ const NotifySchema = new Schema(
         "SUBMITTED",
         "ACCEPTED",
         "REJECTED",
+        "ONGOING",
         "IN_PROGRESS",
         "COMPLETED",
         "CANCELLED",
@@ -24,7 +25,14 @@ const NotifySchema = new Schema(
     role: {
       type: String,
       required: true,
-      enum: ["CITIZEN", "COORDINATOR", "TEAM_LEADER", "ADMIN", "MANAGER"],
+      enum: [
+        "CITIZEN",
+        "COORDINATOR",
+        "TEAM_LEADER",
+        "TEAM_MEMBER",
+        "ADMIN",
+        "MANAGER",
+      ],
     },
     message: {
       type: String,

@@ -19,10 +19,6 @@ const timelineSchema = new mongoose.Schema(
       ref: "Mission",
       required: true,
     },
-    requestId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Request",
-    },
     teamId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Team",
@@ -37,11 +33,6 @@ const timelineSchema = new mongoose.Schema(
     startedAt: Date,
     arrivedAt: Date,
     completedAt: Date,
-    rescuedCount: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
     failureReason: String,
     withdrawalReason: String,
     note: String,

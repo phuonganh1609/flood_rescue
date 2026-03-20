@@ -86,6 +86,7 @@ class MissionService {
     return {
       missionId,
       requestIds,
+      teamIds,
       citizenIds: [
         ...new Set(
           requests
@@ -429,6 +430,7 @@ class MissionService {
       missionCode: updatedMission?.code || mission?.code,
       requestIds,
       citizenIds,
+      teamIds: assignedTeamIds,
       teamLeaderIds,
       teamNames,
     });

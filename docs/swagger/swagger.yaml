@@ -4700,11 +4700,6 @@ components:
         missionId:
           type: string
           example: "65f1d2c3b4a5968776655111"
-        requestId:
-          type: string
-          nullable: true
-          description: Legacy field, optional in mission-scoped flow
-          example: "65f1d2c3b4a5968776655222"
         teamId:
           type: string
           example: "65f1d2c3b4a5968776655333"
@@ -4735,10 +4730,6 @@ components:
           type: string
           format: date-time
           nullable: true
-        rescuedCount:
-          type: integer
-          minimum: 0
-          example: 4
         failureReason:
           type: string
           nullable: true
@@ -4769,10 +4760,6 @@ components:
         note:
           type: string
           nullable: true
-        rescuedCount:
-          type: integer
-          minimum: 0
-          description: Optional aggregate value. Server derives actual value from completions.
         completions:
           type: array
           minItems: 1

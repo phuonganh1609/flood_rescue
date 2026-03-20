@@ -20,7 +20,6 @@ const completeTimelineSchema = Joi.object({
     .valid(TIMELINE_STATUS.COMPLETED, TIMELINE_STATUS.PARTIAL)
     .required(),
   note: Joi.string().max(1000).allow("", null),
-  rescuedCount: Joi.number().integer().min(0).optional(),
   completions: Joi.array()
     .items(
       Joi.object({

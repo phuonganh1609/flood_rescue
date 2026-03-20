@@ -170,7 +170,6 @@ describe("TimelineService flow", () => {
     const completed = await timelineService.completeTimeline(timelineId, actorUserId, {
       outcome: "COMPLETED",
       note: "all rescued",
-      rescuedCount: 2,
       completions: [{ missionRequestId, rescuedCount: 2 }],
     });
 

@@ -259,6 +259,23 @@ class MissionRequestService {
       missionRequest.missionId?._id?.toString?.() ||
       missionRequest.missionId?.toString?.();
 
+    const mission = await missionRepository.findById(missionId);
+    if (!mission) {
+      const error = new Error(`Không tìm thấy mission với ID: ${missionId}`);
+      error.statusCode = 404;
+      error.errorCode = "MISSION_NOT_FOUND";
+      throw error;
+    }
+
+    if (["ABORTED", "COMPLETED", "PAUSED"].includes(mission.status)) {
+      const error = new Error(
+        `Không thể cập nhật progress: mission đang ở trạng thái ${mission.status}`,
+      );
+      error.statusCode = 400;
+      error.errorCode = "MISSION_UNAVAILABLE_FOR_PROGRESS";
+      throw error;
+    }
+
     let teamId = null;
     if (user?.teamId) {
       teamId = user.teamId.toString();
@@ -283,6 +300,38 @@ class MissionRequestService {
       error.statusCode = 403;
       error.errorCode = "TEAM_NOT_ASSIGNED_TO_MISSION";
       throw error;
+    }
+
+    const hasExecutingTimeline = await TimelineModel.exists({
+      missionId,
+      teamId,
+      status: { $in: ["EN_ROUTE", "ON_SITE"] },
+    });
+
+    if (!hasExecutingTimeline) {
+      const hasPreAcceptTimeline = await TimelineModel.exists({
+        missionId,
+        teamId,
+        status: { $in: ["PLANNED", "ASSIGNED"] },
+      });
+      if (hasPreAcceptTimeline) {
+        const error = new Error("Team phải accept mission trước khi cập nhật progress.");
+        error.statusCode = 400;
+        error.errorCode = "TEAM_MUST_ACCEPT_BEFORE_PROGRESS";
+        throw error;
+      }
+
+      const hasTerminalTimeline = await TimelineModel.exists({
+        missionId,
+        teamId,
+        status: { $in: ["WITHDRAWN", "FAILED", "COMPLETED", "PARTIAL", "CANCELLED"] },
+      });
+      if (hasTerminalTimeline) {
+        const error = new Error("Không thể cập nhật progress khi timeline của team đã kết thúc.");
+        error.statusCode = 400;
+        error.errorCode = "PROGRESS_NOT_ALLOWED_IN_TERMINAL_STATE";
+        throw error;
+      }
     }
 
     const normalizedSupplies = (suppliesDelivered || []).map((item) => ({
