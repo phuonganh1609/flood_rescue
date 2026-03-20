@@ -1,5 +1,6 @@
 import { vehicleRepository } from "./vehicle.repository.js";
 import { eventBus } from "../../utils/events.js";
+import {inventoryItemRepository } from "../inventory/inventoryItem.responsitory.js";
 import mongoose from "mongoose";
 import XLSX from "xlsx";
 
@@ -56,13 +57,13 @@ class VehicleService {
     );
 
     // 👉 sync inventory nếu có
-    const inventoryItem = await inventoryRepository.findVehicleItem(
+    const inventoryItem = await inventoryItemRepository.findVehicleItem(
       vehicle._id,
       session
     );
 
     if (inventoryItem) {
-      await inventoryRepository.updateStatus(
+      await inventoryItemRepository.updateStatus(
         inventoryItem._id,
         "IN_USE",
         session
@@ -108,13 +109,13 @@ class VehicleService {
       session
     );
 
-    const inventoryItem = await inventoryRepository.findVehicleItem(
+    const inventoryItem = await inventoryItemRepository.findVehicleItem(
       vehicle._id,
       session
     );
 
     if (inventoryItem) {
-      await inventoryRepository.updateStatus(
+      await inventoryItemRepository.updateStatus(
         inventoryItem._id,
         "ACTIVE",
         session

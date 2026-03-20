@@ -308,6 +308,8 @@ export const useSupply = async (req, res) => {
   try {
     const { supplyID, warehouseId, quantity } = req.body;
 
+    console.log("BODY:", req.body); // 👈 debug
+
     if (!supplyID || !warehouseId || !quantity) {
       return response.sendError(res, {
         message: "Missing required fields",
@@ -318,7 +320,7 @@ export const useSupply = async (req, res) => {
     const result = await inventoryItemService.useSupplyFromInventory(
       supplyID,
       warehouseId,
-      quantity
+      Number(quantity)
     );
 
     return response.sendSuccess(res, {
@@ -327,6 +329,7 @@ export const useSupply = async (req, res) => {
     });
 
   } catch (err) {
+    console.error(err);
     return response.sendError(res, {
       message: err.message,
       statusCode: 400,

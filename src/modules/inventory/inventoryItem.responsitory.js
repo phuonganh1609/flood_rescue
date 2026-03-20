@@ -92,14 +92,20 @@ class InventoryItemRepository {
       return await this.deleteById(name);
     }
 
-    async findBySupplyAndWarehouse(supplyID, warehouseId) {
-      const item = await InventoryItem.findOne({
-        supplyID: new mongoose.Types.ObjectId(supplyID),
-        warehouse: new mongoose.Types.ObjectId(warehouseId),
-      });
-    console.log("FOUND ITEM:", item);
-    return item;
+    findBySupplyAndWarehouse(supplyID, warehouseId) {
+  if (!mongoose.Types.ObjectId.isValid(supplyID)) {
+    throw new Error("Invalid supplyID");
   }
+
+  if (!mongoose.Types.ObjectId.isValid(warehouseId)) {
+    throw new Error("Invalid warehouseId");
+  }
+
+  return InventoryItem.findOne({
+    supplyID: new mongoose.Types.ObjectId(supplyID),
+    warehouse: new mongoose.Types.ObjectId(warehouseId),
+  });
+}
 
     async updateInventory(id, updateData) {
       return await InventoryItem.findByIdAndUpdate(id, updateData, {

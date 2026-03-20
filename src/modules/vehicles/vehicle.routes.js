@@ -32,7 +32,8 @@ router.post(
   importVehiclesFromExcel
 );
 // use vehicle
-router.patch('/:licensePlate/use', useVehicle);
+router.patch('/:licensePlate/use',authenticate,
+  authorize(["Manager"]), useVehicle);
 router.patch(
   "/:licensePlate/release",
   authenticate,

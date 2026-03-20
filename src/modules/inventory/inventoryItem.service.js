@@ -196,30 +196,45 @@ async importExcel(inventories, managerId) {
     };
 
   async useSupplyFromInventory(supplyID, warehouseId, quantity) {
-      const item = await inventoryItemRepository.findBySupplyAndWarehouse(supplyID, warehouseId);
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-      if (!item) throw new Error("Inventory not found");
+  try {
+    const item = await inventoryItemRepository.findBySupplyAndWarehouse(
+      supplyID,
+      warehouseId,
+      session
+    );
 
-      const available = item.quantity - item.reservedQuantity;
+    if (!item) throw new Error("Inventory not found");
 
-      if (available < quantity) {
-        throw new Error("Not enough stock");
-      }
+    const available = item.quantity - item.reservedQuantity;
 
-      item.quantity -= quantity;
+    if (available < quantity) {
+      throw new Error("Not enough stock");
+    }
 
-    // update status
-      if (item.quantity === 0) {
-        item.status = "OUT_OF_STOCK";
-      } else if (item.quantity < 50) {
-        item.status = "RESERVED";
-      } else {
-        item.status = "ACTIVE";
-      }
+    item.quantity -= quantity;
 
-      await item.save();
-      return item;
+    const newAvailable = item.quantity - item.reservedQuantity;
+
+    if (newAvailable === 0) item.status = "OUT_OF_STOCK";
+    else if (item.reservedQuantity > 0) item.status = "RESERVED";
+    else item.status = "ACTIVE";
+
+    await item.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return item;
+
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    throw err;
   }
+}
 }
 const inventoryItemService = new InventoryItemService();
 export{ inventoryItemService };
