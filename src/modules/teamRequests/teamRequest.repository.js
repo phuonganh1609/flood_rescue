@@ -183,6 +183,16 @@ class TeamRequestRepository {
       completedAt: null,
     });
   }
+
+  async findCompletedByMissionAndTeam(missionId, teamId) {
+    return await TeamRequest.find({
+      missionId,
+      teamId,
+      completedAt: { $ne: null },
+    })
+      .select("outcome")
+      .lean();
+  }
 }
 
 const teamRequestRepository = new TeamRequestRepository();

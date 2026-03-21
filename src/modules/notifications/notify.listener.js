@@ -137,6 +137,64 @@ eventBus.on("REQUEST_VERIFIED", async (payload) => {
 });
 
 /**
+ * REQUEST_AUTO_CLOSED: MissionRequest automatically closed when fulfilled
+ * → Notify Coordinator and Citizen
+ */
+eventBus.on("REQUEST_AUTO_CLOSED", async (payload) => {
+  try {
+    const { requestId, missionRequestId, missionId } = payload;
+    
+    // Get request to find citizen
+    const { requestRepository } = await import("../requests/request.repository.js");
+    const request = await requestRepository.findRequestById(requestId);
+    
+    if (!request) {
+      console.warn("Request not found for REQUEST_AUTO_CLOSED event:", requestId);
+      return;
+    }
+
+    const citizenId = request.userId?.toString?.() || request.userId;
+
+    // Notify Citizen
+    if (citizenId) {
+      const citizenResult = await notificationService.create({
+        userId: citizenId,
+        role: "CITIZEN",
+        requestId,
+        missionId,
+        type: "COMPLETED",
+        message: "🎉 Yêu cầu cứu hộ của bạn đã được hoàn thành! Cảm ơn bạn đã sử dụng dịch vụ",
+        isRead: false,
+      });
+
+      emitToUser(citizenId, NOTIFICATION_EVENTS.REQUEST_AUTO_CLOSED, citizenResult.data);
+      await emitUnreadCountForUser(citizenId);
+    }
+
+    // Notify all Coordinators
+    const coordinators = await authService.getCurrentUsersByRole("Rescue Coordinator");
+    for (const coordinator of coordinators) {
+      const userId = coordinator._id || coordinator.id;
+
+      const result = await notificationService.create({
+        userId,
+        role: "COORDINATOR",
+        requestId,
+        missionId,
+        type: "COMPLETED",
+        message: `✅ Yêu cầu cứu hộ đã tự động đóng do đã hoàn thành đủ mục tiêu`,
+        isRead: false,
+      });
+
+      emitToUser(userId, NOTIFICATION_EVENTS.REQUEST_AUTO_CLOSED, result.data);
+      await emitUnreadCountForUser(userId);
+    }
+  } catch (error) {
+    console.error("Error in REQUEST_AUTO_CLOSED listener:", error);
+  }
+});
+
+/**
  * TEAM_APPLICATION_SUBMITTED: Citizen submits application to become Rescue Team
  * → Notify all Coordinators and Admins
  */

@@ -442,8 +442,12 @@ Khi Rescue Team thực hiện action trên Timeline, hệ thống tự động s
 - Progress endpoint dùng path chuẩn: `POST /api/mission-requests/:id/progress`.
 - Progress không cho phép trước `accept`; team cần đang có timeline `EN_ROUTE`/`ON_SITE` trong mission.
 - Nếu over-delivery supply, API trả `422 SUPPLY_OVER_DELIVERY`.
+- **Auto-close behavior**:
+    - Khi MissionRequest đạt 100% fulfillment → tự động chuyển sang `CLOSED` (không qua `FULFILLED`).
+    - Emit event `REQUEST_AUTO_CLOSED` để notify Coordinator và Citizen.
+    - Team khác cố update progress trên request đã `CLOSED` → nhận `200 OK` với message `"Mission already completed"`, không ghi data.
 - Request final status:
-    - `FULFILLED` nếu đủ target.
+    - `FULFILLED` nếu tất cả MissionRequest đều `CLOSED` và đủ target.
     - `PARTIALLY_FULFILLED` nếu kết thúc mà chưa đủ target.
 
 ---

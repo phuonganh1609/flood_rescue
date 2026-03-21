@@ -36,11 +36,16 @@ const cancelTimelineSchema = Joi.object({
   note: Joi.string().max(1000).allow("", null),
 });
 
+const completeFromTeamRequestsSchema = Joi.object({
+  note: Joi.string().max(1000).allow("", null),
+});
+
 export {
   listTimelinesSchema,
   completeTimelineSchema,
   failTimelineSchema,
   withdrawTimelineSchema,
   cancelTimelineSchema,
+  completeFromTeamRequestsSchema,
 };
 

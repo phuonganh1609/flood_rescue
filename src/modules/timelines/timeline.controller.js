@@ -166,6 +166,25 @@ class TimelineController {
       return sendError(res, TimelineController.toErrorPayload(error));
     }
   }
+
+  async completeFromTeamRequests(req, res) {
+    const timelineId = parseTimelineId(req, res);
+    if (!timelineId) return;
+
+    try {
+      const timeline = await timelineService.completeTimelineFromAllTeamRequests(
+        timelineId,
+        req.user.id,
+        req.body,
+      );
+      return sendSuccess(res, {
+        data: timeline,
+        message: "Timeline completed from team requests successfully",
+      });
+    } catch (error) {
+      return sendError(res, TimelineController.toErrorPayload(error));
+    }
+  }
 }
 
 export default new TimelineController();

@@ -8,6 +8,7 @@ import {
   failTimelineSchema,
   withdrawTimelineSchema,
   cancelTimelineSchema,
+  completeFromTeamRequestsSchema,
 } from "./timeline.validation.js";
 
 const router = express.Router();
@@ -53,6 +54,13 @@ router.patch(
   authorize(["Rescue Coordinator", "Admin"]),
   validate(cancelTimelineSchema),
   timelineController.cancel,
+);
+
+router.post(
+  "/:id/complete-from-team-requests",
+  authorize(["Rescue Team"]),
+  validate(completeFromTeamRequestsSchema),
+  timelineController.completeFromTeamRequests,
 );
 
 export default router;

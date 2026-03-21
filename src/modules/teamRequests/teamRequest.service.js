@@ -157,11 +157,19 @@ class TeamRequestService {
     );
 
     if (incompleteCount === 0) {
+      const completedTeamRequests = await teamRequestRepository.findCompletedByMissionAndTeam(
+        missionId,
+        teamId,
+      );
+
+      const hasAnyPartial = completedTeamRequests.some((tr) => tr.outcome === "PARTIAL");
+      const timelineOutcome = hasAnyPartial ? "PARTIAL" : "COMPLETED";
+
       const TimelineService = (await import("../timelines/timeline.service.js")).default;
       await TimelineService.completeTimelineFromTeamRequest(
         timeline._id.toString(),
-        outcome,
-        note || `Auto-completed from TeamRequest (${outcome})`,
+        timelineOutcome,
+        note || `Auto-completed from TeamRequest (${timelineOutcome})`,
         user?.id || null,
       );
     }

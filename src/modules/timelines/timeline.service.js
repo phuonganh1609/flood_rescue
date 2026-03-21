@@ -266,6 +266,65 @@ class TimelineService {
     return transitioned;
   }
 
+  async completeTimelineFromAllTeamRequests(timelineId, actorUserId, payload = {}) {
+    const { note } = payload;
+    const timeline = await this.getTimelineById(timelineId);
+
+    if (timeline.status !== TIMELINE_STATUS.ON_SITE) {
+      const err = new Error(
+        `Timeline phải ở trạng thái ON_SITE mới có thể complete. Trạng thái hiện tại: ${timeline.status}`,
+      );
+      err.statusCode = 400;
+      err.errorCode = "TIMELINE_NOT_ON_SITE";
+      throw err;
+    }
+
+    await this.assertTeamActionAllowed(timeline, actorUserId);
+
+    const missionId = extractId(timeline.missionId);
+    const teamId = extractId(timeline.teamId);
+
+    const { teamRequestRepository } = await import("../teamRequests/teamRequest.repository.js");
+
+    const incompleteCount = await teamRequestRepository.countIncompleteByMissionAndTeam(
+      missionId,
+      teamId,
+    );
+
+    if (incompleteCount > 0) {
+      const err = new Error(
+        `Không thể hoàn tất timeline: còn ${incompleteCount} TeamRequest chưa hoàn thành`,
+      );
+      err.statusCode = 400;
+      err.errorCode = "INCOMPLETE_TEAM_REQUESTS_REMAINING";
+      throw err;
+    }
+
+    const completedTeamRequests = await teamRequestRepository.findCompletedByMissionAndTeam(
+      missionId,
+      teamId,
+    );
+
+    if (completedTeamRequests.length === 0) {
+      const err = new Error(
+        "Không tìm thấy TeamRequest nào cho team này trong mission",
+      );
+      err.statusCode = 404;
+      err.errorCode = "NO_TEAM_REQUESTS_FOUND";
+      throw err;
+    }
+
+    const hasAnyPartial = completedTeamRequests.some((tr) => tr.outcome === "PARTIAL");
+    const timelineOutcome = hasAnyPartial ? "PARTIAL" : "COMPLETED";
+
+    return await this.completeTimelineFromTeamRequest(
+      timelineId,
+      timelineOutcome,
+      note || `Manually completed from all TeamRequests (${timelineOutcome})`,
+      actorUserId,
+    );
+  }
+
   async failTimeline(timelineId, actorUserId, payload) {
     const { failureReason, note } = payload;
     const timeline = await this.getTimelineById(timelineId);

@@ -9,6 +9,7 @@ import {
   timelineRepository,
 } from "../timelines/timeline.repository.js";
 import { teamRequestRepository } from "../teamRequests/teamRequest.repository.js";
+import { eventBus } from "../../utils/events.js";
 
 class MissionRequestService {
   deriveRequestStatus(missionRequests = []) {
@@ -27,11 +28,11 @@ class MissionRequestService {
       return REQUEST_STATUS.IN_PROGRESS;
     }
 
-    const allFulfilled = missionRequests.every(
-      (item) => item.status === MISSION_REQUEST_STATUS.FULFILLED,
+    const allClosed = missionRequests.every(
+      (item) => item.status === MISSION_REQUEST_STATUS.CLOSED,
     );
 
-    return allFulfilled
+    return allClosed
       ? REQUEST_STATUS.FULFILLED
       : REQUEST_STATUS.PARTIALLY_FULFILLED;
   }
@@ -176,10 +177,18 @@ class MissionRequestService {
     const missionRequests = await missionRequestRepository.findByRequestId(requestId);
     if (missionRequests.length === 0) return request.status;
 
-    const desiredStatus = this.deriveRequestStatus(missionRequests) || request.status;
+    let desiredStatus = this.deriveRequestStatus(missionRequests) || request.status;
+
+    if (desiredStatus === REQUEST_STATUS.FULFILLED) {
+      desiredStatus = REQUEST_STATUS.CLOSED;
+    }
 
     if (desiredStatus !== request.status) {
       await requestRepository.updateRequestStatus(requestId, desiredStatus);
+
+      if (desiredStatus === REQUEST_STATUS.CLOSED) {
+        eventBus.emit("REQUEST_CLOSED", { requestId });
+      }
     }
 
     return desiredStatus;
@@ -250,6 +259,14 @@ class MissionRequestService {
 
   async updateProgress(id, { peopleRescuedIncrement = 0, suppliesDelivered = [] } = {}, user) {
     const missionRequest = await this.getById(id);
+
+    // Early return if already CLOSED - return 200 OK with message
+    if (missionRequest.status === MISSION_REQUEST_STATUS.CLOSED) {
+      return {
+        ...missionRequest.toObject(),
+        message: "Mission already completed",
+      };
+    }
 
     // Chỉ cho phép khi chưa kết thúc
     this.ensureCanTransition(missionRequest.status, MISSION_REQUEST_STATUS.IN_PROGRESS);

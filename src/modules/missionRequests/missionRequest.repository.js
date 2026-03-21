@@ -72,7 +72,7 @@ function calculateAggregateFields(missionRequest, contributionSummary = {}) {
 
   let status = MISSION_REQUEST_STATUS.PENDING;
   if (isFullyMet) {
-    status = MISSION_REQUEST_STATUS.FULFILLED;
+    status = MISSION_REQUEST_STATUS.CLOSED;
   } else if (hasContribution) {
     status = MISSION_REQUEST_STATUS.PARTIAL;
   }
@@ -222,6 +222,8 @@ class MissionRequestRepository {
       MISSION_REQUEST_STATUS.DROPPED,
     ].includes(missionRequest.status);
 
+    const previousStatus = missionRequest.status;
+    
     missionRequest.peopleRescued = aggregate.peopleRescued;
     missionRequest.peopleRemaining = aggregate.peopleRemaining;
     missionRequest.suppliesDelivered = aggregate.suppliesDelivered;
@@ -230,7 +232,7 @@ class MissionRequestRepository {
 
     if (!isManualTerminal) {
       missionRequest.status = aggregate.status;
-      if (aggregate.status === MISSION_REQUEST_STATUS.FULFILLED) {
+      if (aggregate.status === MISSION_REQUEST_STATUS.CLOSED) {
         missionRequest.closedAt = missionRequest.closedAt || new Date();
       } else {
         missionRequest.closedAt = null;
@@ -238,7 +240,22 @@ class MissionRequestRepository {
     }
 
     await missionRequest.save();
-    return await this.findById(id);
+    
+    const updated = await this.findById(id);
+    
+    if (previousStatus !== MISSION_REQUEST_STATUS.CLOSED && 
+        updated.status === MISSION_REQUEST_STATUS.CLOSED) {
+      const { eventBus } = await import("../../utils/events.js");
+      eventBus.emit("REQUEST_AUTO_CLOSED", {
+        requestId: updated.requestId?._id?.toString?.() || updated.requestId?.toString?.(),
+        missionRequestId: updated._id.toString(),
+        missionId: updated.missionId?._id?.toString?.() || updated.missionId?.toString?.(),
+        fulfillmentPercent: updated.fulfillmentPercent,
+        closedAt: updated.closedAt,
+      });
+    }
+    
+    return updated;
   }
 
   async findByMissionIdPaginated(missionId, { teamId = null, page = 1, limit = 10 } = {}) {
