@@ -79,6 +79,64 @@ class WarehouseService {
         return deletedWarehouse;
     };
 
+     async updateWarehouseStatus(warehouseId) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const warehouse = await warehouseRepository.findById(warehouseId, session);
+
+      if (!warehouse) throw new Error("Warehouse not found");
+
+      // nếu đang maintenance thì giữ nguyên
+      if (warehouse.status === "MAINTENANCE") {
+        await session.commitTransaction();
+        session.endSession();
+        return warehouse;
+      }
+
+      const itemCount = await warehouseRepository.countInventoryItems(
+        warehouseId,
+        session
+      );
+
+      let newStatus = "EMPTY";
+
+      if (itemCount > 0) {
+        newStatus = "FULL";
+      }
+
+      const updated = await warehouseRepository.updateStatus(
+        warehouseId,
+        newStatus,
+        session
+      );
+
+      await session.commitTransaction();
+      session.endSession();
+
+      return updated;
+
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
+    }
+  }
+
+  //  MANUAL set maintenance
+  async setMaintenance(warehouseId) {
+    return await warehouseRepository.updateStatus(
+      warehouseId,
+      "MAINTENANCE"
+    );
+  }
+
+  //  remove maintenance → auto recalc lại
+  async removeMaintenance(warehouseId) {
+    return await this.updateWarehouseStatus(warehouseId);
+  }
+
 }
 const warehouseService = new WarehouseService();
 export { warehouseService };

@@ -1,6 +1,5 @@
 import { Warehouse } from './warehouse.model.js';
 import { InventoryItem } from '../inventory/inventoryItem.model.js';
-
 class WarehouseRepository {
 // Warehouse repository
   async create(warehouseData) {
@@ -40,12 +39,33 @@ class WarehouseRepository {
     return Warehouse.findOneAndDelete({ name }).lean();
   };
 
-async getInventoryById(inventoryId) {
-  return InventoryItem.findById(inventoryId)
+  async getInventoryById(inventoryId) {
+    return InventoryItem.findById(inventoryId)
     .populate('supplyID')
     .populate('warehouse')
     .lean();
-};
+  };
+
+  async findById(id, session = null) {
+    return await Warehouse.findById(id).session(session);
+  }
+
+  async updateStatus(id, status, session = null) {
+    return await Warehouse.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, session }
+    );
+  }
+
+  // check warehouse có item không
+  async countInventoryItems(warehouseId, session = null) {
+    return await InventoryItem.countDocuments({
+      warehouse: warehouseId,
+      quantity: { $gt: 0 }
+    }).session(session);
+  }
+
 }
 const warehouseRepository = new WarehouseRepository();
 export { warehouseRepository };
