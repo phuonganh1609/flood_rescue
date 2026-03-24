@@ -40,6 +40,10 @@ const completeFromTeamRequestsSchema = Joi.object({
   note: Joi.string().max(1000).allow("", null),
 });
 
+const completeTimelineAutoSchema = Joi.object({
+  note: Joi.string().max(1000).allow("", null),
+});
+
 export {
   listTimelinesSchema,
   completeTimelineSchema,
@@ -47,5 +51,6 @@ export {
   withdrawTimelineSchema,
   cancelTimelineSchema,
   completeFromTeamRequestsSchema,
+  completeTimelineAutoSchema,
 };
 

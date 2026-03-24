@@ -86,6 +86,12 @@ class TimelineRepository {
       .populate("teamId");
   }
 
+  async findOne(filter) {
+    return await Timeline.findOne(filter)
+      .populate("missionId")
+      .populate("teamId");
+  }
+
   async findActiveByMissionId(missionId) {
     return await Timeline.find({
       missionId,
