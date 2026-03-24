@@ -5,7 +5,7 @@ import { create,
   getAll,
   update,
   remove,
-  importFromExcel, useSupply
+  importFromExcel, useSupply, allocateSupply
 } from './inventoryItem.controller.js';
 import { authenticate, authorize } from "../../middlewares/authMiddleware.js";
 const router = express.Router();
@@ -21,6 +21,12 @@ router.post(
   authenticate,
   authorize(['Manager']),
   useSupply
+);
+router.post(
+  '/allocate',
+  authenticate,
+  authorize(['Manager']),
+  allocateSupply
 );
 // Import supplies from Excel
 router.post(

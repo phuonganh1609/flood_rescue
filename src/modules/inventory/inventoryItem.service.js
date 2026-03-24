@@ -1,8 +1,9 @@
-import { inventoryItemRepository } from './inventoryItem.responsitory.js';
+import { inventoryItemRepository } from './inventoryItem.repository.js';
 import { Warehouse } from '../warehouse/warehouse.model.js';
 import Supply from '../supply/supply.model.js';
 import {eventBus} from '../../utils/events.js';
 import { InventoryItem } from "../inventory/inventoryItem.model.js";
+import MissionSupply from "../missionSupplies/missionSupply.model.js";
 import mongoose from 'mongoose';
 import XLSX from "xlsx";
 class InventoryItemService {
@@ -235,6 +236,51 @@ async importExcel(inventories, managerId) {
     throw err;
   }
 }
+
+  async allocateSupplyToMission(missionId, supplyId, warehouseId, allocatedQty, managerId) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // 1. Find the MissionSupply requirement
+      const missionSupply = await MissionSupply.findOne({ missionId, supplyId }).session(session);
+      if (!missionSupply) throw new Error("Mission Supply requirement not found (it might not have been requested for this mission)");
+      if (missionSupply.status === "RETURNED") throw new Error("Mission supply order already returned");
+      if (missionSupply.status === "ALLOCATED" || missionSupply.status === "FULLY_CLAIMED") throw new Error("Supply already allocated for this mission. Please create a new request if more needed.");
+      if (allocatedQty <= 0) throw new Error("Allocated quantity must be greater than zero");
+
+      // 2. Find the inventory item in the specified warehouse
+      const inventoryItem = await inventoryItemRepository.findBySupplyAndWarehouse(supplyId, warehouseId, session);
+      if (!inventoryItem) throw new Error("Supply not found in the selected warehouse");
+
+      // 3. Ensure enough available quantity (unreserved)
+      const availableQty = inventoryItem.quantity - inventoryItem.reservedQuantity;
+      if (availableQty < allocatedQty) throw new Error(`Not enough available stock in this warehouse. Available: ${availableQty}`);
+
+      // 4. Update Mission Supply Allocation
+      missionSupply.warehouseId = warehouseId;
+      missionSupply.inventoryItemId = inventoryItem._id;
+      missionSupply.allocatedQty = allocatedQty;
+      missionSupply.status = "ALLOCATED";
+      missionSupply.allocatedBy = managerId;
+      missionSupply.allocatedAt = new Date();
+      await missionSupply.save({ session });
+
+      // 5. Update Inventory Item Reserved Quantity
+      inventoryItem.reservedQuantity += allocatedQty;
+      inventoryItem.status = "RESERVED"; 
+      await inventoryItem.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+
+      return missionSupply;
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
+    }
+  }
 }
 const inventoryItemService = new InventoryItemService();
 export{ inventoryItemService };

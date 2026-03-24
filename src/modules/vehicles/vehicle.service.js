@@ -1,6 +1,6 @@
 import { vehicleRepository } from "./vehicle.repository.js";
 import { eventBus } from "../../utils/events.js";
-import {inventoryItemRepository } from "../inventory/inventoryItem.responsitory.js";
+import {inventoryItemRepository } from "../inventory/inventoryItem.repository.js";
 import mongoose from "mongoose";
 import XLSX from "xlsx";
 

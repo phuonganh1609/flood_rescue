@@ -1,7 +1,32 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-jest.unstable_mockModule('../../../../src/modules/inventory/inventoryItem.responsitory.js', () => ({
+const mockSession = {
+  startTransaction: jest.fn(),
+  commitTransaction: jest.fn(),
+  abortTransaction: jest.fn(),
+  endSession: jest.fn(),
+};
+
+class MockSchema { constructor() {} }
+MockSchema.Types = { ObjectId: String };
+
+jest.unstable_mockModule("mongoose", () => ({
+  default: {
+    startSession: jest.fn().mockResolvedValue(mockSession),
+    Schema: MockSchema,
+    model: jest.fn()
+  }
+}));
+
+jest.unstable_mockModule('../../../../src/modules/missionSupplies/missionSupply.model.js', () => ({
+    default: {
+        findOne: jest.fn(),
+    }
+}));
+
+jest.unstable_mockModule('../../../../src/modules/inventory/inventoryItem.repository.js', () => ({
   inventoryItemRepository: {
+    findBySupplyAndWarehouse: jest.fn(),
     create: jest.fn(),
     findById: jest.fn(),
     findAll: jest.fn(),
@@ -36,9 +61,10 @@ jest.unstable_mockModule('../../../../src/utils/events.js', () => ({
 }));
 
 const { inventoryItemService } = await import('../../../../src/modules/inventory/inventoryItem.service.js');
-const { inventoryItemRepository } = await import('../../../../src/modules/inventory/inventoryItem.responsitory.js');
+const { inventoryItemRepository } = await import('../../../../src/modules/inventory/inventoryItem.repository.js');
 const { Warehouse } = await import('../../../../src/modules/warehouse/warehouse.model.js');
 const Supply = (await import('../../../../src/modules/supply/supply.model.js')).default;
+const MissionSupply = (await import('../../../../src/modules/missionSupplies/missionSupply.model.js')).default;
 const { eventBus } = await import('../../../../src/utils/events.js');
 
 describe('InventoryItemService', () => {
@@ -369,4 +395,58 @@ describe('InventoryItemService', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe("allocateSupplyToMission", () => {
+    it("should allocate supply successfully and use mongoose transaction", async () => {
+      const mockMissionSupply = {
+        _id: "ms-1",
+        status: "REQUESTED",
+        save: jest.fn().mockResolvedValue()
+      };
+
+      MissionSupply.findOne.mockReturnValue({
+        session: jest.fn().mockResolvedValue(mockMissionSupply)
+      });
+
+      const mockInventoryItem = {
+        _id: "inv-1",
+        quantity: 200,
+        reservedQuantity: 50,
+        save: jest.fn().mockResolvedValue()
+      };
+
+      inventoryItemRepository.findBySupplyAndWarehouse.mockResolvedValue(mockInventoryItem);
+
+      const result = await inventoryItemService.allocateSupplyToMission("m-1", "sup-1", "w-1", 100, "user-1", "note");
+
+      expect(mockMissionSupply.warehouseId).toBe("w-1");
+      expect(mockMissionSupply.allocatedQty).toBe(100);
+      expect(mockMissionSupply.status).toBe("ALLOCATED");
+      expect(mockInventoryItem.reservedQuantity).toBe(150);
+      expect(mockSession.commitTransaction).toHaveBeenCalled();
+      expect(result).toBe(mockMissionSupply);
+    });
+
+    it("should fail if there is not enough available inventory", async () => {
+      MissionSupply.findOne.mockReturnValue({
+        session: jest.fn().mockResolvedValue({
+          _id: "ms-1",
+          status: "REQUESTED",
+        })
+      });
+
+      inventoryItemRepository.findBySupplyAndWarehouse.mockResolvedValue({
+        _id: "inv-1",
+        quantity: 100,
+        reservedQuantity: 50,
+      });
+
+      await expect(
+        inventoryItemService.allocateSupplyToMission("m-1", "sup-1", "w-1", 60, "user-1", "note")
+      ).rejects.toThrow("Not enough available stock in this warehouse. Available: 50");
+      
+      expect(mockSession.abortTransaction).toHaveBeenCalled();
+    });
+  });
 });
+
