@@ -336,3 +336,36 @@ export const useSupply = async (req, res) => {
     });
   }
 };
+
+export const allocateSupply = async (req, res) => {
+  try {
+    const { missionId, supplyId, warehouseId, allocatedQty } = req.body;
+    
+    if (!missionId || !supplyId || !warehouseId || allocatedQty === undefined) {
+      return response.sendError(res, {
+        message: "Missing required fields (missionId, supplyId, warehouseId, allocatedQty)",
+        statusCode: 400,
+      });
+    }
+
+    const result = await inventoryItemService.allocateSupplyToMission(
+      missionId,
+      supplyId,
+      warehouseId,
+      Number(allocatedQty),
+      req.user.id
+    );
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Supply allocated successfully to the mission",
+    });
+
+  } catch (err) {
+    console.error(err);
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
+    });
+  }
+};

@@ -70,6 +70,18 @@ jest.unstable_mockModule("../../../../src/modules/teamRequests/teamRequest.servi
   },
 }));
 
+jest.unstable_mockModule("../../../../src/modules/supply/supply.model.js", () => ({
+  default: {
+    find: jest.fn(),
+  },
+}));
+
+jest.unstable_mockModule("../../../../src/modules/missionSupplies/missionSupply.model.js", () => ({
+  default: {
+    insertMany: jest.fn(),
+  },
+}));
+
 const missionService = (await import("../../../../src/modules/missions/mission.service.js")).default;
 const missionRepository = (await import("../../../../src/modules/missions/mission.repository.js")).default;
 const Timeline = (await import("../../../../src/modules/timelines/timeline.model.js")).default;
@@ -79,6 +91,8 @@ const { requestRepository } = await import("../../../../src/modules/requests/req
 const timelineService = (await import("../../../../src/modules/timelines/timeline.service.js")).default;
 const { teamRepository } = await import("../../../../src/modules/teams/team.repository.js");
 const { teamRequestService } = await import("../../../../src/modules/teamRequests/teamRequest.service.js");
+const Supply = (await import("../../../../src/modules/supply/supply.model.js")).default;
+const MissionSupply = (await import("../../../../src/modules/missionSupplies/missionSupply.model.js")).default;
 
 describe("MissionService", () => {
   beforeEach(() => {
@@ -101,10 +115,14 @@ describe("MissionService", () => {
       expect(teamRequestService.createMatrix).not.toHaveBeenCalled();
     });
 
-    it("should start mission and emit MISSION_ASSIGNED with mission-scoped recipients", async () => {
+    it("should start mission, emit MISSION_ASSIGNED, and auto-create MissionSupply records", async () => {
       missionRepository.findById.mockResolvedValue({ _id: "m1", status: "DRAFT", code: "M-001" });
       missionRequestRepository.findByMissionId.mockResolvedValue([
-        { _id: "mr1", requestId: { _id: "r1", userId: { _id: "citizen-1" } } },
+        { 
+          _id: "mr1", 
+          requestId: { _id: "r1", userId: { _id: "citizen-1" } },
+          requestSuppliesSnapshot: [{ name: "Water", quantity: 50 }, { name: "Food", quantity: 20 }]
+        },
       ]);
       Timeline.find.mockReturnValue({
         populate: jest.fn().mockResolvedValue([
@@ -114,6 +132,12 @@ describe("MissionService", () => {
       Timeline.updateMany.mockResolvedValue({ modifiedCount: 1 });
       teamRequestService.createMatrix.mockResolvedValue({ matched: 1, upserted: 1 });
       missionRepository.update.mockResolvedValue({ _id: "m1", code: "M-001", status: "PLANNED" });
+      
+      Supply.find.mockResolvedValue([
+        { _id: "sup-w", name: "Water" },
+        { _id: "sup-f", name: "Food" }
+      ]);
+      MissionSupply.insertMany.mockResolvedValue([]);
 
       const result = await missionService.startMission("m1");
 
@@ -139,6 +163,11 @@ describe("MissionService", () => {
         missionRequestIds: ["mr1"],
         teamIds: ["team-1"],
       });
+      expect(Supply.find).toHaveBeenCalledWith({ name: { $in: ["Water", "Food"] } });
+      expect(MissionSupply.insertMany).toHaveBeenCalledWith([
+        { missionId: "m1", supplyId: "sup-w", plannedQty: 50, status: "REQUESTED" },
+        { missionId: "m1", supplyId: "sup-f", plannedQty: 20, status: "REQUESTED" }
+      ]);
       expect(result).toEqual(expect.objectContaining({ status: "PLANNED" }));
     });
   });

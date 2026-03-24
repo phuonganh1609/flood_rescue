@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const MISSION_SUPPLY_STATUS = {
+export const MISSION_SUPPLY_STATUS = {
   REQUESTED: "REQUESTED",
   ALLOCATED: "ALLOCATED",
   FULLY_CLAIMED: "FULLY_CLAIMED",
@@ -70,7 +70,8 @@ const missionSupplySchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// Ensure uniqueness: One supply type per mission 
+// Ensure uniqueness: "Mỗi loại supply trong một Mission chỉ được lấy từ một warehouse duy nhất."
+// Đảm bảo team chỉ lấy supply từ 1 nguồn warehouse (hiện tại là zậy á)
 missionSupplySchema.index({ missionId: 1, supplyId: 1 }, { unique: true });
 
 const MissionSupply = mongoose.model("MissionSupply", missionSupplySchema);

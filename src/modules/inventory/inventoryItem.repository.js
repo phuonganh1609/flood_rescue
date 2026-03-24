@@ -14,6 +14,14 @@ class InventoryItemRepository {
     return doc.save();
   };
 
+  async findBySupplyAndWarehouse(supplyId, warehouseId, session = null) {
+    return await InventoryItem.findOne({
+      supplyID: supplyId,
+      warehouse: warehouseId,
+      itemType: "SUPPLY",
+    }).session(session);
+  }
+
    // Tìm nhiều supply theo mảng tên → trả về map name → _id
   async findSuppliesByNames(names) {
     const supplies = await Supply.find({ 

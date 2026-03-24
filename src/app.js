@@ -15,6 +15,7 @@ import teamApplicationRoute from "./modules/teamApplications/teamApplication.rou
 import missionRoute from "./modules/missions/mission.routes.js";
 import missionRequestRoute from "./modules/missionRequests/missionRequest.routes.js";
 import timelineRoute from "./modules/timelines/timeline.routes.js";
+import timelineSupplyRoute from "./modules/timelineSupplies/timelineSupply.routes.js";
 import teamRequestRoute from "./modules/teamRequests/teamRequest.routes.js";
 import userRoute from "./modules/users/user.routes.js";
 import "./modules/notifications/notify.listener.js"; // Initialize event listeners
@@ -104,6 +105,7 @@ app.use("/api/missions", missionRoute);
 app.use("/api/mission-requests", missionRequestRoute);
 app.use("/api/team-requests", teamRequestRoute);
 app.use("/api/timelines", timelineRoute);
+app.use("/api/timeline-supplies", timelineSupplyRoute);
 app.use("/api/notifications", notificationRoute);
 app.use("/api/teams", teamRoute);
 app.use("/api/team-applications", teamApplicationRoute);

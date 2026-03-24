@@ -8,6 +8,8 @@ import { missionRequestRepository } from "../missionRequests/missionRequest.repo
 import { eventBus } from "../../utils/events.js";
 import User from "../users/user.model.js";
 import { teamRequestService } from "../teamRequests/teamRequest.service.js";
+import Supply from "../supply/supply.model.js";
+import MissionSupply from "../missionSupplies/missionSupply.model.js";
 
 class MissionService {
   async assertRescueTeamCanAccessMission(missionId, user) {
@@ -397,6 +399,32 @@ class MissionService {
       missionRequestIds,
       teamIds: assignedTeamIds,
     });
+
+    // Auto-create MissionSupply based on aggregated request items
+    const supplyAggregate = {};
+    for (const mr of missionRequests) {
+      if (Array.isArray(mr.requestSuppliesSnapshot)) {
+        for (const s of mr.requestSuppliesSnapshot) {
+          if (s && s.name && typeof s.quantity === "number") {
+            supplyAggregate[s.name] = (supplyAggregate[s.name] || 0) + s.quantity;
+          }
+        }
+      }
+    }
+
+    const supplyNames = Object.keys(supplyAggregate);
+    if (supplyNames.length > 0) {
+      const supplies = await Supply.find({ name: { $in: supplyNames } });
+      const msData = supplies.map(sup => ({
+        missionId: id,
+        supplyId: sup._id,
+        plannedQty: supplyAggregate[sup.name],
+        status: "REQUESTED",
+      }));
+      if (msData.length > 0) {
+        await MissionSupply.insertMany(msData);
+      }
+    }
 
     const updatedMission = await missionRepository.update(id, { status: "PLANNED" });
 
