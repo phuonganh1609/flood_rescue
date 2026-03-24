@@ -1,5 +1,5 @@
 import express from 'express';
-import {add, getByName, getAll, update, remove } from './warehouse.controller.js';
+import {add, getByName, getAll, update, remove, updateWarehouseStatus,removeWarehouseMaintenance,setWarehouseMaintenance } from './warehouse.controller.js';
 import { authenticate, authorize } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -35,5 +35,13 @@ router.delete(
   authenticate,
   authorize(['Manager', 'Admin']),remove
 );
+// auto calc status
+router.patch("/:id/status", updateWarehouseStatus);
+
+// manual maintenance
+router.patch("/:id/maintenance", setWarehouseMaintenance);
+
+// remove maintenance
+router.patch("/:id/maintenance/remove", removeWarehouseMaintenance);
 
 export default router;

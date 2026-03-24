@@ -147,7 +147,7 @@ class TimelineService {
     );
     await this.syncAllForTimeline(transitioned);
     await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
-    await this.emitMissionAcceptedForMission(transitioned);
+    await this.emitMissionAcceptedForMission(transitioned, actorUserId);
     await this.emitMissionApproachingForMission(transitioned);
 
     return transitioned;
@@ -182,7 +182,7 @@ class TimelineService {
   }
 
   async completeTimeline(timelineId, actorUserId, payload) {
-    const { outcome, note, rescuedCount, completions = [] } = payload;
+    const { outcome, note } = payload;
     const timeline = await this.getTimelineById(timelineId);
     await this.assertMissionNotTerminated(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
@@ -194,11 +194,6 @@ class TimelineService {
 
     assertTimelineTransition(timeline.status, nextStatus);
 
-    const derivedRescuedCount = completions.reduce(
-      (sum, item) => sum + item.rescuedCount,
-      0,
-    );
-
     const transitioned = await timelineRepository.transitionStatus(
       timelineId,
       TIMELINE_STATUS.ON_SITE,
@@ -206,7 +201,6 @@ class TimelineService {
         status: nextStatus,
         completedAt: new Date(),
         note: note || timeline.note,
-        rescuedCount: Number.isFinite(derivedRescuedCount) ? derivedRescuedCount : timeline.rescuedCount || 0,
       },
     );
 
@@ -219,35 +213,43 @@ class TimelineService {
       throw err;
     }
 
-    const fulfilledMissionRequests = [];
-    for (const item of completions) {
-      const missionRequest = await missionRequestRepository.findById(item.missionRequestId);
-      if (!missionRequest) {
-        const err = new Error(
-          `Không tìm thấy mission request với ID: ${item.missionRequestId}`,
-        );
-        err.statusCode = 404;
-        err.errorCode = "MISSION_REQUEST_NOT_FOUND";
-        throw err;
-      }
+    await this.syncAllForTimeline(transitioned);
+    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
 
-      if (extractId(missionRequest.missionId) !== extractId(transitioned.missionId)) {
-        const err = new Error("Mission request không thuộc mission của timeline này");
-        err.statusCode = 400;
-        err.errorCode = "MISSION_REQUEST_MISMATCH";
-        throw err;
-      }
-
-      const updatedMissionRequest = await missionRequestRepository.incrementRescued(
-        item.missionRequestId,
-        item.rescuedCount,
-        extractId(transitioned._id),
-        extractId(transitioned.teamId),
+    if (nextStatus === TIMELINE_STATUS.COMPLETED) {
+      await this.emitMissionCompletedForMission(
+        transitioned,
+        "completed via timeline",
+        actorUserId,
       );
+    }
 
-      if (updatedMissionRequest?.status === "FULFILLED") {
-        fulfilledMissionRequests.push(updatedMissionRequest);
-      }
+    return transitioned;
+  }
+
+  async completeTimelineFromTeamRequest(timelineId, outcome, note, actorUserId) {
+    const timeline = await this.getTimelineById(timelineId);
+
+    const nextStatus =
+      outcome === "PARTIAL" ? TIMELINE_STATUS.PARTIAL : TIMELINE_STATUS.COMPLETED;
+
+    const transitioned = await timelineRepository.transitionStatus(
+      timelineId,
+      TIMELINE_STATUS.ON_SITE,
+      {
+        status: nextStatus,
+        completedAt: new Date(),
+        note: note || timeline.note,
+      },
+    );
+
+    if (!transitioned) {
+      const err = new Error(
+        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
+      );
+      err.statusCode = 409;
+      err.errorCode = "TIMELINE_CONFLICT";
+      throw err;
     }
 
     await this.syncAllForTimeline(transitioned);
@@ -256,22 +258,191 @@ class TimelineService {
     if (nextStatus === TIMELINE_STATUS.COMPLETED) {
       await this.emitMissionCompletedForMission(
         transitioned,
-        "completed via timeline",
+        "completed via TeamRequest",
+        actorUserId,
       );
     }
 
-    for (const missionRequest of fulfilledMissionRequests) {
-      const requestId = extractId(missionRequest.requestId);
-      const citizenId = extractId(missionRequest.requestId?.userId);
-      if (!requestId || !citizenId) continue;
-      eventBus.emit("MISSION_COMPLETED", {
-        requestId,
-        missionId: extractId(transitioned.missionId),
-        citizenId,
-      });
+    return transitioned;
+  }
+
+  async completeTimelineFromAllTeamRequests(timelineId, actorUserId, payload = {}) {
+    const { note } = payload;
+    const timeline = await this.getTimelineById(timelineId);
+
+    if (timeline.status !== TIMELINE_STATUS.ON_SITE) {
+      const err = new Error(
+        `Timeline phải ở trạng thái ON_SITE mới có thể complete. Trạng thái hiện tại: ${timeline.status}`,
+      );
+      err.statusCode = 400;
+      err.errorCode = "TIMELINE_NOT_ON_SITE";
+      throw err;
     }
 
-    return transitioned;
+    await this.assertTeamActionAllowed(timeline, actorUserId);
+
+    const missionId = extractId(timeline.missionId);
+    const teamId = extractId(timeline.teamId);
+
+    const { teamRequestRepository } = await import("../teamRequests/teamRequest.repository.js");
+
+    const incompleteCount = await teamRequestRepository.countIncompleteByMissionAndTeam(
+      missionId,
+      teamId,
+    );
+
+    if (incompleteCount > 0) {
+      const err = new Error(
+        `Không thể hoàn tất timeline: còn ${incompleteCount} TeamRequest chưa hoàn thành`,
+      );
+      err.statusCode = 400;
+      err.errorCode = "INCOMPLETE_TEAM_REQUESTS_REMAINING";
+      throw err;
+    }
+
+    const completedTeamRequests = await teamRequestRepository.findCompletedByMissionAndTeam(
+      missionId,
+      teamId,
+    );
+
+    if (completedTeamRequests.length === 0) {
+      const err = new Error(
+        "Không tìm thấy TeamRequest nào cho team này trong mission",
+      );
+      err.statusCode = 404;
+      err.errorCode = "NO_TEAM_REQUESTS_FOUND";
+      throw err;
+    }
+
+    const hasAnyPartial = completedTeamRequests.some((tr) => tr.outcome === "PARTIAL");
+    const timelineOutcome = hasAnyPartial ? "PARTIAL" : "COMPLETED";
+
+    return await this.completeTimelineFromTeamRequest(
+      timelineId,
+      timelineOutcome,
+      note || `Manually completed from all TeamRequests (${timelineOutcome})`,
+      actorUserId,
+    );
+  }
+
+  async completeTimelineAuto(timelineId, actorUserId, payload = {}) {
+    const { note } = payload;
+    const timeline = await this.getTimelineById(timelineId);
+
+    const terminalStatuses = [
+      TIMELINE_STATUS.COMPLETED,
+      TIMELINE_STATUS.PARTIAL,
+      TIMELINE_STATUS.FAILED,
+      TIMELINE_STATUS.WITHDRAWN,
+      TIMELINE_STATUS.CANCELLED,
+    ];
+
+    if (terminalStatuses.includes(timeline.status)) {
+      return {
+        ...timeline.toObject(),
+        _alreadyCompleted: true,
+        message: "Timeline đã được hoàn tất trước đó",
+      };
+    }
+
+    if (timeline.status !== TIMELINE_STATUS.ON_SITE) {
+      const err = new Error(
+        `Timeline phải ở trạng thái ON_SITE mới có thể complete. Trạng thái hiện tại: ${timeline.status}`,
+      );
+      err.statusCode = 400;
+      err.errorCode = "TIMELINE_NOT_ON_SITE";
+      throw err;
+    }
+
+    await this.assertTeamActionAllowed(timeline, actorUserId);
+    await this.assertMissionNotTerminated(extractId(timeline.missionId));
+
+    const missionId = extractId(timeline.missionId);
+    const teamId = extractId(timeline.teamId);
+
+    const { teamRequestRepository } = await import("../teamRequests/teamRequest.repository.js");
+
+    const allTeamRequests = await teamRequestRepository.findByMissionAndTeam(missionId, teamId);
+
+    if (allTeamRequests.length === 0) {
+      const err = new Error(
+        "Không thể complete timeline khi mission chưa start (chưa có TeamRequest)",
+      );
+      err.statusCode = 400;
+      err.errorCode = "NO_TEAM_REQUESTS_FOUND";
+      throw err;
+    }
+
+    // Auto-complete all incomplete teamRequests based on their actual progress
+    const RequestModel = (await import("../requests/request.model.js")).default;
+    for (const tr of allTeamRequests) {
+      if (tr.completedAt) continue; // already completed
+
+      const trId = tr._id?.toString?.();
+      const missionRequestId = tr.missionRequestId?._id?.toString?.() || tr.missionRequestId?.toString?.();
+      const missionRequest = missionRequestId
+        ? await missionRequestRepository.findById(missionRequestId)
+        : null;
+
+      let trOutcome = "PARTIAL";
+      if (missionRequest) {
+        const requestId = missionRequest.requestId?._id?.toString?.() || missionRequest.requestId?.toString?.();
+        const request = requestId ? await RequestModel.findById(requestId) : null;
+        const peopleNeeded = request?.peopleNeeded || 0;
+        const rescuedCountTotal = tr.rescuedCountTotal || 0;
+
+        const hasProgress = rescuedCountTotal > 0 || (tr.suppliesDeliveredTotal && tr.suppliesDeliveredTotal.length > 0);
+        if (!hasProgress) {
+          trOutcome = "PARTIAL";
+        } else {
+          trOutcome = rescuedCountTotal >= peopleNeeded ? "COMPLETED" : "PARTIAL";
+        }
+      }
+
+      await teamRequestRepository.markComplete(trId, {
+        outcome: trOutcome,
+        note: note || "Auto-completed when finishing mission",
+        completedBy: actorUserId,
+      });
+
+      // Sync missionRequest aggregate
+      if (missionRequest) {
+        const MissionRequestService = (await import("../missionRequests/missionRequest.service.js")).default;
+        await MissionRequestService.syncAfterMissionRequestUpdate(missionRequest);
+      }
+    }
+
+    // Re-fetch completed teamRequests after auto-completing
+    const completedTeamRequests = await teamRequestRepository.findCompletedByMissionAndTeam(
+      missionId,
+      teamId,
+    );
+
+    let outcome;
+    let targetStatus;
+
+    if (completedTeamRequests.length > 0) {
+      const hasAnyPartial = completedTeamRequests.some((tr) => tr.outcome === "PARTIAL");
+      outcome = hasAnyPartial ? "PARTIAL" : "COMPLETED";
+      targetStatus = outcome === "PARTIAL" ? TIMELINE_STATUS.PARTIAL : TIMELINE_STATUS.COMPLETED;
+    } else {
+      outcome = "FAILED";
+      targetStatus = TIMELINE_STATUS.FAILED;
+    }
+
+    if (targetStatus === TIMELINE_STATUS.FAILED) {
+      return await this.failTimeline(timelineId, actorUserId, {
+        failureReason: "Team kết thúc nhiệm vụ mà chưa hoàn thành yêu cầu nào",
+        note: note || null,
+      });
+    } else {
+      return await this.completeTimelineFromTeamRequest(
+        timelineId,
+        outcome,
+        note || `Auto-calculated outcome from TeamRequests: ${outcome}`,
+        actorUserId,
+      );
+    }
   }
 
   async failTimeline(timelineId, actorUserId, payload) {
@@ -303,7 +474,7 @@ class TimelineService {
 
     await this.syncAllForTimeline(transitioned);
     await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
-    await this.emitMissionFailedForMission(transitioned, failureReason);
+    await this.emitMissionFailedForMission(transitioned, failureReason, actorUserId);
     return transitioned;
   }
 
@@ -334,7 +505,7 @@ class TimelineService {
       throw err;
     }
 
-    await this.emitMissionWithdrawnForMission(transitioned);
+    await this.emitMissionWithdrawnForMission(transitioned, actorUserId);
     await this.syncAllForTimeline(transitioned);
     await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
     return transitioned;
@@ -365,6 +536,7 @@ class TimelineService {
     }
 
     await this.syncAllForTimeline(transitioned);
+    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
     return transitioned;
   }
 
@@ -433,7 +605,12 @@ class TimelineService {
           ["FULFILLED", "CLOSED", "DROPPED"].includes(status),
         );
         if (allDone) {
-          desiredFromMissionRequest = REQUEST_STATUS.FULFILLED;
+          const allFulfilled = missionRequestStatuses.every(
+            (status) => status === "FULFILLED",
+          );
+          desiredFromMissionRequest = allFulfilled
+            ? REQUEST_STATUS.FULFILLED
+            : REQUEST_STATUS.PARTIALLY_FULFILLED;
         } else {
           desiredFromMissionRequest = REQUEST_STATUS.VERIFIED;
         }
@@ -543,8 +720,8 @@ class TimelineService {
     }
   }
 
-  // Lighter check — only blocks truly terminal states.
-  // Used for arrive/complete/fail/withdraw where the team is already executing.
+  // Used for arrive/complete/fail/withdraw.
+  // Team actions are blocked when mission is paused or terminal.
   async assertMissionNotTerminated(missionId) {
     const mission = await missionRepository.findById(missionId);
     if (!mission) {
@@ -554,12 +731,12 @@ class TimelineService {
       throw err;
     }
 
-    if (["ABORTED", "COMPLETED"].includes(mission.status)) {
+    if (["ABORTED", "COMPLETED", "PAUSED"].includes(mission.status)) {
       const err = new Error(
-        `Không thể thao tác timeline: mission đã kết thúc với trạng thái ${mission.status}`,
+        `Không thể thao tác timeline: mission đang ở trạng thái ${mission.status}`,
       );
       err.statusCode = 400;
-      err.errorCode = "MISSION_TERMINAL";
+      err.errorCode = "MISSION_UNAVAILABLE_FOR_EXECUTION";
       throw err;
     }
   }
@@ -589,7 +766,7 @@ class TimelineService {
     }
   }
 
-  async emitMissionAcceptedForMission(timeline) {
+  async emitMissionAcceptedForMission(timeline, actorUserId) {
     const missionRequests = await missionRequestRepository.findByMissionId(
       extractId(timeline.missionId),
     );
@@ -598,6 +775,8 @@ class TimelineService {
     eventBus.emit("MISSION_ACCEPTED", {
       requestId,
       missionId: extractId(timeline.missionId),
+      teamId: extractId(timeline.teamId),
+      actorUserId,
       teamName: timeline.teamId?.name || "Rescue Team",
     });
   }
@@ -620,7 +799,7 @@ class TimelineService {
     }
   }
 
-  async emitMissionFailedForMission(timeline, reason) {
+  async emitMissionFailedForMission(timeline, reason, actorUserId) {
     const missionRequests = await missionRequestRepository.findByMissionId(
       extractId(timeline.missionId),
     );
@@ -634,12 +813,14 @@ class TimelineService {
         requestId,
         missionId: extractId(timeline.missionId),
         citizenId,
+        teamId: extractId(timeline.teamId),
+        actorUserId,
         reason,
       });
     }
   }
 
-  async emitMissionWithdrawnForMission(timeline) {
+  async emitMissionWithdrawnForMission(timeline, actorUserId) {
     const missionRequests = await missionRequestRepository.findByMissionId(
       extractId(timeline.missionId),
     );
@@ -654,12 +835,14 @@ class TimelineService {
     eventBus.emit("MISSION_WITHDRAWN", {
       requestIds,
       missionId: extractId(timeline.missionId),
+      teamId: extractId(timeline.teamId),
+      actorUserId,
       teamName: timeline.teamId?.name || "Rescue Team",
       withdrawalReason: timeline.withdrawalReason,
     });
   }
 
-  async emitMissionCompletedForMission(timeline, completionNote) {
+  async emitMissionCompletedForMission(timeline, completionNote, actorUserId) {
     const missionRequests = await missionRequestRepository.findByMissionId(
       extractId(timeline.missionId),
     );
@@ -673,6 +856,8 @@ class TimelineService {
         requestId,
         missionId: extractId(timeline.missionId),
         citizenId,
+        teamId: extractId(timeline.teamId),
+        actorUserId,
         completionNote,
       });
     }

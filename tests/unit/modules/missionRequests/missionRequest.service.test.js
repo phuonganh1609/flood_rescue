@@ -130,14 +130,14 @@ describe("MissionRequestService", () => {
     it("should reject dropping from terminal status", async () => {
       missionRequestRepository.findById.mockResolvedValue({
         _id: "mr-2",
-        status: "FULFILLED",
+        status: "CLOSED",
       });
 
       await expect(
         missionRequestService.dropById("mr-2", "manual handoff"),
       ).rejects.toMatchObject({
         message:
-          "Không thể chuyển trạng thái mission request: trạng thái hiện tại FULFILLED đã là trạng thái kết thúc",
+          "Không thể chuyển trạng thái mission request: trạng thái hiện tại CLOSED đã là trạng thái kết thúc",
         statusCode: 400,
         errorCode: "MISSION_REQUEST_TERMINAL",
       });
@@ -153,8 +153,8 @@ describe("MissionRequestService", () => {
         status: "IN_PROGRESS",
       });
       missionRequestRepository.findByRequestId.mockResolvedValue([
-        { status: "FULFILLED" },
         { status: "CLOSED" },
+        { status: "DROPPED" },
       ]);
 
       const result = await missionRequestService.syncRequestStatus("req-1");
@@ -178,7 +178,7 @@ describe("MissionRequestService", () => {
         { status: "PARTIAL" },
       ]);
       missionRequestRepository.findByMissionId.mockResolvedValue([
-        { status: "FULFILLED", fulfillmentPercent: 100 },
+        { status: "CLOSED", fulfillmentPercent: 100 },
         { status: "CLOSED", fulfillmentPercent: 60 },
       ]);
 
@@ -257,7 +257,7 @@ describe("MissionRequestService", () => {
       expect(result.fulfillmentPercent).toBe(60);
     });
 
-    it("should resolve to FULFILLED when target is fully met", async () => {
+    it("should resolve to CLOSED when target is fully met", async () => {
       jest.spyOn(missionRequestService, "syncAfterMissionRequestUpdate").mockResolvedValue();
 
       missionRequestRepository.findById.mockResolvedValue(baseMissionRequest);
@@ -282,7 +282,7 @@ describe("MissionRequestService", () => {
       teamRequestRepository.upsertContribution.mockResolvedValue({ _id: "tr-2" });
       missionRequestRepository.syncAggregateFromContributionSummary.mockResolvedValue({
         _id: "mr-p",
-        status: "FULFILLED",
+        status: "CLOSED",
         peopleRescued: 5,
         peopleNeeded: 5,
         fulfillmentPercent: 100,
@@ -296,7 +296,7 @@ describe("MissionRequestService", () => {
         { id: "u-1", role: "Rescue Team", teamId: "team-1" },
       );
 
-      expect(result.status).toBe("FULFILLED");
+      expect(result.status).toBe("CLOSED");
       expect(result.fulfillmentPercent).toBe(100);
     });
 
@@ -329,7 +329,7 @@ describe("MissionRequestService", () => {
       teamRequestRepository.upsertContribution.mockResolvedValue({ _id: "tr-3" });
       missionRequestRepository.syncAggregateFromContributionSummary.mockResolvedValue({
         _id: "mr-p",
-        status: "FULFILLED",
+        status: "CLOSED",
         fulfillmentPercent: 100,
         suppliesDelivered: [{ name: "Water", deliveredQty: 10 }],
         missionId: "m-1",
@@ -415,25 +415,29 @@ describe("MissionRequestService", () => {
       expect(teamRequestRepository.upsertContribution).not.toHaveBeenCalled();
     });
 
-    it("should throw 400 MISSION_REQUEST_TERMINAL when missionRequest is already FULFILLED", async () => {
+    it("should return 200 OK with message when missionRequest is already CLOSED", async () => {
       missionRequestRepository.findById.mockResolvedValue({
         _id: "mr-p",
-        status: "FULFILLED",
+        status: "CLOSED",
         missionId: "m-1",
+        peopleRescued: 5,
+        fulfillmentPercent: 100,
+        toObject: function() { return { ...this }; },
       });
 
-      await expect(
-        missionRequestService.updateProgress(
-          "mr-p",
-          { peopleRescuedIncrement: 1 },
-          { id: "u-1", role: "Rescue Team", teamId: "team-1" },
-        ),
-      ).rejects.toMatchObject({
-        statusCode: 400,
-        errorCode: "MISSION_REQUEST_TERMINAL",
-      });
+      const result = await missionRequestService.updateProgress(
+        "mr-p",
+        { peopleRescuedIncrement: 1 },
+        { id: "u-1", role: "Rescue Team", teamId: "team-1" },
+      );
 
+      expect(result).toMatchObject({
+        _id: "mr-p",
+        status: "CLOSED",
+        message: "Mission already completed",
+      });
       expect(teamRequestRepository.upsertContribution).not.toHaveBeenCalled();
+      expect(missionRequestRepository.syncAggregateFromContributionSummary).not.toHaveBeenCalled();
     });
 
     it("should retrieve teamId from DB when user.teamId not provided", async () => {

@@ -311,7 +311,7 @@ sequenceDiagram
 | `PATCH`  | `/missions/{id}/abort`                       | Coordinator | Abort mission → cancel all active timelines                          |
 | `PATCH`  | `/timelines/{id}/accept`                     | Team        | Accept → `EN_ROUTE`; confirm supplies carried                        |
 | `PATCH`  | `/timelines/{id}/arrive`                     | Team        | Arrive → `ON_SITE`                                                   |
-| `PATCH`  | `/timelines/{id}/complete`                   | Team        | Finish with report → `COMPLETED` / `PARTIAL`; updates MissionRequest |
+| `PATCH`  | `/timelines/{id}/complete`                   | Team        | Finish → `COMPLETED` / `PARTIAL`; team phải dùng progress endpoint trước |
 | `PATCH`  | `/timelines/{id}/fail`                       | Team        | Report failure → `FAILED`                                            |
 | `PATCH`  | `/timelines/{id}/withdraw`                   | Team        | Withdraw → `WITHDRAWN`                                               |
 | `PATCH`  | `/timelines/{id}/cancel`                     | Coordinator | Cancel timeline → `CANCELLED`                                        |
@@ -328,8 +328,9 @@ Luồng mục tiêu sau khi redesign:
 4. Coordinator ghép Team(s) vào Mission → `POST /api/missions/{id}/teams` → tạo `Timeline (PLANNED)`.
 5. Coordinator bấm Start → `PATCH /api/missions/{id}/start` → tất cả Timeline `PLANNED → ASSIGNED`; pre-create TeamRequest matrix; Mission `DRAFT → PLANNED`; notify teams.
 6. Team thao tác lifecycle: `PATCH /api/timelines/{id}/accept|arrive|complete|fail|withdraw`.
-7. Team cập nhật contribution theo request: `POST /api/missionRequests/{id}/progress`.
+7. Team cập nhật contribution theo request: `POST /api/missionRequests/{id}/progress` (phải gọi trước khi complete).
 8. Sau mỗi progress update, BE sync aggregate `MissionRequest.peopleRescued`, `suppliesDelivered`, `fulfillmentPercent` từ TeamRequest.
+   - Timeline complete chỉ chuyển trạng thái, không ghi rescuedCount trực tiếp vào MissionRequest.
 9. Coordinator/Admin huỷ timeline: `PATCH /api/timelines/{id}/cancel`.
 10. Coordinator abort mission: `PATCH /api/missions/{id}/abort` → huỷ tất cả active timelines; emit `MISSION_ABORTED`.
 

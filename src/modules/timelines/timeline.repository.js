@@ -28,7 +28,6 @@ class TimelineRepository {
   async findById(id) {
     return await Timeline.findById(id)
       .populate("missionId")
-      .populate("requestId")
       .populate("teamId");
   }
 
@@ -43,7 +42,6 @@ class TimelineRepository {
     const [timelines, total] = await Promise.all([
       Timeline.find(filter)
         .populate("missionId")
-        .populate("requestId")
         .populate("teamId")
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -74,7 +72,6 @@ class TimelineRepository {
   async updateById(id, updateData) {
     return await Timeline.findByIdAndUpdate(id, updateData, { new: true })
       .populate("missionId")
-      .populate("requestId")
       .populate("teamId");
   }
 
@@ -86,7 +83,12 @@ class TimelineRepository {
       { new: true },
     )
       .populate("missionId")
-      .populate("requestId")
+      .populate("teamId");
+  }
+
+  async findOne(filter) {
+    return await Timeline.findOne(filter)
+      .populate("missionId")
       .populate("teamId");
   }
 

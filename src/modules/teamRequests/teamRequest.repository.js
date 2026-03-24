@@ -148,6 +148,51 @@ class TeamRequestRepository {
       totalSuppliesDelivered: supplies,
     };
   }
+
+  async markComplete(id, { outcome, note, completedBy }) {
+    const updated = await TeamRequest.findByIdAndUpdate(
+      id,
+      {
+        completedAt: new Date(),
+        completedBy,
+        outcome,
+        note,
+      },
+      { new: true },
+    );
+
+    if (!updated) {
+      return null;
+    }
+
+    return await this.findById(id);
+  }
+
+  async findByMissionAndTeam(missionId, teamId) {
+    return await TeamRequest.find({ missionId, teamId })
+      .populate("missionRequestId")
+      .populate("teamId", "name")
+      .sort({ createdAt: 1 })
+      .lean();
+  }
+
+  async countIncompleteByMissionAndTeam(missionId, teamId) {
+    return await TeamRequest.countDocuments({
+      missionId,
+      teamId,
+      completedAt: null,
+    });
+  }
+
+  async findCompletedByMissionAndTeam(missionId, teamId) {
+    return await TeamRequest.find({
+      missionId,
+      teamId,
+      completedAt: { $ne: null },
+    })
+      .select("outcome")
+      .lean();
+  }
 }
 
 const teamRequestRepository = new TeamRequestRepository();

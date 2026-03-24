@@ -58,6 +58,26 @@ const teamRequestSchema = new Schema(
       ref: "User",
       default: null,
     },
+    completedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    completedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    outcome: {
+      type: String,
+      enum: ["COMPLETED", "PARTIAL"],
+      default: null,
+    },
+    note: {
+      type: String,
+      default: null,
+      maxlength: 1000,
+    },
   },
   { timestamps: true },
 );

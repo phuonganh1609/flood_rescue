@@ -206,3 +206,47 @@ export const deleteAllNotificationsByUser = async (req, res) => {
     });
   }
 };
+
+/**
+ * Get unread notification count for the currently authenticated user
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const getMyUnreadCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const count = await notificationService.getUnreadCount(userId);
+    return response.sendSuccess(res, {
+      data: { unreadCount: count },
+      message: "Unread count fetched successfully",
+    });
+  } catch (error) {
+    console.error("Error fetching unread count:", error);
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+    });
+  }
+};
+
+/**
+ * Mark all notifications as read for the currently authenticated user
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+export const markAllAsRead = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await notificationService.markAllAsRead(userId);
+    return response.sendSuccess(res, {
+      data: result,
+      message: "All notifications marked as read",
+    });
+  } catch (error) {
+    console.error("Error marking all as read:", error);
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+    });
+  }
+};

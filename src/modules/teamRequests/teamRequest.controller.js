@@ -36,4 +36,21 @@ const getTeamRequestById = async (req, res) => {
   }
 };
 
-export { listTeamRequests, getTeamRequestById };
+const completeTeamRequest = async (req, res) => {
+  try {
+    const completed = await teamRequestService.completeTeamRequest(
+      req.params.id,
+      req.body,
+      req.user,
+    );
+
+    return response.sendSuccess(res, {
+      data: completed,
+      message: "Team request completed successfully",
+    });
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+export { listTeamRequests, getTeamRequestById, completeTeamRequest };

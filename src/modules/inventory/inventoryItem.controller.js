@@ -141,8 +141,8 @@ export const getAll = async (req, res) => {
  try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10; 
+    const itemType = req.query.itemType;
 
-     
     const filter = {};
     if (req.query.supplyId) filter.supplyID = req.query.supplyId;
     if (req.query.warehouseId) filter.warehouse = req.query.warehouseId;
@@ -158,6 +158,18 @@ export const getAll = async (req, res) => {
 
       filter.supplyID = { $in: supplies.map(s => s._id) };
 
+    }
+    //search vehicle license plate
+    if (req.query.licensePlate) {
+
+      const vehicles = await Vehicle.find({
+        licensePlate: { $regex: req.query.licensePlate, $options: "i" }
+      }).select("_id");
+
+      filter.vehicleID = { $in: vehicles.map(v => v._id) };
+    }
+    if (itemType) {
+      filter.itemType = itemType;
     }
 
     const result = await inventoryItemService.list(filter, { page, limit });
@@ -288,6 +300,39 @@ export const importFromExcel = async (req, res) => {
     return res.status(500).json({
       message: "Import Excel failed",
       error: err.message,
+    });
+  }
+};
+
+export const useSupply = async (req, res) => {
+  try {
+    const { supplyID, warehouseId, quantity } = req.body;
+
+    console.log("BODY:", req.body); // 👈 debug
+
+    if (!supplyID || !warehouseId || !quantity) {
+      return response.sendError(res, {
+        message: "Missing required fields",
+        statusCode: 400,
+      });
+    }
+
+    const result = await inventoryItemService.useSupplyFromInventory(
+      supplyID,
+      warehouseId,
+      Number(quantity)
+    );
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Supply used successfully",
+    });
+
+  } catch (err) {
+    console.error(err);
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 400,
     });
   }
 };

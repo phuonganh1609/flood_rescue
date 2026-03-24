@@ -72,7 +72,7 @@ function calculateAggregateFields(missionRequest, contributionSummary = {}) {
 
   let status = MISSION_REQUEST_STATUS.PENDING;
   if (isFullyMet) {
-    status = MISSION_REQUEST_STATUS.FULFILLED;
+    status = MISSION_REQUEST_STATUS.CLOSED;
   } else if (hasContribution) {
     status = MISSION_REQUEST_STATUS.PARTIAL;
   }
@@ -167,43 +167,6 @@ class MissionRequestRepository {
     return await MissionRequest.deleteOne({ missionId, requestId });
   }
 
-  async incrementRescued(id, rescuedCount, timelineId = null, teamId = null) {
-    const missionRequest = await MissionRequest.findById(id);
-    if (!missionRequest) return null;
-
-    missionRequest.peopleRescued += rescuedCount;
-    missionRequest.peopleRemaining = Math.max(
-      0,
-      (missionRequest.peopleNeeded || 0) - missionRequest.peopleRescued,
-    );
-
-    missionRequest.fulfillmentPercent =
-      missionRequest.peopleNeeded > 0 ?
-        Math.min(
-          100,
-          Math.round((missionRequest.peopleRescued / missionRequest.peopleNeeded) * 100),
-        )
-      : 0;
-
-    if (
-      missionRequest.peopleNeeded > 0 &&
-      missionRequest.peopleRescued >= missionRequest.peopleNeeded
-    ) {
-      missionRequest.status = MISSION_REQUEST_STATUS.FULFILLED;
-      missionRequest.closedAt = new Date();
-    } else if (missionRequest.peopleRescued > 0) {
-      missionRequest.status = MISSION_REQUEST_STATUS.PARTIAL;
-    }
-
-    if (timelineId) missionRequest.lastUpdatedByTimelineId = timelineId;
-    if (teamId && !missionRequest.handledByTeamIds.some((idValue) => idValue.toString() === teamId.toString())) {
-      missionRequest.handledByTeamIds.push(teamId);
-    }
-
-    await missionRequest.save();
-    return await this.findById(id);
-  }
-
   async updateStatus(id, status) {
     const patch = { status };
     if ([MISSION_REQUEST_STATUS.FULFILLED, MISSION_REQUEST_STATUS.CLOSED].includes(status)) {
@@ -259,6 +222,8 @@ class MissionRequestRepository {
       MISSION_REQUEST_STATUS.DROPPED,
     ].includes(missionRequest.status);
 
+    const previousStatus = missionRequest.status;
+    
     missionRequest.peopleRescued = aggregate.peopleRescued;
     missionRequest.peopleRemaining = aggregate.peopleRemaining;
     missionRequest.suppliesDelivered = aggregate.suppliesDelivered;
@@ -267,7 +232,7 @@ class MissionRequestRepository {
 
     if (!isManualTerminal) {
       missionRequest.status = aggregate.status;
-      if (aggregate.status === MISSION_REQUEST_STATUS.FULFILLED) {
+      if (aggregate.status === MISSION_REQUEST_STATUS.CLOSED) {
         missionRequest.closedAt = missionRequest.closedAt || new Date();
       } else {
         missionRequest.closedAt = null;
@@ -275,7 +240,22 @@ class MissionRequestRepository {
     }
 
     await missionRequest.save();
-    return await this.findById(id);
+    
+    const updated = await this.findById(id);
+    
+    if (previousStatus !== MISSION_REQUEST_STATUS.CLOSED && 
+        updated.status === MISSION_REQUEST_STATUS.CLOSED) {
+      const { eventBus } = await import("../../utils/events.js");
+      eventBus.emit("REQUEST_AUTO_CLOSED", {
+        requestId: updated.requestId?._id?.toString?.() || updated.requestId?.toString?.(),
+        missionRequestId: updated._id.toString(),
+        missionId: updated.missionId?._id?.toString?.() || updated.missionId?.toString?.(),
+        fulfillmentPercent: updated.fulfillmentPercent,
+        closedAt: updated.closedAt,
+      });
+    }
+    
+    return updated;
   }
 
   async findByMissionIdPaginated(missionId, { teamId = null, page = 1, limit = 10 } = {}) {
@@ -308,64 +288,6 @@ class MissionRequestRepository {
     };
   }
 
-  async updateProgress(id, { peopleRescuedIncrement = 0, suppliesDelivered = [], teamId = null, timelineId = null } = {}) {
-    const missionRequest = await MissionRequest.findById(id);
-    if (!missionRequest) return null;
-
-    // Update people rescued
-    if (peopleRescuedIncrement > 0) {
-      missionRequest.peopleRescued += peopleRescuedIncrement;
-      missionRequest.peopleRemaining = Math.max(
-        0,
-        (missionRequest.peopleNeeded || 0) - missionRequest.peopleRescued,
-      );
-      missionRequest.fulfillmentPercent =
-        missionRequest.peopleNeeded > 0
-          ? Math.min(100, Math.round((missionRequest.peopleRescued / missionRequest.peopleNeeded) * 100))
-          : 0;
-    }
-
-    // Merge supplies delivered (additive, không overwrite)
-    if (suppliesDelivered.length > 0) {
-      for (const incoming of suppliesDelivered) {
-        const existing = missionRequest.suppliesDelivered.find(
-          (s) => s.name === incoming.name,
-        );
-        if (existing) {
-          existing.deliveredQty = (existing.deliveredQty || 0) + incoming.deliveredQty;
-        } else {
-          missionRequest.suppliesDelivered.push(incoming);
-        }
-      }
-    }
-
-    // Auto-transition status based on fulfillmentPercent
-    const notTerminal = ![
-      MISSION_REQUEST_STATUS.FULFILLED,
-      MISSION_REQUEST_STATUS.CLOSED,
-      MISSION_REQUEST_STATUS.DROPPED,
-    ].includes(missionRequest.status);
-
-    if (notTerminal) {
-      if (
-        missionRequest.peopleNeeded > 0 &&
-        missionRequest.peopleRescued >= missionRequest.peopleNeeded
-      ) {
-        missionRequest.status = MISSION_REQUEST_STATUS.FULFILLED;
-        missionRequest.closedAt = new Date();
-      } else if (missionRequest.peopleRescued > 0 || missionRequest.suppliesDelivered.length > 0) {
-        missionRequest.status = MISSION_REQUEST_STATUS.PARTIAL;
-      }
-    }
-
-    if (timelineId) missionRequest.lastUpdatedByTimelineId = timelineId;
-    if (teamId && !missionRequest.handledByTeamIds.some((tid) => tid.toString() === teamId.toString())) {
-      missionRequest.handledByTeamIds.push(teamId);
-    }
-
-    await missionRequest.save();
-    return await this.findById(id);
-  }
 }
 
 const missionRequestRepository = new MissionRequestRepository();

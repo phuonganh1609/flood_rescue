@@ -7,7 +7,9 @@ import {
   getNotificationById,
   markAsRead,
   deleteNotification,
-  deleteAllNotificationsByUser
+  deleteAllNotificationsByUser,
+  getMyUnreadCount,
+  markAllAsRead
 } from "./notification.controller.js";
 
 // All authenticated roles
@@ -33,6 +35,26 @@ router.get(
   "/me",
   authenticate,
   getMyNotifications
+);
+
+/**
+ * GET /notifications/me/unread-count - Get unread notification count
+ * ⚠️ Must be defined BEFORE /:userId to avoid param conflict
+ */
+router.get(
+  "/me/unread-count",
+  authenticate,
+  getMyUnreadCount
+);
+
+/**
+ * PATCH /notifications/me/mark-all-read - Mark all notifications as read
+ * ⚠️ Must be defined BEFORE /:userId to avoid param conflict
+ */
+router.patch(
+  "/me/mark-all-read",
+  authenticate,
+  markAllAsRead
 );
 
 /**

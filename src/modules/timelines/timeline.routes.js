@@ -8,6 +8,8 @@ import {
   failTimelineSchema,
   withdrawTimelineSchema,
   cancelTimelineSchema,
+  completeFromTeamRequestsSchema,
+  completeTimelineAutoSchema,
 } from "./timeline.validation.js";
 
 const router = express.Router();
@@ -29,12 +31,15 @@ router.get(
 
 router.patch("/:id/accept", authorize(["Rescue Team"]), timelineController.accept);
 router.patch("/:id/arrive", authorize(["Rescue Team"]), timelineController.arrive);
-router.patch(
-  "/:id/complete",
-  authorize(["Rescue Team"]),
-  validate(completeTimelineSchema),
-  timelineController.complete,
-);
+
+// DEPRECATED: Use POST /timelines/:id/complete instead
+// router.patch(
+//   "/:id/complete",
+//   authorize(["Rescue Team"]),
+//   validate(completeTimelineSchema),
+//   timelineController.complete,
+// );
+
 router.patch(
   "/:id/fail",
   authorize(["Rescue Team"]),
@@ -53,6 +58,13 @@ router.patch(
   authorize(["Rescue Coordinator", "Admin"]),
   validate(cancelTimelineSchema),
   timelineController.cancel,
+);
+
+router.post(
+  "/:id/complete",
+  authorize(["Rescue Team"]),
+  validate(completeTimelineAutoSchema),
+  timelineController.completeAuto,
 );
 
 export default router;

@@ -1231,6 +1231,98 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /api/team-requests/{id}/complete:
+    post:
+      tags:
+        - Missions
+      summary: Complete a TeamRequest (new recommended way)
+      description: |
+        Team completes their work on a specific request within a mission.
+        - System auto-determines outcome (COMPLETED/PARTIAL) based on rescuedCountTotal vs peopleNeeded
+        - Team must be ON_SITE to complete
+        - If this is the last incomplete TeamRequest for the team in the mission, Timeline is auto-completed
+        - Syncs MissionRequest/Request/Mission statuses
+      operationId: completeTeamRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: TeamRequest ID
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 1000
+                  nullable: true
+                  description: Optional note about the completion
+      responses:
+        "200":
+          description: TeamRequest completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Team request completed successfully"
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/TeamRequest"
+                      - type: object
+                        properties:
+                          outcome:
+                            type: string
+                            enum: [COMPLETED, PARTIAL]
+                            description: Auto-determined based on rescued count vs target
+                          completedAt:
+                            type: string
+                            format: date-time
+                          completedBy:
+                            type: string
+        "400":
+          description: Invalid request (already completed, Timeline not ON_SITE, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: Forbidden - not team member or wrong team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: TeamRequest not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /api/missions/{id}/requests:
     get:
       tags:
@@ -3513,10 +3605,25 @@ paths:
           description: Timeline marked ON_SITE successfully
 
   /api/timelines/{id}/complete:
-    patch:
+    post:
       tags:
         - Timelines
-      summary: Complete timeline with outcome
+      summary: Complete timeline with auto-calculated outcome
+      description: |
+        **UNIFIED API** - Automatically calculates timeline outcome based on completed TeamRequests.
+        
+        **Outcome Logic:**
+        - Has completed TeamRequests with all COMPLETED → Timeline COMPLETED
+        - Has completed TeamRequests with any PARTIAL → Timeline PARTIAL
+        - Has TeamRequests but none completed → Timeline WITHDRAWN
+        - No TeamRequests (mission not started) → Error 400
+        
+        **Idempotent:** Returns 200 OK even if timeline already completed (auto-complete or previous call).
+        
+        **Breaking Change:** 
+        - Method changed from PATCH to POST
+        - No longer requires `outcome` field in request body (auto-calculated)
+        - Old PATCH endpoint is deprecated
       security:
         - bearerAuth: []
       parameters:
@@ -3525,15 +3632,55 @@ paths:
           required: true
           schema:
             type: string
+          description: Timeline ID
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/TimelineCompleteInput"
+              $ref: "#/components/schemas/TimelineCompleteAutoInput"
       responses:
         "200":
-          description: Timeline completed successfully
+          description: Timeline completed successfully or already completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Timeline"
+                  message:
+                    type: string
+                    enum:
+                      - "Timeline completed successfully"
+                      - "Timeline đã được hoàn tất trước đó"
+                    description: Different message for new completion vs already completed
+        "400":
+          description: Invalid state or mission not started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+              examples:
+                notOnSite:
+                  value:
+                    success: false
+                    message: "Timeline phải ở trạng thái ON_SITE mới có thể complete. Trạng thái hiện tại: ASSIGNED"
+                    errorCode: "TIMELINE_NOT_ON_SITE"
+                noTeamRequests:
+                  value:
+                    success: false
+                    message: "Không thể complete timeline khi mission chưa start (chưa có TeamRequest)"
+                    errorCode: "NO_TEAM_REQUESTS_FOUND"
+        "403":
+          description: User not in team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /api/timelines/{id}/fail:
     patch:
@@ -4481,20 +4628,6 @@ components:
           type: string
           format: date-time
 
-    TimelineCompletionItem:
-      type: object
-      required:
-        - missionRequestId
-        - rescuedCount
-      properties:
-        missionRequestId:
-          type: string
-          example: "65f1d2c3b4a5968776655777"
-        rescuedCount:
-          type: integer
-          minimum: 0
-          example: 3
-
     Mission:
       type: object
       properties:
@@ -4700,11 +4833,6 @@ components:
         missionId:
           type: string
           example: "65f1d2c3b4a5968776655111"
-        requestId:
-          type: string
-          nullable: true
-          description: Legacy field, optional in mission-scoped flow
-          example: "65f1d2c3b4a5968776655222"
         teamId:
           type: string
           example: "65f1d2c3b4a5968776655333"
@@ -4735,10 +4863,6 @@ components:
           type: string
           format: date-time
           nullable: true
-        rescuedCount:
-          type: integer
-          minimum: 0
-          example: 4
         failureReason:
           type: string
           nullable: true
@@ -4757,28 +4881,32 @@ components:
 
     TimelineCompleteInput:
       type: object
+      deprecated: true
+      description: "DEPRECATED - Use TimelineCompleteAutoInput instead. Old PATCH endpoint is removed."
       required:
         - outcome
-        - completions
       properties:
         outcome:
           type: string
           enum:
             - COMPLETED
             - PARTIAL
+          description: "DEPRECATED - Outcome is now auto-calculated from TeamRequests"
         note:
           type: string
           nullable: true
-        rescuedCount:
-          type: integer
-          minimum: 0
-          description: Optional aggregate value. Server derives actual value from completions.
-        completions:
-          type: array
-          minItems: 1
-          description: List of mission request completion updates for this timeline.
-          items:
-            $ref: "#/components/schemas/TimelineCompletionItem"
+          maxLength: 1000
+
+    TimelineCompleteAutoInput:
+      type: object
+      description: "Input for unified complete timeline API. Outcome is automatically calculated from TeamRequests."
+      properties:
+        note:
+          type: string
+          nullable: true
+          maxLength: 1000
+          description: "Optional completion note"
+          example: "Mission completed successfully"
 
     TimelineFailInput:
       type: object
@@ -4847,7 +4975,7 @@ components:
                 properties:
                   field:
                     type: string
-                    example: "completions.0.missionRequestId"
+                    example: "outcome"
                   message:
                     type: string
                     example: "missionRequestId phải là ObjectId hợp lệ"

@@ -151,6 +151,43 @@ class NotificationService {
       throw new Error(`Failed to delete notifications: ${error.message}`);
     }
   }
+
+  /**
+   * Get unread notification count for a user
+   * @param {string} userId - User ID
+   * @returns {Promise<number>}
+   */
+  async getUnreadCount(userId) {
+    try {
+      const count = await NotifyModel.countDocuments({
+        userId,
+        isRead: false,
+      });
+      return count;
+    } catch (error) {
+      throw new Error(`Failed to get unread count: ${error.message}`);
+    }
+  }
+
+  /**
+   * Mark all notifications as read for a user
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>}
+   */
+  async markAllAsRead(userId) {
+    try {
+      const result = await NotifyModel.updateMany(
+        { userId, isRead: false },
+        { isRead: true }
+      );
+      return {
+        message: `${result.modifiedCount} notifications marked as read`,
+        modifiedCount: result.modifiedCount,
+      };
+    } catch (error) {
+      throw new Error(`Failed to mark all as read: ${error.message}`);
+    }
+  }
 }
 
 const notificationService = new NotificationService();

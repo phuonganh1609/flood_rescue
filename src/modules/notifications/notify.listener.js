@@ -1,6 +1,7 @@
 import { eventBus } from "../../utils/events.js";
 import { notificationService } from "./notification.service.js";
 import { authService } from "../auth/auth.service.js";
+import { teamRepository } from "../teams/team.repository.js";
 import {
   emitToUser,
   emitToRole,
@@ -8,6 +9,31 @@ import {
   NOTIFICATION_EVENTS,
 } from "../../sockets/notification.emitter.js";
 import NotifyModel from "./notify.model.js";
+
+const TEAM_MEMBER_ROLE = "TEAM_MEMBER";
+
+function normalizeId(value) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  return value._id?.toString?.() || value.toString?.() || null;
+}
+
+async function resolveTeamMemberIds(teamIds = [], { excludeUserId = null } = {}) {
+  const normalizedTeamIds = [...new Set(teamIds.map(normalizeId).filter(Boolean))];
+  if (normalizedTeamIds.length === 0) return [];
+
+  const excludedId = normalizeId(excludeUserId);
+  const membersByTeam = await Promise.all(
+    normalizedTeamIds.map((teamId) => teamRepository.findMembers(teamId)),
+  );
+
+  const memberIds = membersByTeam
+    .flat()
+    .map((member) => normalizeId(member?._id || member?.id))
+    .filter((memberId) => memberId && memberId !== excludedId);
+
+  return [...new Set(memberIds)];
+}
 
 /**
  * Helper: Get unread count for a user and emit it
@@ -107,6 +133,64 @@ eventBus.on("REQUEST_VERIFIED", async (payload) => {
     await emitUnreadCountForUser(citizenId);
   } catch (error) {
     console.error("Error in REQUEST_VERIFIED listener:", error);
+  }
+});
+
+/**
+ * REQUEST_AUTO_CLOSED: MissionRequest automatically closed when fulfilled
+ * → Notify Coordinator and Citizen
+ */
+eventBus.on("REQUEST_AUTO_CLOSED", async (payload) => {
+  try {
+    const { requestId, missionRequestId, missionId } = payload;
+    
+    // Get request to find citizen
+    const { requestRepository } = await import("../requests/request.repository.js");
+    const request = await requestRepository.findRequestById(requestId);
+    
+    if (!request) {
+      console.warn("Request not found for REQUEST_AUTO_CLOSED event:", requestId);
+      return;
+    }
+
+    const citizenId = request.userId?.toString?.() || request.userId;
+
+    // Notify Citizen
+    if (citizenId) {
+      const citizenResult = await notificationService.create({
+        userId: citizenId,
+        role: "CITIZEN",
+        requestId,
+        missionId,
+        type: "COMPLETED",
+        message: "🎉 Yêu cầu cứu hộ của bạn đã được hoàn thành! Cảm ơn bạn đã sử dụng dịch vụ",
+        isRead: false,
+      });
+
+      emitToUser(citizenId, NOTIFICATION_EVENTS.REQUEST_AUTO_CLOSED, citizenResult.data);
+      await emitUnreadCountForUser(citizenId);
+    }
+
+    // Notify all Coordinators
+    const coordinators = await authService.getCurrentUsersByRole("Rescue Coordinator");
+    for (const coordinator of coordinators) {
+      const userId = coordinator._id || coordinator.id;
+
+      const result = await notificationService.create({
+        userId,
+        role: "COORDINATOR",
+        requestId,
+        missionId,
+        type: "COMPLETED",
+        message: `✅ Yêu cầu cứu hộ đã tự động đóng do đã hoàn thành đủ mục tiêu`,
+        isRead: false,
+      });
+
+      emitToUser(userId, NOTIFICATION_EVENTS.REQUEST_AUTO_CLOSED, result.data);
+      await emitUnreadCountForUser(userId);
+    }
+  } catch (error) {
+    console.error("Error in REQUEST_AUTO_CLOSED listener:", error);
   }
 });
 
@@ -238,6 +322,8 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
       missionCode,
       citizenId,
       citizenIds = [],
+      teamId,
+      teamIds = [],
       teamLeaderId,
       teamLeaderIds = [],
       teamName,
@@ -246,6 +332,7 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
 
     const normalizedRequestId = requestId || requestIds[0] || null;
     const normalizedCitizenIds = citizenIds.length > 0 ? citizenIds : citizenId ? [citizenId] : [];
+    const normalizedTeamIds = teamIds.length > 0 ? teamIds : teamId ? [teamId] : [];
     const normalizedTeamLeaderIds =
       teamLeaderIds.length > 0 ? teamLeaderIds : teamLeaderId ? [teamLeaderId] : [];
     const teamNameText =
@@ -271,23 +358,28 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
       await emitUnreadCountForUser(currentCitizenId);
     }
 
-    for (const currentTeamLeaderId of normalizedTeamLeaderIds) {
+    const teamRecipientIds =
+      normalizedTeamIds.length > 0 ?
+        await resolveTeamMemberIds(normalizedTeamIds)
+      : normalizedTeamLeaderIds;
+
+    for (const teamMemberId of teamRecipientIds) {
       const teamResult = await notificationService.create({
-        userId: currentTeamLeaderId,
-        role: "TEAM_LEADER",
+        userId: teamMemberId,
+        role: TEAM_MEMBER_ROLE,
         requestId: normalizedRequestId,
         missionId,
         type: "ACCEPTED",
-        message: `📋 Bạn có nhiệm vụ cứu hộ mới - Mission #${missionLabel}`,
+        message: `📋 Đội của bạn có nhiệm vụ cứu hộ mới - Mission #${missionLabel}`,
         isRead: false,
       });
 
       emitToUser(
-        currentTeamLeaderId,
+        teamMemberId,
         NOTIFICATION_EVENTS.MISSION_ASSIGNED,
         teamResult.data,
       );
-      await emitUnreadCountForUser(currentTeamLeaderId);
+      await emitUnreadCountForUser(teamMemberId);
     }
   } catch (error) {
     console.error("Error in MISSION_ASSIGNED listener:", error);
@@ -300,7 +392,14 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
  */
 eventBus.on("MISSION_ACCEPTED", async (payload) => {
   try {
-    const { requestId, requestIds = [], missionId, teamName } = payload;
+    const {
+      requestId,
+      requestIds = [],
+      missionId,
+      teamName,
+      teamId,
+      actorUserId,
+    } = payload;
     const primaryRequestId = requestId || requestIds[0] || null;
 
     // Notify all coordinators
@@ -321,6 +420,24 @@ eventBus.on("MISSION_ACCEPTED", async (payload) => {
 
       emitToUser(userId, NOTIFICATION_EVENTS.MISSION_ACCEPTED, result.data);
       await emitUnreadCountForUser(userId);
+    }
+
+    const teamMemberIds = await resolveTeamMemberIds([teamId], {
+      excludeUserId: actorUserId,
+    });
+    for (const teamMemberId of teamMemberIds) {
+      const result = await notificationService.create({
+        userId: teamMemberId,
+        role: TEAM_MEMBER_ROLE,
+        requestId: primaryRequestId,
+        missionId,
+        type: "ONGOING",
+        message: `👍 Một thành viên trong đội đã xác nhận nhiệm vụ #${missionId}${teamName ? ` (${teamName})` : ""}`,
+        isRead: false,
+      });
+
+      emitToUser(teamMemberId, NOTIFICATION_EVENTS.MISSION_ACCEPTED, result.data);
+      await emitUnreadCountForUser(teamMemberId);
     }
   } catch (error) {
     console.error("Error in MISSION_ACCEPTED listener:", error);
@@ -358,7 +475,15 @@ eventBus.on("MISSION_APPROACHING", async (payload) => {
  */
 eventBus.on("MISSION_COMPLETED", async (payload) => {
   try {
-    const { requestId, requestIds = [], missionId, citizenId, completionNote } = payload;
+    const {
+      requestId,
+      requestIds = [],
+      missionId,
+      citizenId,
+      completionNote,
+      teamId,
+      actorUserId,
+    } = payload;
     const primaryRequestId = requestId || requestIds[0] || null;
 
     // Notify Citizen
@@ -402,6 +527,28 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
       emitToUser(userId, NOTIFICATION_EVENTS.MISSION_COMPLETED, result.data);
       await emitUnreadCountForUser(userId);
     }
+
+    const teamMemberIds = await resolveTeamMemberIds([teamId], {
+      excludeUserId: actorUserId,
+    });
+    for (const teamMemberId of teamMemberIds) {
+      const teamResult = await notificationService.create({
+        userId: teamMemberId,
+        role: TEAM_MEMBER_ROLE,
+        requestId: primaryRequestId,
+        missionId,
+        type: "COMPLETED",
+        message: `✅ Đội của bạn đã hoàn thành nhiệm vụ #${missionId}`,
+        isRead: false,
+      });
+
+      emitToUser(
+        teamMemberId,
+        NOTIFICATION_EVENTS.MISSION_COMPLETED,
+        teamResult.data,
+      );
+      await emitUnreadCountForUser(teamMemberId);
+    }
   } catch (error) {
     console.error("Error in MISSION_COMPLETED listener:", error);
   }
@@ -413,7 +560,15 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
  */
 eventBus.on("MISSION_FAILED", async (payload) => {
   try {
-    const { requestId, requestIds = [], missionId, citizenId, reason } = payload;
+    const {
+      requestId,
+      requestIds = [],
+      missionId,
+      citizenId,
+      reason,
+      teamId,
+      actorUserId,
+    } = payload;
     const primaryRequestId = requestId || requestIds[0] || null;
 
     // Notify Citizen
@@ -454,6 +609,24 @@ eventBus.on("MISSION_FAILED", async (payload) => {
       emitToUser(userId, NOTIFICATION_EVENTS.MISSION_FAILED, result.data);
       await emitUnreadCountForUser(userId);
     }
+
+    const teamMemberIds = await resolveTeamMemberIds([teamId], {
+      excludeUserId: actorUserId,
+    });
+    for (const teamMemberId of teamMemberIds) {
+      const teamResult = await notificationService.create({
+        userId: teamMemberId,
+        role: TEAM_MEMBER_ROLE,
+        requestId: primaryRequestId,
+        missionId,
+        type: "CANCELLED",
+        message: `⚠️ Nhiệm vụ #${missionId} của đội chưa thành công${reason ? ` (Lý do: ${reason})` : ""}`,
+        isRead: false,
+      });
+
+      emitToUser(teamMemberId, NOTIFICATION_EVENTS.MISSION_FAILED, teamResult.data);
+      await emitUnreadCountForUser(teamMemberId);
+    }
   } catch (error) {
     console.error("Error in MISSION_FAILED listener:", error);
   }
@@ -470,6 +643,7 @@ eventBus.on("MISSION_ABORTED", async (payload) => {
       missionId,
       missionCode,
       citizenIds = [],
+      teamIds = [],
       teamLeaderIds = [],
       teamNames = [],
     } = payload;
@@ -493,10 +667,13 @@ eventBus.on("MISSION_ABORTED", async (payload) => {
       await emitUnreadCountForUser(citizenId);
     }
 
-    for (const teamLeaderId of teamLeaderIds) {
+    const teamRecipientIds =
+      teamIds.length > 0 ? await resolveTeamMemberIds(teamIds) : teamLeaderIds;
+
+    for (const teamMemberId of teamRecipientIds) {
       const teamResult = await notificationService.create({
-        userId: teamLeaderId,
-        role: "TEAM_LEADER",
+        userId: teamMemberId,
+        role: TEAM_MEMBER_ROLE,
         requestId: primaryRequestId,
         missionId,
         type: "CANCELLED",
@@ -504,8 +681,8 @@ eventBus.on("MISSION_ABORTED", async (payload) => {
         isRead: false,
       });
 
-      emitToUser(teamLeaderId, NOTIFICATION_EVENTS.MISSION_ABORTED, teamResult.data);
-      await emitUnreadCountForUser(teamLeaderId);
+      emitToUser(teamMemberId, NOTIFICATION_EVENTS.MISSION_ABORTED, teamResult.data);
+      await emitUnreadCountForUser(teamMemberId);
     }
 
     const coordinators = await authService.getCurrentUsersByRole("Rescue Coordinator");
@@ -536,7 +713,15 @@ eventBus.on("MISSION_ABORTED", async (payload) => {
  */
 eventBus.on("MISSION_WITHDRAWN", async (payload) => {
   try {
-    const { requestId, requestIds = [], missionId, teamName, withdrawalReason } = payload;
+    const {
+      requestId,
+      requestIds = [],
+      missionId,
+      teamName,
+      withdrawalReason,
+      teamId,
+      actorUserId,
+    } = payload;
     const primaryRequestId = requestId || requestIds[0] || null;
 
     const coordinators =
@@ -557,6 +742,28 @@ eventBus.on("MISSION_WITHDRAWN", async (payload) => {
       emitToUser(userId, NOTIFICATION_EVENTS.MISSION_WITHDRAWN, result.data);
       await emitUnreadCountForUser(userId);
     }
+
+    const teamMemberIds = await resolveTeamMemberIds([teamId], {
+      excludeUserId: actorUserId,
+    });
+    for (const teamMemberId of teamMemberIds) {
+      const teamResult = await notificationService.create({
+        userId: teamMemberId,
+        role: TEAM_MEMBER_ROLE,
+        requestId: primaryRequestId,
+        missionId,
+        type: "WITHDRAWN",
+        message: `↩️ Một thành viên trong đội đã rút khỏi nhiệm vụ #${missionId}${withdrawalReason ? ` (Lý do: ${withdrawalReason})` : ""}`,
+        isRead: false,
+      });
+
+      emitToUser(
+        teamMemberId,
+        NOTIFICATION_EVENTS.MISSION_WITHDRAWN,
+        teamResult.data,
+      );
+      await emitUnreadCountForUser(teamMemberId);
+    }
   } catch (error) {
     console.error("Error in MISSION_WITHDRAWN listener:", error);
   }
@@ -568,23 +775,28 @@ eventBus.on("MISSION_WITHDRAWN", async (payload) => {
  */
 eventBus.on("MISSION_REASSIGNED", async (payload) => {
   try {
-    const { requestId, missionId, newTeamLeaderId, teamName } = payload;
+    const { requestId, missionId, newTeamLeaderId, newTeamId } = payload;
+    const teamRecipientIds =
+      newTeamId ? await resolveTeamMemberIds([newTeamId]) : normalizeId(newTeamLeaderId) ? [normalizeId(newTeamLeaderId)] : [];
 
-    const result = await notificationService.create({
-      userId: newTeamLeaderId,
-      role: "TEAM_LEADER",
-      requestId,
-      type: "ACCEPTED",
-      message: `🔄 Nhiệm vụ #${missionId} đã được chuyển cho đội bạn`,
-      isRead: false,
-    });
+    for (const teamMemberId of teamRecipientIds) {
+      const result = await notificationService.create({
+        userId: teamMemberId,
+        role: TEAM_MEMBER_ROLE,
+        requestId,
+        missionId,
+        type: "ACCEPTED",
+        message: `🔄 Nhiệm vụ #${missionId} đã được chuyển cho đội bạn`,
+        isRead: false,
+      });
 
-    emitToUser(
-      newTeamLeaderId,
-      NOTIFICATION_EVENTS.MISSION_REASSIGNED,
-      result.data,
-    );
-    await emitUnreadCountForUser(newTeamLeaderId);
+      emitToUser(
+        teamMemberId,
+        NOTIFICATION_EVENTS.MISSION_REASSIGNED,
+        result.data,
+      );
+      await emitUnreadCountForUser(teamMemberId);
+    }
   } catch (error) {
     console.error("Error in MISSION_REASSIGNED listener:", error);
   }

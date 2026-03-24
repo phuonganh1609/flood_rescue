@@ -1,60 +1,11 @@
-import { inventoryItemRepository } from './inventoryItem.repository.js';
+import { inventoryItemRepository } from './inventoryItem.responsitory.js';
 import { Warehouse } from '../warehouse/warehouse.model.js';
 import Supply from '../supply/supply.model.js';
 import {eventBus} from '../../utils/events.js';
+import { InventoryItem } from "../inventory/inventoryItem.model.js";
+import mongoose from 'mongoose';
 import XLSX from "xlsx";
 class InventoryItemService {
-
-//    async importExcel(supplies, managerId) {
-
-//   const supplyNames    = [...new Set(supplies.map(r => r.supplyName))];
-//   const warehouseNames = [...new Set(supplies.map(r => r.warehouse))];
-
-//   // Dùng method mới từ inventoryItemRepository
-//   const [supplyMap, warehouseMap] = await Promise.all([
-//     inventoryItemRepository.findSuppliesByNames(supplyNames),
-//     inventoryItemRepository.findWarehousesByNames(warehouseNames),
-//   ]);
-
-//   const errors = [];
-//   const formattedSupplies = [];
-
-//   supplies.forEach((row, index) => {
-//     const supplyId    = supplyMap.get(row.supplyName);
-//     const warehouseId = warehouseMap.get(row.warehouse);
-
-//     if (!supplyId) {
-//       errors.push(`Row ${index + 2}: Supply "${row.supplyName}" not found`);
-//       return;
-//     }
-//     if (!warehouseId) {
-//       errors.push(`Row ${index + 2}: Warehouse "${row.warehouse}" not found`);
-//       return;
-//     }
-
-//     formattedSupplies.push({
-//       supplyID:         supplyId,    // đúng tên field trong model
-//       warehouse:        warehouseId, // đúng tên field trong model
-//       description:      row.description,
-//       quantity:         Number(row.quantity)         || 0,
-//       reservedQuantity: Number(row.reservedQuantity) || 0,
-//       unit:             row.unit,
-//       status:           row.status  || "ACTIVE",
-//       createdBy:        managerId,
-//     });
-//   });
-
-//   if (errors.length > 0) {
-//     throw new Error(errors.join("\n"));
-//   }
-
-//   const result = await inventoryItemRepository.insertMany(formattedSupplies);
-
-//   return {
-//     inserted: result.length,
-//     data: result,
-//   };
-// }
 
 async importExcel(inventories, managerId) {
   // ===== 1. Tách dữ liệu =====
@@ -195,17 +146,17 @@ async importExcel(inventories, managerId) {
         };
     };
 
-    async getByName(supplyName) {
+  async getByName(supplyName) {
         // repository already populates the supply and warehouse
         return await inventoryItemRepository.findByName(supplyName);
-    };
+  };
 
-    async getById(id) {
+  async getById(id) {
         return await inventoryItemRepository.findById(id);
-    };
+  };
 
     
-    async list(filter = {}, pagination = { page: 1, limit: 10 }) {
+  async list(filter = {}, pagination = { page: 1, limit: 10 }) {
         if (filter.supplyName) {
             const supplies = await Supply.find({
                 name: { $regex: filter.supplyName, $options: 'i' },
@@ -217,7 +168,7 @@ async importExcel(inventories, managerId) {
 
         // repository already populates the supply and warehouse
         return await inventoryItemRepository.findAll(filter, pagination);
-    };
+  };
 
     async update(id, payload) {
         const updater = inventoryItemRepository.updateById || inventoryItemRepository.updateByName;
@@ -243,6 +194,47 @@ async importExcel(inventories, managerId) {
         }
         return deletedInventoryItem;
     };
+
+  async useSupplyFromInventory(supplyID, warehouseId, quantity) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const item = await inventoryItemRepository.findBySupplyAndWarehouse(
+      supplyID,
+      warehouseId,
+      session
+    );
+
+    if (!item) throw new Error("Inventory not found");
+
+    const available = item.quantity - item.reservedQuantity;
+
+    if (available < quantity) {
+      throw new Error("Not enough stock");
+    }
+
+    item.quantity -= quantity;
+
+    const newAvailable = item.quantity - item.reservedQuantity;
+
+    if (newAvailable === 0) item.status = "OUT_OF_STOCK";
+    else if (item.reservedQuantity > 0) item.status = "RESERVED";
+    else item.status = "ACTIVE";
+
+    await item.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return item;
+
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    throw err;
+  }
+}
 }
 const inventoryItemService = new InventoryItemService();
 export{ inventoryItemService };

@@ -20,27 +20,6 @@ const completeTimelineSchema = Joi.object({
     .valid(TIMELINE_STATUS.COMPLETED, TIMELINE_STATUS.PARTIAL)
     .required(),
   note: Joi.string().max(1000).allow("", null),
-  rescuedCount: Joi.number().integer().min(0).optional(),
-  completions: Joi.array()
-    .items(
-      Joi.object({
-        missionRequestId: objectId.required().label("missionRequestId"),
-        rescuedCount: Joi.number().integer().min(0).required(),
-      }),
-    )
-    .min(1)
-    .required()
-    .custom((value, helpers) => {
-      const ids = value.map((item) => item.missionRequestId);
-      const unique = new Set(ids);
-      if (unique.size !== ids.length) {
-        return helpers.error("array.duplicates");
-      }
-      return value;
-    })
-    .messages({
-      "array.duplicates": "completions chứa missionRequestId bị trùng",
-    }),
 });
 
 const failTimelineSchema = Joi.object({
@@ -57,11 +36,21 @@ const cancelTimelineSchema = Joi.object({
   note: Joi.string().max(1000).allow("", null),
 });
 
+const completeFromTeamRequestsSchema = Joi.object({
+  note: Joi.string().max(1000).allow("", null),
+});
+
+const completeTimelineAutoSchema = Joi.object({
+  note: Joi.string().max(1000).allow("", null),
+});
+
 export {
   listTimelinesSchema,
   completeTimelineSchema,
   failTimelineSchema,
   withdrawTimelineSchema,
   cancelTimelineSchema,
+  completeFromTeamRequestsSchema,
+  completeTimelineAutoSchema,
 };
 

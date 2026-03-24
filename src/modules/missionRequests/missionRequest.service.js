@@ -9,6 +9,7 @@ import {
   timelineRepository,
 } from "../timelines/timeline.repository.js";
 import { teamRequestRepository } from "../teamRequests/teamRequest.repository.js";
+import { eventBus } from "../../utils/events.js";
 
 class MissionRequestService {
   deriveRequestStatus(missionRequests = []) {
@@ -27,11 +28,11 @@ class MissionRequestService {
       return REQUEST_STATUS.IN_PROGRESS;
     }
 
-    const allFulfilled = missionRequests.every(
-      (item) => item.status === MISSION_REQUEST_STATUS.FULFILLED,
+    const allClosed = missionRequests.every(
+      (item) => item.status === MISSION_REQUEST_STATUS.CLOSED,
     );
 
-    return allFulfilled
+    return allClosed
       ? REQUEST_STATUS.FULFILLED
       : REQUEST_STATUS.PARTIALLY_FULFILLED;
   }
@@ -176,10 +177,18 @@ class MissionRequestService {
     const missionRequests = await missionRequestRepository.findByRequestId(requestId);
     if (missionRequests.length === 0) return request.status;
 
-    const desiredStatus = this.deriveRequestStatus(missionRequests) || request.status;
+    let desiredStatus = this.deriveRequestStatus(missionRequests) || request.status;
+
+    if (desiredStatus === REQUEST_STATUS.FULFILLED) {
+      desiredStatus = REQUEST_STATUS.CLOSED;
+    }
 
     if (desiredStatus !== request.status) {
       await requestRepository.updateRequestStatus(requestId, desiredStatus);
+
+      if (desiredStatus === REQUEST_STATUS.CLOSED) {
+        eventBus.emit("REQUEST_CLOSED", { requestId });
+      }
     }
 
     return desiredStatus;
@@ -251,6 +260,14 @@ class MissionRequestService {
   async updateProgress(id, { peopleRescuedIncrement = 0, suppliesDelivered = [] } = {}, user) {
     const missionRequest = await this.getById(id);
 
+    // Early return if already CLOSED - return 200 OK with message
+    if (missionRequest.status === MISSION_REQUEST_STATUS.CLOSED) {
+      return {
+        ...missionRequest.toObject(),
+        message: "Mission already completed",
+      };
+    }
+
     // Chỉ cho phép khi chưa kết thúc
     this.ensureCanTransition(missionRequest.status, MISSION_REQUEST_STATUS.IN_PROGRESS);
 
@@ -258,6 +275,23 @@ class MissionRequestService {
     const missionId =
       missionRequest.missionId?._id?.toString?.() ||
       missionRequest.missionId?.toString?.();
+
+    const mission = await missionRepository.findById(missionId);
+    if (!mission) {
+      const error = new Error(`Không tìm thấy mission với ID: ${missionId}`);
+      error.statusCode = 404;
+      error.errorCode = "MISSION_NOT_FOUND";
+      throw error;
+    }
+
+    if (["ABORTED", "COMPLETED", "PAUSED"].includes(mission.status)) {
+      const error = new Error(
+        `Không thể cập nhật progress: mission đang ở trạng thái ${mission.status}`,
+      );
+      error.statusCode = 400;
+      error.errorCode = "MISSION_UNAVAILABLE_FOR_PROGRESS";
+      throw error;
+    }
 
     let teamId = null;
     if (user?.teamId) {
@@ -283,6 +317,38 @@ class MissionRequestService {
       error.statusCode = 403;
       error.errorCode = "TEAM_NOT_ASSIGNED_TO_MISSION";
       throw error;
+    }
+
+    const hasExecutingTimeline = await TimelineModel.exists({
+      missionId,
+      teamId,
+      status: { $in: ["EN_ROUTE", "ON_SITE"] },
+    });
+
+    if (!hasExecutingTimeline) {
+      const hasPreAcceptTimeline = await TimelineModel.exists({
+        missionId,
+        teamId,
+        status: { $in: ["PLANNED", "ASSIGNED"] },
+      });
+      if (hasPreAcceptTimeline) {
+        const error = new Error("Team phải accept mission trước khi cập nhật progress.");
+        error.statusCode = 400;
+        error.errorCode = "TEAM_MUST_ACCEPT_BEFORE_PROGRESS";
+        throw error;
+      }
+
+      const hasTerminalTimeline = await TimelineModel.exists({
+        missionId,
+        teamId,
+        status: { $in: ["WITHDRAWN", "FAILED", "COMPLETED", "PARTIAL", "CANCELLED"] },
+      });
+      if (hasTerminalTimeline) {
+        const error = new Error("Không thể cập nhật progress khi timeline của team đã kết thúc.");
+        error.statusCode = 400;
+        error.errorCode = "PROGRESS_NOT_ALLOWED_IN_TERMINAL_STATE";
+        throw error;
+      }
     }
 
     const normalizedSupplies = (suppliesDelivered || []).map((item) => ({
