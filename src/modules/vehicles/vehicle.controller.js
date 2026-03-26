@@ -98,7 +98,7 @@ export const getAllVehicles = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
 
     const filter = { isActive: true };
-    if (req.query.type) filter.type = req.query.type;
+    if (req.query.type) filter.type = new RegExp(req.query.type, "i");
     if (req.query.status) filter.status = req.query.status;
     if (req.query.licensePlate)
       filter.licensePlate = new RegExp(req.query.licensePlate, "i");

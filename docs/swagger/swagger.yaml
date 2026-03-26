@@ -54,6 +54,9 @@ tags:
     description: Administrative operations
   - name: System
     description: System configuration and settings
+  - name: Timeline Supplies
+    description: Tracking supply pickup and return per team
+
 
 paths:
   /api/auth/register:
@@ -2471,6 +2474,47 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/inventory/allocate:
+    post:
+      tags:
+        - Inventory
+      summary: Allocate supply to a mission
+      description: Allocate a specific supply from a warehouse to a mission (Manager only). This reserves the quantity in the warehouse and updates the MissionSupply record.
+      operationId: allocateSupply
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AllocateSupplyInput"
+      responses:
+        "200":
+          description: Supply allocated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MissionSupply"
+        "400":
+          description: Invalid input, mission supply not in REQUESTED status, or insufficient available quantity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Manager only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission supply requirement or inventory not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/notifications/me:
     get:
       tags:
@@ -3751,6 +3795,95 @@ paths:
         "200":
           description: Timeline cancelled successfully
 
+  /api/timeline-supplies/claim:
+    post:
+      tags:
+        - Timeline Supplies
+      summary: Claim allocated supplies for a team
+      description: Rescue Teams claim requested quantities from the mission's total allocated supplies (Rescue Team only). This updates both TimelineSupply and MissionSupply, and deducts from actual inventory.
+      operationId: claimSupply
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimSupplyInput"
+      responses:
+        "201":
+          description: Supply claimed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimelineSupply"
+        "400":
+          description: Invalid input or trying to claim more than allocated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Rescue Team only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Mission supply or timeline not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/timeline-supplies/return:
+    post:
+      tags:
+        - Timeline Supplies
+      summary: Return leftover supplies
+      description: Rescue Teams return the remaining supplies after finishing mission tasks (Rescue Team only). Returns the quantity calculated as (carriedQty - totalDistributed).
+      operationId: returnSupply
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReturnSupplyInput"
+      responses:
+        "200":
+          description: Supply returned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Supply returned successfully"
+                  data:
+                    $ref: "#/components/schemas/TimelineSupply"
+        "400":
+          description: Invalid input or supply already returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - Rescue Team only
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Timeline supply record not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+
 components:
   schemas:
     RegisterRequest:
@@ -4983,7 +5116,136 @@ components:
                     type: string
                     example: "string.pattern.base"
 
+    AllocateSupplyInput:
+      type: object
+      properties:
+        missionId:
+          type: string
+          description: ID of the mission
+          example: "60d5ec49f1b2c8b1f8e4e1a4"
+        supplyId:
+          type: string
+          description: ID of the supply type
+          example: "60d5ec49f1b2c8b1f8e4e1a7"
+        warehouseId:
+          type: string
+          description: ID of the source warehouse
+          example: "60d5ec49f1b2c8b1f8e4e1b1"
+        allocatedQty:
+          type: integer
+          description: Actual quantity to reserve for the mission
+          example: 50
+        note:
+          type: string
+          description: Optional allocation notes
+          example: "Allocated from Warehouse A for Mission Bravo"
+      required:
+        - missionId
+        - supplyId
+        - warehouseId
+        - allocatedQty
+
+    ClaimSupplyInput:
+      type: object
+      properties:
+        timelineId:
+          type: string
+          description: ID of the team's timeline record
+          example: "60d5ec49f1b2c8b1f8e4e1c1"
+        missionSupplyId:
+          type: string
+          description: ID of the mission supply requirement record
+          example: "60d5ec49f1b2c8b1f8e4e1d1"
+        carriedQty:
+          type: integer
+          description: Actual quantity the team is picking up
+          example: 20
+      required:
+        - timelineId
+        - missionSupplyId
+        - carriedQty
+
+    ReturnSupplyInput:
+      type: object
+      properties:
+        timelineId:
+          type: string
+          description: ID of the team's timeline record
+          example: "60d5ec49f1b2c8b1f8e4e1c1"
+        missionSupplyId:
+          type: string
+          description: ID of the mission supply requirement record
+          example: "60d5ec49f1b2c8b1f8e4e1d1"
+      required:
+        - timelineId
+        - missionSupplyId
+
+    MissionSupply:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1d1"
+        missionId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a4"
+        supplyId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1a7"
+        warehouseId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1b1"
+        plannedQty:
+          type: integer
+          example: 100
+        allocatedQty:
+          type: integer
+          example: 50
+        claimedQty:
+          type: integer
+          example: 20
+        status:
+          type: string
+          enum: [REQUESTED, ALLOCATED, FULLY_CLAIMED, RETURNED]
+        allocatedBy:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1f1"
+        allocatedAt:
+          type: string
+          format: date-time
+        note:
+          type: string
+
+    TimelineSupply:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1e1"
+        timelineId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1c1"
+        missionSupplyId:
+          type: string
+          example: "60d5ec49f1b2c8b1f8e4e1d1"
+        carriedQty:
+          type: integer
+          example: 20
+        returnedQty:
+          type: integer
+          example: 5
+        status:
+          type: string
+          enum: [CLAIMED, RETURNED]
+        claimedAt:
+          type: string
+          format: date-time
+        returnedAt:
+          type: string
+          format: date-time
+
   securitySchemes:
+
     bearerAuth:
       type: http
       scheme: bearer

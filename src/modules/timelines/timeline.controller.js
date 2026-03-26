@@ -92,6 +92,21 @@ class TimelineController {
     }
   }
 
+  async confirmSupplyClaim(req, res) {
+    const timelineId = parseTimelineId(req, res);
+    if (!timelineId) return;
+
+    try {
+      const timeline = await timelineService.confirmSupplyClaim(timelineId, req.user.id, req.body);
+      return sendSuccess(res, {
+        data: timeline,
+        message: "Supply claim confirmed successfully",
+      });
+    } catch (error) {
+      return sendError(res, TimelineController.toErrorPayload(error));
+    }
+  }
+
   async arrive(req, res) {
     const timelineId = parseTimelineId(req, res);
     if (!timelineId) return;
