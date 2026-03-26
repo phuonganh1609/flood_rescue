@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 export const TIMELINE_STATUS = {
   PLANNED: "PLANNED",
   ASSIGNED: "ASSIGNED",
+  CLAIMING_SUPPLIES: "CLAIMING_SUPPLIES",
   EN_ROUTE: "EN_ROUTE",
   ON_SITE: "ON_SITE",
   COMPLETED: "COMPLETED",

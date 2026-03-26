@@ -30,6 +30,7 @@ router.get(
 );
 
 router.patch("/:id/accept", authorize(["Rescue Team"]), timelineController.accept);
+router.post("/:id/confirm-supply-claim", authorize(["Rescue Team"]), timelineController.confirmSupplyClaim);
 router.patch("/:id/arrive", authorize(["Rescue Team"]), timelineController.arrive);
 
 // DEPRECATED: Use POST /timelines/:id/complete instead

@@ -18,10 +18,11 @@ import {
 const TIMELINE_TRANSITIONS = {
   [TIMELINE_STATUS.PLANNED]: [TIMELINE_STATUS.ASSIGNED, TIMELINE_STATUS.CANCELLED],
   [TIMELINE_STATUS.ASSIGNED]: [
-    TIMELINE_STATUS.EN_ROUTE,
+    TIMELINE_STATUS.CLAIMING_SUPPLIES,
     TIMELINE_STATUS.WITHDRAWN,
     TIMELINE_STATUS.CANCELLED,
   ],
+  [TIMELINE_STATUS.CLAIMING_SUPPLIES]: [TIMELINE_STATUS.EN_ROUTE],
   [TIMELINE_STATUS.EN_ROUTE]: [TIMELINE_STATUS.ON_SITE],
   [TIMELINE_STATUS.ON_SITE]: [
     TIMELINE_STATUS.COMPLETED,
@@ -122,13 +123,13 @@ class TimelineService {
     const timeline = await this.getTimelineById(timelineId);
     await this.assertMissionCanExecute(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
-    assertTimelineTransition(timeline.status, TIMELINE_STATUS.EN_ROUTE);
+    assertTimelineTransition(timeline.status, TIMELINE_STATUS.CLAIMING_SUPPLIES);
 
     const transitioned = await timelineRepository.transitionStatus(
       timelineId,
       TIMELINE_STATUS.ASSIGNED,
       {
-        status: TIMELINE_STATUS.EN_ROUTE,
+        status: TIMELINE_STATUS.CLAIMING_SUPPLIES,
         startedAt: new Date(),
       },
     );
@@ -148,6 +149,36 @@ class TimelineService {
     await this.syncAllForTimeline(transitioned);
     await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
     await this.emitMissionAcceptedForMission(transitioned, actorUserId);
+
+    return transitioned;
+  }
+
+  async confirmSupplyClaim(timelineId, actorUserId, payload = {}) {
+    const { note } = payload;
+    const timeline = await this.getTimelineById(timelineId);
+    await this.assertMissionNotTerminated(extractId(timeline.missionId));
+    await this.assertTeamActionAllowed(timeline, actorUserId);
+    assertTimelineTransition(timeline.status, TIMELINE_STATUS.EN_ROUTE);
+
+    const transitioned = await timelineRepository.transitionStatus(
+      timelineId,
+      TIMELINE_STATUS.CLAIMING_SUPPLIES,
+      {
+        status: TIMELINE_STATUS.EN_ROUTE,
+        note: note || timeline.note,
+      },
+    );
+
+    if (!transitioned) {
+      const err = new Error(
+        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
+      );
+      err.statusCode = 409;
+      err.errorCode = "TIMELINE_CONFLICT";
+      throw err;
+    }
+
+    await this.syncAllForTimeline(transitioned);
     await this.emitMissionApproachingForMission(transitioned);
 
     return transitioned;
