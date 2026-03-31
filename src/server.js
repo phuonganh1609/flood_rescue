@@ -1,9 +1,16 @@
 //Khởi động server (listen port)
-import "dotenv/config.js";
+import dotenv from "dotenv";
 import http from "http";
 import app from "./app.js";
 import { connectDB } from "./config/database.js";
 import { initializeSocket } from "./sockets/socket.server.js";
+
+// Load .env.test for test runs, otherwise default to .env
+if (process.env.NODE_ENV === "test") {
+  dotenv.config({ path: ".env.test" });
+} else {
+  dotenv.config();
+}
 
 const PORT = process.env.PORT || 8080;
 

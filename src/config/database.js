@@ -6,10 +6,13 @@ import mongoose from "mongoose";
  */
 const connectDB = async () => {
   try {
-    const connectionString = process.env.MONGODB_CONNECTIONSTRING;
+    const connectionString =
+      process.env.MONGODB_CONNECTIONSTRING || process.env.MONGODB_URI;
 
     if (!connectionString) {
-      throw new Error("MongoDB connection string is not defined in .env file");
+      throw new Error(
+        "MongoDB connection string is not defined. Set MONGODB_CONNECTIONSTRING or MONGODB_URI.",
+      );
     }
 
     await mongoose.connect(connectionString, {

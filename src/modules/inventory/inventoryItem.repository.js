@@ -1,6 +1,6 @@
-import { InventoryItem } from './inventoryItem.model.js';
+import InventoryItem from './inventoryItem.model.js';
 import Supply from '../supply/supply.model.js';
-import { Warehouse } from '../warehouse/warehouse.model.js';
+import Warehouse from '../warehouse/warehouse.model.js';
 import Vehicle from '../vehicles/vehicle.model.js';
 
 class InventoryItemRepository {
