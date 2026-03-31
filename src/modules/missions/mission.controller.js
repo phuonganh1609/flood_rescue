@@ -117,7 +117,10 @@ class MissionController {
         note,
       });
       return sendSuccess(res, {
-        data: missionRequests,
+        data: {
+          addedCount: missionRequests.length,
+          missionRequests: missionRequests,
+        },
         message: "Requests added to mission successfully",
         statusCode: 200,
       });
@@ -134,7 +137,10 @@ class MissionController {
         note,
       });
       return sendSuccess(res, {
-        data: timelines,
+        data: {
+          addedCount: timelines.length,
+          timelines: timelines,
+        },
         message: "Teams assigned to mission successfully",
         statusCode: 200,
       });

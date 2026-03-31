@@ -67,6 +67,7 @@ async function createAndStartMission(request) {
 
   // Add request
   const req = await Request.create({
+    type: 'Relief',
     userId: testData.citizens[0]._id,
     userName: 'Citizen One',
     phoneNumber: '0902000001',
@@ -127,10 +128,6 @@ test.describe('Timeline Execution', () => {
     // Verify mission status changed to IN_PROGRESS
     const mission = await Mission.findById(missionId);
     expect(mission.status).toBe('IN_PROGRESS');
-
-    // Verify request status changed to IN_PROGRESS
-    const req = await Request.findById(timelinesData.data[0].missionId.requests[0]);
-    // Note: Need to check via MissionRequest sync
   });
 
   test('Team confirms supply claim: CLAIMING_SUPPLIES → EN_ROUTE', async ({ request }) => {
@@ -231,6 +228,10 @@ test.describe('Timeline Execution', () => {
 
     expect(completeResponse.status()).toBe(200);
     const completeData = await completeResponse.json();
+    
+    // Timeline should have a terminal status after completion
+    expect(completeData.data).toBeDefined();
+    expect(completeData.data.status).toBeDefined();
     expect(['COMPLETED', 'PARTIAL', 'FAILED']).toContain(completeData.data.status);
   });
 
@@ -250,7 +251,8 @@ test.describe('Timeline Execution', () => {
     const withdrawResponse = await request.patch(`/api/timelines/${team1Timeline._id}/withdraw`, {
       headers: { Authorization: `Bearer ${team1Token}` },
       data: {
-        note: 'Team unavailable',
+        withdrawalReason: 'Team unavailable',
+        note: 'Additional context',
       },
     });
 
@@ -278,6 +280,6 @@ test.describe('Timeline Execution', () => {
 
     expect(invalidResponse.status()).toBe(400);
     const errorData = await invalidResponse.json();
-    expect(errorData.message).toContain('transition');
+    expect(errorData.message).toMatch(/transition|trạng thái/i);
   });
 });

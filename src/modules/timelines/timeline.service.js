@@ -209,6 +209,7 @@ class TimelineService {
     }
 
     await this.syncAllForTimeline(transitioned);
+    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
     return transitioned;
   }
 

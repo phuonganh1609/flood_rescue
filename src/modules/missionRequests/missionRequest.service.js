@@ -108,9 +108,9 @@ class MissionRequestService {
 
       if (deliveredQty > requestedQty) {
         const error = new Error(
-          `Supply ${name} vượt requestedQty tối đa ${requestedQty}.`,
+          `Supply ${name} delivered quantity cannot exceed requested quantity of ${requestedQty}.`,
         );
-        error.statusCode = 422;
+        error.statusCode = 400;
         error.errorCode = "SUPPLY_OVER_DELIVERY";
         throw error;
       }

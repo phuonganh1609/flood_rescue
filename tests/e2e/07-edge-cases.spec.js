@@ -39,6 +39,7 @@ test.describe('Edge Cases', () => {
     const missionId = (await missionResponse.json()).data._id;
 
     const req = await Request.create({
+      type: 'Relief',
       userId: testData.citizens[0]._id,
       userName: 'Citizen One',
       phoneNumber: '0902000001',
@@ -105,6 +106,7 @@ test.describe('Edge Cases', () => {
     const missionId = (await missionResponse.json()).data._id;
 
     const req = await Request.create({
+      type: 'Relief',
       userId: testData.citizens[0]._id,
       userName: 'Citizen One',
       phoneNumber: '0902000001',
@@ -171,6 +173,7 @@ test.describe('Edge Cases', () => {
     const missionId = (await missionResponse.json()).data._id;
 
     const req = await Request.create({
+      type: 'Relief',
       userId: testData.citizens[0]._id,
       userName: 'Citizen One',
       phoneNumber: '0902000001',
@@ -237,6 +240,7 @@ test.describe('Edge Cases', () => {
     const missionId = (await missionResponse.json()).data._id;
 
     const req = await Request.create({
+      type: 'Relief',
       userId: testData.citizens[0]._id,
       userName: 'Citizen One',
       phoneNumber: '0902000001',
@@ -293,6 +297,7 @@ test.describe('Edge Cases', () => {
     const missionId = (await missionResponse.json()).data._id;
 
     const req = await Request.create({
+      type: 'Relief',
       userId: testData.citizens[0]._id,
       userName: 'Citizen One',
       phoneNumber: '0902000001',
@@ -372,6 +377,7 @@ test.describe('Edge Cases', () => {
     const missionId = (await missionResponse.json()).data._id;
 
     const req = await Request.create({
+      type: 'Relief',
       userId: testData.citizens[0]._id,
       userName: 'Citizen One',
       phoneNumber: '0902000001',
