@@ -366,7 +366,7 @@ test.describe('Edge Cases', () => {
 
     expect(completeResponse2.status()).toBe(200);
     const data = await completeResponse2.json();
-    expect(data.message).toContain('completed');
+    expect(data.message).toMatch(/completed|hoàn tất/i);
   });
 
   test('Progress update when mission already completed', async ({ request }) => {

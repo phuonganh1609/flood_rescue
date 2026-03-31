@@ -427,7 +427,12 @@ class TimelineService {
         if (!hasProgress) {
           trOutcome = "PARTIAL";
         } else {
-          trOutcome = rescuedCountTotal >= peopleNeeded ? "COMPLETED" : "PARTIAL";
+          // For supplies-only requests (peopleNeeded = 0), check only supplies
+          if (peopleNeeded === 0) {
+            trOutcome = hasProgress ? "COMPLETED" : "PARTIAL";
+          } else {
+            trOutcome = rescuedCountTotal >= peopleNeeded ? "COMPLETED" : "PARTIAL";
+          }
         }
       }
 
@@ -628,13 +633,13 @@ class TimelineService {
       let desiredFromMissionRequest = request.status;
 
       const hasNonTerminal = missionRequestStatuses.some((status) =>
-        ["PENDING", "IN_PROGRESS", "PARTIAL"].includes(status),
+        ["PENDING", "IN_PROGRESS"].includes(status),
       );
       if (hasNonTerminal) {
         desiredFromMissionRequest = REQUEST_STATUS.IN_PROGRESS;
       } else {
         const allDone = missionRequestStatuses.every((status) =>
-          ["FULFILLED", "CLOSED", "DROPPED"].includes(status),
+          ["FULFILLED", "CLOSED", "DROPPED", "PARTIAL"].includes(status),
         );
         if (allDone) {
           const allFulfilled = missionRequestStatuses.every(

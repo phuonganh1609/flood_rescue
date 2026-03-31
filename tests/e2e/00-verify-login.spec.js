@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Verify Login', () => {
   test('Register new user and login', async ({ request }) => {
     // Register a new user
-    const registerResponse = await request.post('http://127.0.0.1:8080/api/auth/register', {
+    const registerResponse = await request.post('/api/auth/register', {
       data: {
         userName: 'testuser999',
         displayName: 'Test User 999',
@@ -18,7 +18,7 @@ test.describe('Verify Login', () => {
     console.log('Register response:', JSON.stringify(registerData, null, 2));
 
     // Login with the newly registered user
-    const loginResponse = await request.post('http://127.0.0.1:8080/api/auth/login', {
+    const loginResponse = await request.post('/api/auth/login', {
       data: {
         email: 'testuser999@test.com',
         password: 'Test123!',
@@ -34,7 +34,7 @@ test.describe('Verify Login', () => {
   });
 
   test('Login with seeded citizen1', async ({ request }) => {
-    const loginResponse = await request.post('http://127.0.0.1:8080/api/auth/login', {
+    const loginResponse = await request.post('/api/auth/login', {
       data: {
         email: 'citizen1@test.com',
         password: 'Test123!',

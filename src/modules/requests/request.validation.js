@@ -52,9 +52,9 @@ const addRequestSchema = Joi.object({
     "any.required": "Description is required",
   }),
 
-  peopleCount: Joi.number().integer().min(1).max(100).default(1).messages({
+  peopleCount: Joi.number().integer().min(0).max(100).default(1).messages({
     "number.base": "People count must be a number",
-    "number.min": "People count must be at least 1",
+    "number.min": "People count must be at least 0",
     "number.max": "People count cannot exceed 100",
   }),
 
@@ -199,7 +199,7 @@ const createRequestOnBehalfSchema = Joi.object({
     "any.required": "Description is required",
   }),
 
-  peopleCount: Joi.number().integer().min(1).max(100).default(1),
+  peopleCount: Joi.number().integer().min(0).max(100).default(1),
 
   priority: Joi.string()
     .valid("Critical", "High", "Normal")
