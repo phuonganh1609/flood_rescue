@@ -353,7 +353,7 @@ class MissionService {
     const missionRequests = await missionRequestRepository.findByMissionId(id);
     if (missionRequests.length === 0) {
       const error = new Error(
-        "Không thể bắt đầu mission: cần có ít nhất một request",
+        "Cannot start mission without requests",
       );
       error.statusCode = 400;
       error.errorCode = "NO_MISSION_REQUESTS";

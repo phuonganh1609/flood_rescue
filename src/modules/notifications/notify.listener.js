@@ -75,7 +75,7 @@ eventBus.on("REQUEST_SUBMITTED", async (payload) => {
         role: "COORDINATOR",
         requestId: payload.requestId,
         type: "SUBMITTED",
-        message: "🚨 Có yêu cầu cứu hộ mới cần xác minh",
+        message: "Có yêu cầu cứu hộ mới cần xác minh",
         isRead: false,
       });
 
@@ -101,7 +101,7 @@ eventBus.on("REQUEST_REJECTED", async (payload) => {
       role: "CITIZEN",
       requestId,
       type: "REJECTED",
-      message: `❌ Yêu cầu cứu hộ của bạn đã bị từ chối. Lý do: ${reason || "Không hợp lệ"}`,
+      message: `Yêu cầu cứu hộ của bạn đã bị từ chối. Lý do: ${reason || "Không hợp lệ"}`,
       isRead: false,
     });
 
@@ -125,7 +125,7 @@ eventBus.on("REQUEST_VERIFIED", async (payload) => {
       role: "CITIZEN",
       requestId,
       type: "ACCEPTED",
-      message: "✅ Yêu cầu cứu hộ của bạn đã được xác nhận hợp lệ",
+      message: "Yêu cầu cứu hộ của bạn đã được xác nhận hợp lệ",
       isRead: false,
     });
 
@@ -153,7 +153,7 @@ eventBus.on("REQUEST_AUTO_CLOSED", async (payload) => {
       return;
     }
 
-    const citizenId = request.userId?.toString?.() || request.userId;
+    const citizenId = normalizeId(request.userId);
 
     // Notify Citizen
     if (citizenId) {
@@ -163,7 +163,7 @@ eventBus.on("REQUEST_AUTO_CLOSED", async (payload) => {
         requestId,
         missionId,
         type: "COMPLETED",
-        message: "🎉 Yêu cầu cứu hộ của bạn đã được hoàn thành! Cảm ơn bạn đã sử dụng dịch vụ",
+        message: "Yêu cầu cứu hộ của bạn đã được hoàn thành! Cảm ơn bạn đã sử dụng dịch vụ",
         isRead: false,
       });
 
@@ -182,7 +182,7 @@ eventBus.on("REQUEST_AUTO_CLOSED", async (payload) => {
         requestId,
         missionId,
         type: "COMPLETED",
-        message: `✅ Yêu cầu cứu hộ đã tự động đóng do đã hoàn thành đủ mục tiêu`,
+        message: `Yêu cầu cứu hộ đã tự động đóng do đã hoàn thành đủ mục tiêu`,
         isRead: false,
       });
 
@@ -211,7 +211,7 @@ eventBus.on("TEAM_APPLICATION_SUBMITTED", async (payload) => {
         role,
         teamApplicationId: payload.applicationId,
         type: "SUBMITTED",
-        message: `📝 ${payload.citizenName} vừa nộp đơn ứng tuyển Rescue Team`,
+        message: `${payload.citizenName} vừa nộp đơn ứng tuyển Rescue Team`,
         isRead: false,
       });
 
@@ -237,7 +237,7 @@ eventBus.on("TEAM_APPLICATION_APPROVED", async (payload) => {
       role: "CITIZEN",
       teamApplicationId: payload.applicationId,
       type: "ACCEPTED",
-      message: "✅ Đơn ứng tuyển Rescue Team của bạn đã được phê duyệt",
+      message: "Đơn ứng tuyển Rescue Team của bạn đã được phê duyệt",
       isRead: false,
     });
 
@@ -262,7 +262,7 @@ eventBus.on("TEAM_APPLICATION_REJECTED", async (payload) => {
       role: "CITIZEN",
       teamApplicationId: payload.applicationId,
       type: "REJECTED",
-      message: `❌ Đơn ứng tuyển Rescue Team của bạn đã bị từ chối${payload.reason ? `. Lý do: ${payload.reason}` : ""}`,
+      message: `Đơn ứng tuyển Rescue Team của bạn đã bị từ chối${payload.reason ? `. Lý do: ${payload.reason}` : ""}`,
       isRead: false,
     });
 
@@ -293,7 +293,7 @@ eventBus.on("TEAM_APPLICATION_WITHDRAWN", async (payload) => {
         role,
         teamApplicationId: payload.applicationId,
         type: "WITHDRAWN",
-        message: `↩️ ${payload.citizenName} đã rút đơn ứng tuyển Rescue Team`,
+        message: `${payload.citizenName} đã rút đơn ứng tuyển Rescue Team`,
         isRead: false,
       });
 
@@ -346,7 +346,7 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
         requestId: normalizedRequestId,
         missionId,
         type: "ACCEPTED",
-        message: `✅ ${teamNameText} đã được phân công vào nhiệm vụ hỗ trợ bạn`,
+        message: `${teamNameText} đã được phân công vào nhiệm vụ hỗ trợ bạn`,
         isRead: false,
       });
 
@@ -370,7 +370,7 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
         requestId: normalizedRequestId,
         missionId,
         type: "ACCEPTED",
-        message: `📋 Đội của bạn có nhiệm vụ cứu hộ mới - Mission #${missionLabel}`,
+        message: `Đội của bạn có nhiệm vụ cứu hộ mới - Mission #${missionLabel}`,
         isRead: false,
       });
 
@@ -414,7 +414,7 @@ eventBus.on("MISSION_ACCEPTED", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "ONGOING",
-        message: `👍 Đội "${teamName}" đã nhận nhiệm vụ #${missionId}`,
+        message: `Đội "${teamName}" đã nhận nhiệm vụ #${missionId}`,
         isRead: false,
       });
 
@@ -432,7 +432,7 @@ eventBus.on("MISSION_ACCEPTED", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "ONGOING",
-        message: `👍 Một thành viên trong đội đã xác nhận nhiệm vụ #${missionId}${teamName ? ` (${teamName})` : ""}`,
+        message: `Một thành viên trong đội đã xác nhận nhiệm vụ #${missionId}${teamName ? ` (${teamName})` : ""}`,
         isRead: false,
       });
 
@@ -458,7 +458,7 @@ eventBus.on("MISSION_APPROACHING", async (payload) => {
       role: "CITIZEN",
       requestId,
       type: "ONGOING",
-      message: `🚗 Đội cứu hộ "${teamName}" đang trên đường đến vị trí của bạn`,
+      message: `Đội cứu hộ "${teamName}" đang trên đường đến vị trí của bạn`,
       isRead: false,
     });
 
@@ -496,8 +496,8 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
       type: "COMPLETED",
       message:
         completionNote ?
-          `🎉 Cứu hộ thành công! ${completionNote}`
-        : "🎉 Cứu hộ thành công! Cảm ơn bạn đã sử dụng dịch vụ",
+          `Cứu hộ thành công! ${completionNote}`
+        : "Cứu hộ thành công! Cảm ơn bạn đã sử dụng dịch vụ",
       isRead: false,
     });
       emitToUser(
@@ -520,7 +520,7 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "COMPLETED",
-        message: `✅ Nhiệm vụ #${missionId} hoàn thành thành công`,
+        message: `Nhiệm vụ #${missionId} hoàn thành thành công`,
         isRead: false,
       });
 
@@ -538,7 +538,7 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "COMPLETED",
-        message: `✅ Đội của bạn đã hoàn thành nhiệm vụ #${missionId}`,
+        message: `Đội của bạn đã hoàn thành nhiệm vụ #${missionId}`,
         isRead: false,
       });
 
@@ -579,7 +579,7 @@ eventBus.on("MISSION_FAILED", async (payload) => {
       requestId: primaryRequestId,
       missionId,
       type: "CANCELLED",
-      message: `⚠️ Cứu hộ không thành công. ${reason ? `Lý do: ${reason}` : "Đang chờ phân công đội khác"}`,
+      message: `Cứu hộ không thành công. ${reason ? `Lý do: ${reason}` : "Đang chờ phân công đội khác"}`,
       isRead: false,
     });
       emitToUser(
@@ -602,7 +602,7 @@ eventBus.on("MISSION_FAILED", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "CANCELLED",
-        message: `❌ Nhiệm vụ #${missionId} thất bại - cần phân công lại`,
+        message: `Nhiệm vụ #${missionId} thất bại - cần phân công lại`,
         isRead: false,
       });
 
@@ -620,7 +620,7 @@ eventBus.on("MISSION_FAILED", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "CANCELLED",
-        message: `⚠️ Nhiệm vụ #${missionId} của đội chưa thành công${reason ? ` (Lý do: ${reason})` : ""}`,
+        message: `Nhiệm vụ #${missionId} của đội chưa thành công${reason ? ` (Lý do: ${reason})` : ""}`,
         isRead: false,
       });
 
@@ -659,7 +659,7 @@ eventBus.on("MISSION_ABORTED", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "CANCELLED",
-        message: `⚠️ Nhiệm vụ hỗ trợ của bạn đã bị huỷ bởi điều phối viên. Chúng tôi sẽ cập nhật phương án mới sớm nhất.${teamNameText}`,
+        message: `Nhiệm vụ hỗ trợ của bạn đã bị huỷ bởi điều phối viên. Chúng tôi sẽ cập nhật phương án mới sớm nhất.${teamNameText}`,
         isRead: false,
       });
 
@@ -677,7 +677,7 @@ eventBus.on("MISSION_ABORTED", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "CANCELLED",
-        message: `🛑 Nhiệm vụ #${missionLabel} đã bị điều phối viên huỷ. Vui lòng dừng thực thi và chờ điều động tiếp theo.`,
+        message: `Nhiệm vụ #${missionLabel} đã bị điều phối viên huỷ. Vui lòng dừng thực thi và chờ điều động tiếp theo.`,
         isRead: false,
       });
 
@@ -695,7 +695,7 @@ eventBus.on("MISSION_ABORTED", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "CANCELLED",
-        message: `🛑 Nhiệm vụ #${missionLabel} đã được abort.${teamNameText}`,
+        message: `Nhiệm vụ #${missionLabel} đã được abort.${teamNameText}`,
         isRead: false,
       });
 
@@ -735,7 +735,7 @@ eventBus.on("MISSION_WITHDRAWN", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "WITHDRAWN",
-        message: `⚠️ Đội "${teamName}" đã từ chối nhiệm vụ - cần phân công lại${withdrawalReason ? ` (Lý do: ${withdrawalReason})` : ""}`,
+        message: `Đội "${teamName}" đã từ chối nhiệm vụ - cần phân công lại${withdrawalReason ? ` (Lý do: ${withdrawalReason})` : ""}`,
         isRead: false,
       });
 
@@ -753,7 +753,7 @@ eventBus.on("MISSION_WITHDRAWN", async (payload) => {
         requestId: primaryRequestId,
         missionId,
         type: "WITHDRAWN",
-        message: `↩️ Một thành viên trong đội đã rút khỏi nhiệm vụ #${missionId}${withdrawalReason ? ` (Lý do: ${withdrawalReason})` : ""}`,
+        message: `Một thành viên trong đội đã rút khỏi nhiệm vụ #${missionId}${withdrawalReason ? ` (Lý do: ${withdrawalReason})` : ""}`,
         isRead: false,
       });
 
@@ -786,7 +786,7 @@ eventBus.on("MISSION_REASSIGNED", async (payload) => {
         requestId,
         missionId,
         type: "ACCEPTED",
-        message: `🔄 Nhiệm vụ #${missionId} đã được chuyển cho đội bạn`,
+        message: `Nhiệm vụ #${missionId} đã được chuyển cho đội bạn`,
         isRead: false,
       });
 
@@ -802,4 +802,4 @@ eventBus.on("MISSION_REASSIGNED", async (payload) => {
   }
 });
 
-console.log("✅ Notification event listeners initialized");
+console.log("Notification event listeners initialized");

@@ -2,7 +2,7 @@ import MissionRequest, { MISSION_REQUEST_STATUS } from "./missionRequest.model.j
 import TeamRequest from "../teamRequests/teamRequest.model.js";
 
 function normalizeSupplyName(name) {
-  return typeof name === "string" ? name.trim() : "";
+  return typeof name === "string" ? name.trim().toLowerCase() : "";
 }
 
 function mergeDeliveredSupplies(baseSupplies = [], deltaSupplies = []) {
@@ -40,6 +40,19 @@ function buildRequestedSuppliesMap(requestSuppliesSnapshot = []) {
   return requestedMap;
 }
 
+function buildDeliveredSuppliesMap(deliveredSupplies = []) {
+  const deliveredMap = new Map();
+
+  for (const item of deliveredSupplies) {
+    const name = normalizeSupplyName(item.name);
+    if (!name) continue;
+
+    deliveredMap.set(name, (deliveredMap.get(name) || 0) + (Number(item.deliveredQty) || 0));
+  }
+
+  return deliveredMap;
+}
+
 function calculateAggregateFields(missionRequest, contributionSummary = {}) {
   const totalRescued = Number(contributionSummary.totalRescued) || 0;
   const totalSuppliesDelivered = mergeDeliveredSupplies(
@@ -54,7 +67,7 @@ function calculateAggregateFields(missionRequest, contributionSummary = {}) {
   const requestedSuppliesMap = buildRequestedSuppliesMap(
     missionRequest.requestSuppliesSnapshot || [],
   );
-  const deliveredSuppliesMap = buildRequestedSuppliesMap(totalSuppliesDelivered);
+  const deliveredSuppliesMap = buildDeliveredSuppliesMap(totalSuppliesDelivered);
 
   const totalSupplyTarget = [...requestedSuppliesMap.values()].reduce(
     (sum, qty) => sum + qty,

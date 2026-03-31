@@ -1,8 +1,8 @@
 import { inventoryItemRepository } from './inventoryItem.repository.js';
-import { Warehouse } from '../warehouse/warehouse.model.js';
+import Warehouse from '../warehouse/warehouse.model.js';
 import Supply from '../supply/supply.model.js';
 import {eventBus} from '../../utils/events.js';
-import { InventoryItem } from "../inventory/inventoryItem.model.js";
+import InventoryItem from "../inventory/inventoryItem.model.js";
 import MissionSupply from "../missionSupplies/missionSupply.model.js";
 import mongoose from 'mongoose';
 import XLSX from "xlsx";

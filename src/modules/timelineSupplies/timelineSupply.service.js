@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import TimelineSupply from "./timelineSupply.model.js";
 import MissionSupply from "../missionSupplies/missionSupply.model.js";
-import { InventoryItem } from "../inventory/inventoryItem.model.js";
+import InventoryItem from "../inventory/inventoryItem.model.js";
 import Supply from "../supply/supply.model.js";
 import Timeline from "../timelines/timeline.model.js";
 import TeamRequest from "../teamRequests/teamRequest.model.js";

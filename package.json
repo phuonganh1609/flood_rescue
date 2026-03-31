@@ -9,7 +9,12 @@
     "dev": "nodemon src/server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:seed": "node tests/setup/seedTestData.js",
+    "test:all": "npm run test && npm run test:e2e"
   },
   "author": "",
   "license": "ISC",
@@ -33,6 +38,8 @@
     "yamljs": "^0.3.0"
   },
   "devDependencies": {
-    "jest": "^30.2.0"
+    "@playwright/test": "^1.58.2",
+    "jest": "^30.2.0",
+    "playwright": "^1.58.2"
   }
 }

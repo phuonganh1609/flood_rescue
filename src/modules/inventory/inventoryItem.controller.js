@@ -4,7 +4,7 @@ import { inventoryItemService } from './inventoryItem.service.js';
 import { createSchema, updateSchema } from './inventoryItem.validation.js';
 import Supply from '../supply/supply.model.js';
 import Vehicle from '../vehicles/vehicle.model.js';
-import { Warehouse } from '../warehouse/warehouse.model.js';
+import Warehouse from '../warehouse/warehouse.model.js';
 import XLSX from "xlsx";
 
 

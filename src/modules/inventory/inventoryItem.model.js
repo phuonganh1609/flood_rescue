@@ -23,4 +23,5 @@ const inventoryItemSchema = new Schema(
   { timestamps: true },
 );
 
-export const InventoryItem = mongoose.model('InventoryItem', inventoryItemSchema);
+const InventoryItem = mongoose.model('InventoryItem', inventoryItemSchema);
+export default InventoryItem;

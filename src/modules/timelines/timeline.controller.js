@@ -216,7 +216,7 @@ class TimelineController {
         ? timeline.message || "Timeline đã được hoàn tất trước đó"
         : "Timeline completed successfully";
 
-      const responseData = { ...timeline };
+      const responseData = timeline.toObject ? timeline.toObject() : { ...timeline };
       delete responseData._alreadyCompleted;
       delete responseData.message;
 

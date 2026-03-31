@@ -39,7 +39,7 @@ stateDiagram-v2
     SUBMITTED --> REJECTED : coordinator rejects
     SUBMITTED --> CANCELLED : citizen cancels
 
-    VERIFIED --> IN_PROGRESS : first timeline created
+    VERIFIED --> IN_PROGRESS : first team accepts
 
     IN_PROGRESS --> PARTIALLY_FULFILLED : timeline completed (partial)
     IN_PROGRESS --> FULFILLED : timeline completed (full)
@@ -60,17 +60,18 @@ stateDiagram-v2
 
 ### 2.1 Timeline States Definitions
 
-| State       | Ý nghĩa                                                                    |
-| :---------- | :------------------------------------------------------------------------- |
-| `PLANNED`   | Team đã được ghép vào mission; mission chưa start; team chưa được thông báo |
-| `ASSIGNED`  | Mission đã start; team được thông báo; chờ accept                          |
-| `EN_ROUTE`  | Team đang đi (GPS Tracking)                                                |
-| `ON_SITE`   | Team đã đến điểm cứu trợ và đang phát đồ                                   |
-| `COMPLETED` | Phát xong (Đủ hàng)                                                        |
-| `PARTIAL`   | Phát xong (Thiếu hàng)                                                     |
-| `FAILED`    | Không thể tiếp cận / Hỏng xe                                               |
-| `WITHDRAWN` | Team từ chối nhiệm vụ                                                      |
-| `CANCELLED` | Bị huỷ                                                                     |
+| State               | Ý nghĩa                                                                    |
+| :------------------ | :------------------------------------------------------------------------- |
+| `PLANNED`           | Team đã được ghép vào mission; mission chưa start; team chưa được thông báo |
+| `ASSIGNED`          | Mission đã start; team được thông báo; chờ accept                          |
+| `CLAIMING_SUPPLIES` | Team đã accept; đang nhận vật tư từ warehouse                              |
+| `EN_ROUTE`          | Team đã nhận vật tư; đang đi đến điểm cứu trợ (GPS Tracking)              |
+| `ON_SITE`           | Team đã đến điểm cứu trợ và đang phát đồ                                   |
+| `COMPLETED`         | Phát xong (Đủ hàng)                                                        |
+| `PARTIAL`           | Phát xong (Thiếu hàng)                                                     |
+| `FAILED`            | Không thể tiếp cận / Hỏng xe                                               |
+| `WITHDRAWN`         | Team từ chối nhiệm vụ                                                      |
+| `CANCELLED`         | Bị huỷ                                                                     |
 
 ### 2.2 Timeline State Diagram
 
@@ -81,9 +82,11 @@ stateDiagram-v2
     PLANNED --> ASSIGNED : mission started (Start Mission)
     PLANNED --> CANCELLED : coordinator cancels before start
 
-    ASSIGNED --> EN_ROUTE : team accepts
+    ASSIGNED --> CLAIMING_SUPPLIES : team accepts
     ASSIGNED --> WITHDRAWN : team rejects
     ASSIGNED --> CANCELLED : coordinator cancels
+
+    CLAIMING_SUPPLIES --> EN_ROUTE : confirm supply claim
 
     EN_ROUTE --> ON_SITE : team arrives (GPS match)
 
@@ -143,8 +146,8 @@ stateDiagram-v2
 
 ## 4. Derived Rules Summary
 
-- **MissionRequest = FULFILLED** khi `suppliesDelivered >= requestSuppliesSnapshot` (all items) và `rescuedCount >= requestPeopleSnapshot`.
-- **Request = FULFILLED** khi MissionRequest tương ứng đạt trạng thái `FULFILLED`.
+- **MissionRequest = CLOSED** khi `suppliesDelivered >= requestSuppliesSnapshot` (all items) và `rescuedCount >= requestPeopleSnapshot`.
+- **Request = CLOSED** khi MissionRequest tương ứng đạt trạng thái `CLOSED` (fully met).
 - **Request = PARTIALLY_FULFILLED** khi các MissionRequest đã kết thúc nhưng aggregate còn thiếu so với target.
 - **Tracking**: Relief Team cũng gửi tọa độ GPS liên tục khi `EN_ROUTE` để Citizen theo dõi.
 - **Aggregate source**: MissionRequest aggregate được tính từ tổng contribution của các TeamRequest cùng `missionRequestId`.
@@ -157,7 +160,8 @@ Relief Flow sử dụng Supply Management giống Rescue Flow:
 | ---------------- | --------------------------------------------------- | ------------------------------------------------------------------------------ |
 | **Planning**     | `POST /missions/{id}/teams` — Coordinator assigns team to mission | Reserve supplies từ Warehouse; snapshot vào `MissionRequest.requestSuppliesSnapshot` |
 | **Start**        | `PATCH /missions/{id}/start`                         | Pre-create TeamRequest matrix cho mọi MissionRequest x Team assigned |
-| **Carrying**     | Team accepts (Timeline → EN_ROUTE)                  | Deduct inventory, confirm `carriedQty` on Timeline                             |
+| **Claiming**     | Team accepts (Timeline → CLAIMING_SUPPLIES)         | Team xác nhận nhận vật tư                                                      |
+| **Carrying**     | Confirm supply claim (Timeline → EN_ROUTE)          | Deduct inventory, confirm `carriedQty` on Timeline                             |
 | **Distribution** | Team gửi progress (`POST /missionRequests/{id}/progress`) | Ghi TeamRequest contribution; recompute aggregate `MissionRequest.suppliesDelivered`; return unused |
 
 > Chi tiết xem [Supply_management.md](../Supply_management.md)
@@ -270,9 +274,10 @@ sequenceDiagram
 
 | Method   | Endpoint                         | Actor | Description                                        |
 | :------- | :------------------------------- | :---- | :------------------------------------------------- |
-| `PATCH`  | `/timelines/{id}/accept`         | Team  | Accept assignment → `ASSIGNED → EN_ROUTE`; Mission `→ IN_PROGRESS` |
+| `PATCH`  | `/timelines/{id}/accept`         | Team  | Accept assignment → `ASSIGNED → CLAIMING_SUPPLIES`; Mission `→ IN_PROGRESS` |
+| `POST`   | `/timelines/{id}/confirm-supply-claim` | Team | Confirm supply claim → `CLAIMING_SUPPLIES → EN_ROUTE` |
 | `PATCH`  | `/timelines/{id}/arrive`         | Team  | Arrive on site → `EN_ROUTE → ON_SITE`              |
-| `PATCH`  | `/timelines/{id}/complete`       | Team  | Finish → `ON_SITE → COMPLETED` / `PARTIAL`; team phải dùng progress endpoint trước | `{ outcome, note? }` |
+| `POST`   | `/timelines/{id}/complete`       | Team  | Finish → `ON_SITE → COMPLETED` / `PARTIAL` (auto-calculate outcome from TeamRequests) |
 | `PATCH`  | `/timelines/{id}/withdraw`       | Team  | Withdraw from mission → `WITHDRAWN`                |
 
 ---
