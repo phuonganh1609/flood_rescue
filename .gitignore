@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 credentials/*.json
+
+# Test results
+test-results/
+playwright-report/
+.last-run.json

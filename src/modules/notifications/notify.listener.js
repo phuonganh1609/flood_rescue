@@ -153,7 +153,7 @@ eventBus.on("REQUEST_AUTO_CLOSED", async (payload) => {
       return;
     }
 
-    const citizenId = request.userId?.toString?.() || request.userId;
+    const citizenId = normalizeId(request.userId);
 
     // Notify Citizen
     if (citizenId) {
