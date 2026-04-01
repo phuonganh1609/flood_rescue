@@ -14,6 +14,9 @@ import {
   addMember,
   removeMember,
   changeLeader,
+  getTeamStats,
+  getRescueTrends,
+  getTeamReport,
 } from "./team.controller.js";
 
 const router = express.Router();
@@ -89,6 +92,35 @@ router.delete(
   authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
   authorizeTeamLeader,
   removeMember,
+);
+
+// ─── Team Statistics ────────────────────────────────────────
+
+// Get team statistics
+router.get(
+  "/:teamId/stats",
+  authenticate,
+  authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
+  authorizeTeamMember,
+  getTeamStats,
+);
+
+// Get rescue trends over time
+router.get(
+  "/:teamId/trends",
+  authenticate,
+  authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
+  authorizeTeamMember,
+  getRescueTrends,
+);
+
+// Get comprehensive team report (stats + trends)
+router.get(
+  "/:teamId/report",
+  authenticate,
+  authorize(["Rescue Coordinator", "Admin", "Rescue Team"]),
+  authorizeTeamMember,
+  getTeamReport,
 );
 
 export default router;

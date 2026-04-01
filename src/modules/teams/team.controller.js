@@ -7,6 +7,7 @@ import {
   addMemberSchema,
   changeLeaderSchema,
 } from "./team.validation.js";
+import { getTeamStats, getRescueTrends, getTeamReport } from "./team.stats.controller.js";
 
 /**
  * Validate MongoDB ObjectId helper
@@ -326,3 +327,6 @@ export const changeLeader = async (req, res) => {
     });
   }
 };
+
+// Re-export stats controller functions
+export { getTeamStats, getRescueTrends, getTeamReport };
