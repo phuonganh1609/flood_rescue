@@ -14,6 +14,68 @@
 
 ---
 
+## 0. Overall Relief Flowchart
+
+```mermaid
+flowchart TD
+    A[Citizen tạo Request<br/>status: SUBMITTED] --> B[Coordinator verify Request]
+    B -->|Reject| B1[Request: REJECTED]
+    B -->|Verify OK| C[Request: VERIFIED]
+
+    C --> D[Coordinator tạo Mission<br/>status: DRAFT]
+    D --> E[Add Request vào Mission<br/>tạo MissionRequest: PENDING]
+    E --> F[Assign Team vào Mission<br/>tạo Timeline: PLANNED]
+    F --> G[Start Mission<br/>Timeline: PLANNED -> ASSIGNED<br/>pre-create TeamRequest matrix]
+
+    G --> H[Team accept nhiệm vụ<br/>Timeline: CLAIMING_SUPPLIES]
+    H --> I[Team confirm supply claim<br/>Timeline: EN_ROUTE]
+    I --> J[Team arrive on site<br/>Timeline: ON_SITE]
+    J --> K[Team gửi progress<br/>POST /missionRequests/:id/progress]
+    K --> L[Backend sync aggregate MissionRequest<br/>suppliesDelivered + rescuedCount]
+
+    L --> M{Kết quả Timeline}
+    M -->|Đủ| N[Timeline: COMPLETED]
+    M -->|Thiếu| O[Timeline: PARTIAL]
+    M -->|Sự cố| P[Timeline: FAILED]
+
+    N --> Q{MissionRequest đã đủ target?}
+    O --> Q
+    P --> R[Coordinator re-plan<br/>add team/timeline mới hoặc close thủ công]
+    R --> F
+
+    Q -->|Yes| S[MissionRequest: CLOSED]
+    Q -->|No| T[Request/Mission: PARTIALLY_FULFILLED]
+    T --> R
+
+    S --> U{Tất cả MissionRequest đã CLOSED?}
+    U -->|Yes| V[Mission: COMPLETED<br/>Request: CLOSED]
+    U -->|No| F
+```
+
+### 0.1 Compact Version (For Slides)
+
+```mermaid
+flowchart LR
+    A[Request SUBMITTED] --> B[Verify]
+    B -->|Rejected| X[Request REJECTED]
+    B -->|Verified| C[Plan Mission DRAFT]
+    C --> D[Add Request + Assign Team]
+    D --> E[Start Mission<br/>Timeline ASSIGNED]
+    E --> F[Team Execute<br/>CLAIMING -> EN_ROUTE -> ON_SITE]
+    F --> G[Update Progress<br/>MissionRequest aggregate sync]
+
+    G --> H{Fulfilled?}
+    H -->|Yes| I[MissionRequest CLOSED]
+    H -->|No| J[PARTIAL / FAILED]
+    J --> C
+
+    I --> K{All MissionRequests closed?}
+    K -->|Yes| L[Mission COMPLETED<br/>Request CLOSED]
+    K -->|No| C
+```
+
+---
+
 ## 1. Request State Diagram (Unified)
 
 ### 1.1 Request States Definitions

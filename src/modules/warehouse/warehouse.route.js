@@ -19,7 +19,7 @@ router.get(
 router.get(
   '/',
   authenticate,
-  authorize(['Manager', 'Admin', 'Rescue Coordinator']),getAll
+  authorize(['Manager', 'Admin', 'Rescue Coordinator', 'Rescue Team']),getAll
 );
 
 

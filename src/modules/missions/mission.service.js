@@ -12,6 +12,49 @@ import Supply from "../supply/supply.model.js";
 import MissionSupply from "../missionSupplies/missionSupply.model.js";
 
 class MissionService {
+  async buildMissionMetrics(missionId) {
+    const missionRequests = await missionRequestRepository.findByMissionId(missionId);
+    const requestIds = [
+      ...new Set(
+        missionRequests
+          .map((item) => item.requestId?._id?.toString?.() || item.requestId?.toString?.())
+          .filter(Boolean),
+      ),
+    ];
+
+    if (requestIds.length === 0) {
+      return {
+        peopleCount: 0,
+        totalSupply: 0,
+      };
+    }
+
+    const requests = await Promise.all(
+      requestIds.map((requestId) => requestRepository.findRequestById(requestId)),
+    );
+
+    const peopleCount = requests.reduce(
+      (sum, request) => sum + (Number(request?.peopleCount) || 0),
+      0,
+    );
+
+    const totalSupply = requests.reduce((sum, request) => {
+      const requestSupplies = Array.isArray(request?.requestSupplies)
+        ? request.requestSupplies
+        : [];
+      const requestSupplyTotal = requestSupplies.reduce(
+        (subTotal, item) => subTotal + (Number(item?.requestedQty) || 0),
+        0,
+      );
+      return sum + requestSupplyTotal;
+    }, 0);
+
+    return {
+      peopleCount,
+      totalSupply,
+    };
+  }
+
   async assertRescueTeamCanAccessMission(missionId, user) {
     if (!user || user.role !== "Rescue Team") return;
 
@@ -130,7 +173,13 @@ class MissionService {
   async getMissionById(id, user) {
     const mission = await this.assertMissionExists(id);
     await this.assertRescueTeamCanAccessMission(mission._id, user);
-    return mission;
+
+    const missionMetrics = await this.buildMissionMetrics(id);
+
+    return {
+      ...(mission.toObject ? mission.toObject() : mission),
+      ...missionMetrics,
+    };
   }
 
   async getMissionRequests(id, query = {}, user = null) {
@@ -405,8 +454,9 @@ class MissionService {
     for (const mr of missionRequests) {
       if (Array.isArray(mr.requestSuppliesSnapshot)) {
         for (const s of mr.requestSuppliesSnapshot) {
-          if (s && s.name && typeof s.quantity === "number") {
-            supplyAggregate[s.name] = (supplyAggregate[s.name] || 0) + s.quantity;
+          const qty = Number(s?.requestedQty ?? s?.quantity ?? 0);
+          if (s && s.name && qty > 0) {
+            supplyAggregate[s.name] = (supplyAggregate[s.name] || 0) + qty;
           }
         }
       }
@@ -414,13 +464,41 @@ class MissionService {
 
     const supplyNames = Object.keys(supplyAggregate);
     if (supplyNames.length > 0) {
-      const supplies = await Supply.find({ name: { $in: supplyNames } });
-      const msData = supplies.map(sup => ({
-        missionId: id,
-        supplyId: sup._id,
-        plannedQty: supplyAggregate[sup.name],
-        status: "REQUESTED",
-      }));
+      const normalize = (value = "") =>
+        value
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9\s]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+      const allSupplies = await Supply.find({});
+      const msData = [];
+
+      for (const rawName of supplyNames) {
+        const targetNorm = normalize(rawName);
+        if (!targetNorm) continue;
+
+        const matched = allSupplies.find((sup) => {
+          const supNorm = normalize(sup.name || "");
+          return (
+            supNorm === targetNorm ||
+            supNorm.includes(targetNorm) ||
+            targetNorm.includes(supNorm)
+          );
+        });
+
+        if (!matched) continue;
+
+        msData.push({
+          missionId: id,
+          supplyId: matched._id,
+          plannedQty: supplyAggregate[rawName],
+          status: "REQUESTED",
+        });
+      }
+
       if (msData.length > 0) {
         await MissionSupply.insertMany(msData);
       }

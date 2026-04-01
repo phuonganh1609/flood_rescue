@@ -1,6 +1,32 @@
 import response from '../../utils/response.js';
 import { timelineSupplyService } from './timelineSupply.service.js';
 
+export const getTimelineSupplies = async (req, res) => {
+  try {
+    const { timelineId } = req.query;
+
+    if (!timelineId) {
+      return response.sendError(res, {
+        message: "Missing required query param: timelineId",
+        statusCode: 400,
+        errorCode: "MISSING_TIMELINE_ID",
+      });
+    }
+
+    const data = await timelineSupplyService.getTimelineSupplies(timelineId);
+    return response.sendSuccess(res, {
+      data,
+      message: "Timeline supplies fetched successfully",
+    });
+  } catch (error) {
+    return response.sendError(res, {
+      message: error.message,
+      statusCode: 500,
+      errorCode: "GET_TIMELINE_SUPPLIES_FAILED",
+    });
+  }
+};
+
 export const claimSupply = async (req, res) => {
   try {
     const { timelineId, missionSupplyId, carriedQty } = req.body;

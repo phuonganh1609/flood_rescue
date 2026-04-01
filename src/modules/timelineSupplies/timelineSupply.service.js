@@ -7,6 +7,19 @@ import Timeline from "../timelines/timeline.model.js";
 import TeamRequest from "../teamRequests/teamRequest.model.js";
 
 class TimelineSupplyService {
+  async getTimelineSupplies(timelineId) {
+    return await TimelineSupply.find({ timelineId })
+      .populate({
+        path: "missionSupplyId",
+        populate: [
+          { path: "supplyId", select: "name unit category" },
+          { path: "warehouseId", select: "name location" },
+        ],
+      })
+      .populate("supplyId", "name unit category")
+      .sort({ claimedAt: -1 });
+  }
+
   async claimSupply(timelineId, missionSupplyId, carriedQty) {
     const session = await mongoose.startSession();
     session.startTransaction();
