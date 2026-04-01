@@ -58,13 +58,12 @@ class WarehouseRepository {
     );
   }
 
-  // check warehouse có item không
-  async countInventoryItems(warehouseId, session = null) {
-    return await InventoryItem.countDocuments({
-      warehouse: warehouseId,
-      quantity: { $gt: 0 }
-    }).session(session);
-  }
+   // check warehouse có item không
+  async countInventoryItems(id, session) {
+  return await InventoryItem.countDocuments({ 
+    warehouse: new mongoose.Types.ObjectId(id) // Ép kiểu ở đây
+  }).session(session);
+}
 
 }
 const warehouseRepository = new WarehouseRepository();

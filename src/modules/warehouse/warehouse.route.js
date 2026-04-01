@@ -1,5 +1,5 @@
 import express from 'express';
-import {add, getByName, getAll, update, remove, updateWarehouseStatus,removeWarehouseMaintenance,setWarehouseMaintenance } from './warehouse.controller.js';
+import {add, getByName, getAll, update, remove, updateWarehouseStatus,removeWarehouseMaintenance,setWarehouseMaintenance,updateAllWarehouseStatus } from './warehouse.controller.js';
 import { authenticate, authorize } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -37,7 +37,7 @@ router.delete(
 );
 // auto calc status
 router.patch("/:id/status", updateWarehouseStatus);
-
+router.patch("/status", updateAllWarehouseStatus);
 // manual maintenance
 router.patch("/:id/maintenance", setWarehouseMaintenance);
 
