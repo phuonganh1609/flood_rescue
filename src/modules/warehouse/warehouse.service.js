@@ -1,5 +1,6 @@
 import { warehouseRepository } from './warehouse.repository.js';
 import { eventBus } from '../../utils/events.js';
+import mongoose from 'mongoose';
 
 class WarehouseService {
   // Warehouse service methods
@@ -79,50 +80,44 @@ class WarehouseService {
         return deletedWarehouse;
     };
 
-     async updateWarehouseStatus(warehouseId) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+       async updateWarehouseStatus(warehouseId) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    try {
-      const warehouse = await warehouseRepository.findById(warehouseId, session);
+  try {
+    const warehouse = await warehouseRepository.findById(warehouseId, session);
+    if (!warehouse) throw new Error("Warehouse not found");
 
-      if (!warehouse) throw new Error("Warehouse not found");
-
-      // nếu đang maintenance thì giữ nguyên
-      if (warehouse.status === "MAINTENANCE") {
-        await session.commitTransaction();
-        session.endSession();
-        return warehouse;
-      }
-
-      const itemCount = await warehouseRepository.countInventoryItems(
-        warehouseId,
-        session
-      );
-
-      let newStatus = "EMPTY";
-
-      if (itemCount > 0) {
-        newStatus = "FULL";
-      }
-
-      const updated = await warehouseRepository.updateStatus(
-        warehouseId,
-        newStatus,
-        session
-      );
-
+    if (warehouse.status === "MAINTENANCE") {
       await session.commitTransaction();
-      session.endSession();
-
-      return updated;
-
-    } catch (err) {
-      await session.abortTransaction();
-      session.endSession();
-      throw err;
+      return warehouse;
     }
+
+    // Đảm bảo hàm này sử dụng .session(session) bên trong repository
+    const itemCount = await warehouseRepository.countInventoryItems(warehouseId, session);
+
+// console.log("--- DEBUG WAREHOUSE ---");
+// console.log("Target Warehouse ID:", warehouseId);
+// console.log("Items found in DB:", itemCount); // Xem nó in ra 0 hay số khác
+    
+    const newStatus = itemCount > 0 ? "FULL" : "EMPTY";
+
+    const updated = await warehouseRepository.updateStatus(
+      warehouseId,
+      newStatus,
+      session
+    );
+    
+
+    await session.commitTransaction();
+    return updated;
+  } catch (err) {
+    await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession(); // Luôn luôn đóng session ở đây
   }
+}
 
   //  MANUAL set maintenance
   async setMaintenance(warehouseId) {
@@ -131,6 +126,33 @@ class WarehouseService {
       "MAINTENANCE"
     );
   }
+
+  async updateAllWarehousesStatus() {
+  // 1. Gọi hàm findAll (lúc này nó trả về Object phân trang)
+  const result = await warehouseRepository.findAll({}, { page: 1, limit: 100 }); 
+  
+  // 2. Trỏ thẳng vào mảng data bên trong Object đó
+  const warehouses = result.data; 
+
+  // Kiểm tra phòng hờ nếu mảng trống
+  if (!warehouses || warehouses.length === 0) {
+    throw new Error("Không tìm thấy kho hàng nào trong hệ thống.");
+  }
+
+  const results = [];
+
+  // 3. Bây giờ vòng lặp sẽ chạy mượt mà vì warehouses đã là một Array
+  for (const warehouse of warehouses) {
+    try {
+      const updated = await this.updateWarehouseStatus(warehouse._id);
+      results.push({ id: warehouse._id, status: updated.status });
+    } catch (err) {
+      results.push({ id: warehouse._id, error: err.message });
+    }
+  }
+
+  return results;
+}
 
   //  remove maintenance → auto recalc lại
   async removeMaintenance(warehouseId) {

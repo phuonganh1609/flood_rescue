@@ -158,6 +158,22 @@ export const updateWarehouseStatus = async (req, res) => {
     });
   }
 };
+export const updateAllWarehouseStatus = async (req, res) => {
+  try {
+    const result = await warehouseService.updateAllWarehousesStatus();
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Warehouse status updated"
+    });
+
+  } catch (err) {
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: 500
+    });
+  }
+};
 
 
 // set maintenance
