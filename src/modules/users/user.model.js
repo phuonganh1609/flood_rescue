@@ -57,6 +57,18 @@ const UserSchema = new Schema(
       type: String,
       trim: true,
     },
+    telegramChatId: {
+      type: String,
+      default: null,
+    },
+    telegramLinkToken: {
+      type: String,
+      default: null,
+    },
+    telegramLinkTokenExpiry: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );

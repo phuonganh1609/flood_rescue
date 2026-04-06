@@ -26,6 +26,7 @@ import inventoryRoute from "./modules/inventory/inventoryItem.route.js";
 import warehouseRoute from "./modules/warehouse/warehouse.route.js";
 import vehicleRoute from "./modules/vehicles/vehicle.routes.js";
 import cloudinaryRoute from "./modules/cloudinary/cloudinary.routes.js";
+import telegramRoute from "./modules/telegram/telegram.routes.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -118,6 +119,7 @@ app.use("/api/warehouse", warehouseRoute);
 app.use("/api/vehicles", vehicleRoute);
 app.use("/api/users", userRoute);
 app.use("/api/cloudinary", cloudinaryRoute);
+app.use("/api/telegram", telegramRoute);
 
 // Error handling middlewares (must be after all routes)
 app.use(notFound);
