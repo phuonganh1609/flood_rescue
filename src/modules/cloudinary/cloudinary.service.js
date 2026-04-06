@@ -12,7 +12,9 @@ export const generateUploadSignature = ({
   const params = {
     folder,
     timestamp,
-    resource_type: resourceType,
+    // NOTE: Do NOT include resource_type in params for signing
+    // Cloudinary SDK ignores default values (resource_type=image is default)
+    // Including it will cause signature mismatch
   };
 
   if (context && Object.keys(context).length > 0) {
@@ -45,8 +47,7 @@ export const generateUploadSignature = ({
     apiKey: process.env.CLOUDINARY_API_KEY,
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     folder,
-    resourceType,
-    ...(context && { context }),
+    ...(params.context && { context: params.context }),
     ...(eager && { eager: params.eager, eager_async: true }),
   };
 };

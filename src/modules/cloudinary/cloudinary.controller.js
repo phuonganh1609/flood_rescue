@@ -23,11 +23,25 @@ export const getUploadSignature = async (req, res) => {
     const { folder, context, eager } = value;
     const userId = req.user.id;
 
-    const enrichedContext = {
-      ...context,
-      userId,
-      uploadedBy: req.user.fullName || req.user.username,
-    };
+    // Build enriched context, filtering out undefined/null values
+    const enrichedContext = {};
+    
+    // Add user-provided context first
+    if (context) {
+      Object.entries(context).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          enrichedContext[key] = String(value);
+        }
+      });
+    }
+    
+    // Add system context
+    enrichedContext.userId = userId.toString();
+    
+    const uploadedBy = req.user.fullName || req.user.username || req.user.email;
+    if (uploadedBy) {
+      enrichedContext.uploadedBy = uploadedBy;
+    }
 
     const signature = cloudinaryService.generateUploadSignature({
       folder: `${folder}`,

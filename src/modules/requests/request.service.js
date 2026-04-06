@@ -82,12 +82,21 @@ class RequestService {
       description,
       peopleCount,
       requestSupplies,
-      imageUrls,
+      media: mediaInput,
     } = requestData;
 
-    const media = (imageUrls || []).map((url) => ({
-      imageUrl: url,
-      uploadedAt: new Date(),
+    const media = (mediaInput || []).map((item) => ({
+      publicId: item.publicId,
+      secureUrl: item.secureUrl,
+      thumbnailUrl: item.thumbnailUrl,
+      format: item.format,
+      width: item.width,
+      height: item.height,
+      bytes: item.bytes,
+      resourceType: item.resourceType || "image",
+      description: item.description,
+      uploadedAt: item.uploadedAt || new Date(),
+      uploadedBy: userId,
     }));
 
     const newRequest = await requestRepository.createRequest({
@@ -134,7 +143,7 @@ class RequestService {
       peopleCount,
       priority,
       requestSupplies,
-      imageUrls,
+      media: mediaInput,
     } = requestData;
 
     let userId = null;
@@ -175,9 +184,18 @@ class RequestService {
       phoneNumber = inputPhoneNumber;
     }
 
-    const media = (imageUrls || []).map((url) => ({
-      imageUrl: url,
-      uploadedAt: new Date(),
+    const media = (mediaInput || []).map((item) => ({
+      publicId: item.publicId,
+      secureUrl: item.secureUrl,
+      thumbnailUrl: item.thumbnailUrl,
+      format: item.format,
+      width: item.width,
+      height: item.height,
+      bytes: item.bytes,
+      resourceType: item.resourceType || "image",
+      description: item.description,
+      uploadedAt: item.uploadedAt || new Date(),
+      uploadedBy: coordinatorId,
     }));
 
     const newRequest = await requestRepository.createRequest({
