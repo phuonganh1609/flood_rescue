@@ -27,7 +27,7 @@ async function startServer() {
     initializeSocket(server);
 
     // Initialize Telegram Bot (polling)
-    initTelegramBot();
+    await initTelegramBot();
 
     // Start server
     server.listen(PORT, () => {

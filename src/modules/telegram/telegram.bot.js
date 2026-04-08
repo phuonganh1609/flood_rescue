@@ -6,7 +6,7 @@ let botInstance = null;
 /**
  * Khởi tạo Telegram Bot với long-polling
  */
-export function initTelegramBot() {
+export async function initTelegramBot() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
 
   if (!token) {
@@ -15,7 +15,13 @@ export function initTelegramBot() {
   }
 
   try {
-    botInstance = new TelegramBot(token, { polling: true });
+    botInstance = new TelegramBot(token, { polling: false });
+
+    // Drop pending updates & clear any existing webhook to avoid 409 Conflict on restart
+    await botInstance.deleteWebhook({ drop_pending_updates: true });
+
+    // Start polling after clearing
+    botInstance.startPolling();
 
     // ─── /start ─────────────────────────────────────────────────
     botInstance.onText(/\/start/, (msg) => {
