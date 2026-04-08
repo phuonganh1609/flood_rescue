@@ -1,4 +1,5 @@
 import { missionRequestRepository } from "./missionRequest.repository.js";
+import { missionSupplyRepository } from "../missionSupplies/missionSupply.repository.js";
 import { MISSION_REQUEST_STATUS } from "./missionRequest.model.js";
 import missionRepository from "../missions/mission.repository.js";
 import { requestRepository } from "../requests/request.repository.js";
@@ -392,6 +393,29 @@ class MissionRequestService {
     await this.syncAfterMissionRequestUpdate(updated);
     return updated;
   }
+
+  async createSupplyRequirement(missionRequest, userId) {
+  const supplies = missionRequest.requestSuppliesSnapshot || [];
+  if (supplies.length === 0) return;
+
+  const missionId = missionRequest.missionId?._id || missionRequest.missionId;
+
+  // Map dữ liệu chuẩn để lưu vào bảng MissionSupply
+  const dataToInsert = supplies.map((item) => ({
+    missionId: missionId,
+    supplyId: item.supplyId, 
+    requestedQty: item.requestedQty,
+    status: "REQUESTED",
+    createdBy: userId,
+    requestId: missionRequest.requestId,
+    missionRequestId: missionRequest._id
+  }));
+
+  // Lưu xuống DB
+  await missionSupplyRepository.create(dataToInsert);
+  console.log(">>> Đã lưu thành công vào bảng MissionSupply");
 }
+}
+
 
 export default new MissionRequestService();

@@ -25,6 +25,19 @@ export const TERMINAL_STATUSES = [
   REQUEST_STATUS.REJECTED,
 ];
 
+// Predefined scenarios for demo purposes
+export const SCENARIOS = {
+  "heavy-rain": {
+    needs: ["WATER", "FOOD", "CLOTHING"]
+  },
+  "flooded-area": {
+    needs: ["WATER", "FOOD", "CLOTHING"]
+  },
+  "landslide-risk": {
+    needs: ["WATER", "FOOD", "MEDICAL"]
+  }
+};
+
 // --- Sub-schemas ---
 const MediaSchema = new Schema(
   {
@@ -37,8 +50,8 @@ const MediaSchema = new Schema(
 
 const RequestSupplySchema = new Schema(
   {
-    name: {
-      type: mongoose.Schema.Types.String,
+    supplyId: {
+      type: mongoose.Schema.Types.ObjectId,
       ref: "Supply",
       required: true,
     },
@@ -100,7 +113,11 @@ const RequestSchema = new Schema(
     },
 
     description: { type: String, required: true },
-
+    scenario: {
+      type: String,
+      enum: Object.keys(SCENARIOS),
+      default: null,
+    },
     peopleCount: {
       type: Number,
       min: 0,

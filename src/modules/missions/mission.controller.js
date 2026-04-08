@@ -183,7 +183,7 @@ class MissionController {
 
   async startMission(req, res) {
     try {
-      const mission = await missionService.startMission(req.params.id);
+      const mission = await missionService.startMission(req.params.id, req.user.id);
       return sendSuccess(res, {
         data: mission,
         message: "Mission started successfully",

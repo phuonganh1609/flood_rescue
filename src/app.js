@@ -18,6 +18,7 @@ import timelineRoute from "./modules/timelines/timeline.routes.js";
 import timelineSupplyRoute from "./modules/timelineSupplies/timelineSupply.routes.js";
 import missionSupplyRoute from "./modules/missionSupplies/missionSupply.routes.js";
 import teamRequestRoute from "./modules/teamRequests/teamRequest.routes.js";
+import missionVehicleRoute from "./modules/missionVehicles/missionVehicles.route.js";
 import userRoute from "./modules/users/user.routes.js";
 import "./modules/notifications/notify.listener.js"; // Initialize event listeners
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
@@ -116,6 +117,7 @@ app.use("/api/inventory", inventoryRoute);
 app.use("/api/warehouse", warehouseRoute);
 app.use("/api/vehicles", vehicleRoute);
 app.use("/api/users", userRoute);
+app.use("/api/mission-vehicles", missionVehicleRoute);
 
 // Error handling middlewares (must be after all routes)
 app.use(notFound);

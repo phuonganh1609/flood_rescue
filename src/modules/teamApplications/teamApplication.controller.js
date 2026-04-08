@@ -1,5 +1,7 @@
 import response from "../../utils/response.js";
 import { teamApplicationService } from "./teamApplication.service.js";
+import missionRequestService from "../missionRequests/missionRequest.service.js";
+
 
 const statusMap = {
   "User not found": 404,
@@ -100,7 +102,6 @@ export const approveTeamApplication = async (req, res) => {
       req.params.applicationId,
       req.user,
     );
-
     return response.sendSuccess(res, {
       data: application,
       message: "Team application approved successfully",

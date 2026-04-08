@@ -1,43 +1,37 @@
-// services/missionSupply.service.js
-import MissionSupplyRepository from "./missionSupply.repository.js";
-import paginationUtils from "../../utils/pagination.js";
+import { missionSupplyRepository } from "./missionSupply.repository.js";
 
 class MissionSupplyService {
   async getMissionSupplies(query) {
-    const { missionId, status, page, limit } = query;
+    const { status, page, limit } = query;
     const filter = {};
+    if (status) filter.status = status;
 
-    if (missionId) filter.missionId = missionId;
-    if (status && status.length > 0) {
-      filter.status = status.length === 1 ? status[0] : { $in: status };
-    }
+    const skip = (parseInt(page) - 1) * parseInt(limit) || 0;
+    const l = parseInt(limit) || 100;
 
-    const usePagination = page !== undefined || limit !== undefined;
-    let meta = null;
-    let data;
+    const data = await missionSupplyRepository.findAll(filter, skip, l);
+    const total = await missionSupplyRepository.count(filter);
 
-    if (usePagination) {
-      const { page: p, limit: l, skip } = paginationUtils.getPaginationParams(query);
-      const total = await MissionSupplyRepository.count(filter);
-      data = await MissionSupplyRepository.findAll(filter, skip, l, true);
-      meta = paginationUtils.buildPaginationMeta({ page: p, limit: l, total });
-    } else {
-      data = await MissionSupplyRepository.findAll(filter);
-    }
-
-    return { data, meta };
+    return {
+      data,
+      meta: {
+        total,
+        page: parseInt(page) || 1,
+        limit: l
+      }
+    };
   }
 
   async allocateSupply(id, allocationData, userId) {
-    // Logic: Khi Manager cấp phát vật tư từ Warehouse
     const updateData = {
-      ...allocationData,
+      warehouseId: allocationData.warehouseId,
+      allocatedQty: allocationData.allocatedQty, // Khớp field Model mới
       status: "ALLOCATED",
       allocatedBy: userId,
       allocatedAt: new Date(),
     };
-    return await MissionSupplyRepository.update(id, updateData);
+    return await missionSupplyRepository.update(id, updateData);
   }
 }
 
-export default new MissionSupplyService();
+export const missionSupplyService = new MissionSupplyService();

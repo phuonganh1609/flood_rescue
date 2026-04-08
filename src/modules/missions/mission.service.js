@@ -5,6 +5,7 @@ import { requestRepository } from "../requests/request.repository.js";
 import { REQUEST_STATUS } from "../requests/request.model.js";
 import { teamRepository } from "../teams/team.repository.js";
 import { missionRequestRepository } from "../missionRequests/missionRequest.repository.js";
+import missionRequestService from "../missionRequests/missionRequest.service.js";
 import { eventBus } from "../../utils/events.js";
 import User from "../users/user.model.js";
 import { teamRequestService } from "../teamRequests/teamRequest.service.js";
@@ -395,7 +396,7 @@ class MissionService {
     };
   }
 
-  async startMission(id) {
+  async startMission(id, userId) {
     const mission = await this.assertMissionExists(id);
     this.assertMissionDraft(mission, "start mission");
 
@@ -449,59 +450,9 @@ class MissionService {
       teamIds: assignedTeamIds,
     });
 
-    // Auto-create MissionSupply based on aggregated request items
-    const supplyAggregate = {};
+    // Auto-create MissionSupply for each request
     for (const mr of missionRequests) {
-      if (Array.isArray(mr.requestSuppliesSnapshot)) {
-        for (const s of mr.requestSuppliesSnapshot) {
-          const qty = Number(s?.requestedQty ?? s?.quantity ?? 0);
-          if (s && s.name && qty > 0) {
-            supplyAggregate[s.name] = (supplyAggregate[s.name] || 0) + qty;
-          }
-        }
-      }
-    }
-
-    const supplyNames = Object.keys(supplyAggregate);
-    if (supplyNames.length > 0) {
-      const normalize = (value = "") =>
-        value
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9\s]/g, " ")
-          .replace(/\s+/g, " ")
-          .trim();
-
-      const allSupplies = await Supply.find({});
-      const msData = [];
-
-      for (const rawName of supplyNames) {
-        const targetNorm = normalize(rawName);
-        if (!targetNorm) continue;
-
-        const matched = allSupplies.find((sup) => {
-          const supNorm = normalize(sup.name || "");
-          return (
-            supNorm === targetNorm ||
-            supNorm.includes(targetNorm) ||
-            targetNorm.includes(supNorm)
-          );
-        });
-
-        if (!matched) continue;
-
-        msData.push({
-          missionId: id,
-          supplyId: matched._id,
-          plannedQty: supplyAggregate[rawName],
-          status: "REQUESTED",
-        });
-      }
-
-      if (msData.length > 0) {
-        await MissionSupply.insertMany(msData);
-      }
+      await missionRequestService.createSupplyRequirement(mr, userId);
     }
 
     const updatedMission = await missionRepository.update(id, { status: "PLANNED" });

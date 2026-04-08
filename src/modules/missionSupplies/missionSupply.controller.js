@@ -1,12 +1,12 @@
 // controllers/missionSupply.controller.js
-import MissionSupplyService from "./missionSupply.service.js";
+import {missionSupplyService} from "./missionSupply.service.js";
 import response from "../../utils/response.js";
 
 
 export const getAll = async (req, res) => {
     try {
       const status = req.query.status ? req.query.status.split(",") : [];
-      const result = await MissionSupplyService.getMissionSupplies({
+      const result = await missionSupplyService.getMissionSupplies({
         ...req.query,
         status
       });
@@ -24,7 +24,7 @@ export const getAll = async (req, res) => {
 export const updateAllocation = async (req, res) => {
   try {
     const { id } = req.params;
-    const data = await MissionSupplyService.allocateSupply(id, req.body, req.user._id);
+    const data = await missionSupplyService.allocateSupply(id, req.body, req.user._id);
     return response.sendSuccess(res, { data, message: "Supply allocated successfully" });
   } catch (error) {
     return response.sendError(res, { message: error.message, statusCode: 500 });

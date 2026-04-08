@@ -1,41 +1,28 @@
-// repositories/missionSupply.repository.js
 import MissionSupply from "./missionSupply.model.js";
 
 class MissionSupplyRepository {
-  async findAll(filter, skip, limit, usePagination) {
-    const queryBuilder = MissionSupply.find(filter)
-      .populate("missionId", "name code status type priority")
-      .populate("supplyId", "name unit category")
-      .populate("warehouseId", "name location status")
-      .sort({ createdAt: 1 });
-
-    if (usePagination) {
-      queryBuilder.skip(skip).limit(limit);
-    }
-
-    return await queryBuilder;
+  async findAll(filter, skip = 0, limit = 100) {
+    return await MissionSupply.find(filter)
+      .populate("missionId", "name code") // Lấy name để hiện ở cột Mission
+      .populate("supplyId", "name unit category") // Lấy name, unit để hiện "gói/hộp"
+      .populate("warehouseId", "name")
+      .skip(skip)
+      .limit(limit)
+      .sort({ missionId: 1, createdAt: -1 }); // Gom các vật tư cùng Mission lại gần nhau
   }
 
   async count(filter) {
     return await MissionSupply.countDocuments(filter);
   }
 
-  async findById(id) {
-    return await MissionSupply.findById(id)
-      .populate("missionId")
-      .populate("supplyId");
-  }
-
   async create(data) {
+    // Xử lý nếu data là mảng (insertMany) hoặc object đơn
     return await MissionSupply.create(data);
   }
 
   async update(id, updateData) {
-    return await MissionSupply.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    return await MissionSupply.findByIdAndUpdate(id, updateData, { new: true });
   }
 }
 
-export default new MissionSupplyRepository();
+export const missionSupplyRepository = new MissionSupplyRepository();

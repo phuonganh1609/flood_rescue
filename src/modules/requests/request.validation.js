@@ -51,7 +51,7 @@ const addRequestSchema = Joi.object({
     "string.max": "Description cannot exceed 500 characters",
     "any.required": "Description is required",
   }),
-
+scenario: Joi.string().allow(null, ""), // PHẢI CÓ DÒNG NÀY
   peopleCount: Joi.number().integer().min(0).max(100).default(1).messages({
     "number.base": "People count must be a number",
     "number.min": "People count must be at least 0",
