@@ -15,13 +15,18 @@ export async function initTelegramBot() {
   }
 
   try {
-    botInstance = new TelegramBot(token, { polling: false });
+    botInstance = new TelegramBot(token, {
+      polling: {
+        autoStart: false,
+        params: { timeout: 10 },
+      },
+    });
 
-    // Drop pending updates & clear any existing webhook to avoid 409 Conflict on restart
-    await botInstance.deleteWebhook({ drop_pending_updates: true });
+    // Clear any existing webhook & drop pending updates to avoid 409 Conflict on restart
+    await botInstance.setWebHook("");
 
     // Start polling after clearing
-    botInstance.startPolling();
+    await botInstance.startPolling();
 
     // ─── /start ─────────────────────────────────────────────────
     botInstance.onText(/\/start/, (msg) => {
