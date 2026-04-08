@@ -51,7 +51,7 @@ const addRequestSchema = Joi.object({
     "string.max": "Description cannot exceed 500 characters",
     "any.required": "Description is required",
   }),
-scenario: Joi.string().allow(null, ""), // PHẢI CÓ DÒNG NÀY
+
   peopleCount: Joi.number().integer().min(0).max(100).default(1).messages({
     "number.base": "People count must be a number",
     "number.min": "People count must be at least 0",
@@ -65,17 +65,31 @@ scenario: Joi.string().allow(null, ""), // PHẢI CÓ DÒNG NÀY
       "array.base": "requestSupplies must be an array",
     }),
 
-  imageUrls: Joi.array()
+  media: Joi.array()
     .items(
-      Joi.string().uri().required().messages({
-        "string.uri": "Each image URL must be a valid HTTP/HTTPS URL",
-        "string.empty": "Image URL cannot be empty",
-      }),
+      Joi.object({
+        publicId: Joi.string().required().messages({
+          "string.empty": "publicId cannot be empty",
+          "any.required": "publicId is required",
+        }),
+        secureUrl: Joi.string().uri().required().messages({
+          "string.uri": "secureUrl must be a valid HTTP/HTTPS URL",
+          "any.required": "secureUrl is required",
+        }),
+        thumbnailUrl: Joi.string().uri().optional(),
+        format: Joi.string().optional(),
+        width: Joi.number().optional(),
+        height: Joi.number().optional(),
+        bytes: Joi.number().optional(),
+        resourceType: Joi.string().optional(),
+        description: Joi.string().optional(),
+        uploadedAt: Joi.date().optional(),
+      })
     )
     .max(5)
     .optional()
     .messages({
-      "array.base": "imageUrls must be an array",
+      "array.base": "media must be an array",
       "array.max": "Maximum 5 images allowed",
     }),
 });
@@ -210,7 +224,23 @@ const createRequestOnBehalfSchema = Joi.object({
 
   requestSupplies: Joi.array().items(requestSupplyItemSchema).default([]),
 
-  imageUrls: Joi.array().items(Joi.string().uri()).max(5).optional(),
+  media: Joi.array()
+    .items(
+      Joi.object({
+        publicId: Joi.string().required(),
+        secureUrl: Joi.string().uri().required(),
+        thumbnailUrl: Joi.string().uri().optional(),
+        format: Joi.string().optional(),
+        width: Joi.number().optional(),
+        height: Joi.number().optional(),
+        bytes: Joi.number().optional(),
+        resourceType: Joi.string().optional(),
+        description: Joi.string().optional(),
+        uploadedAt: Joi.date().optional(),
+      })
+    )
+    .max(5)
+    .optional(),
 });
 
 export {

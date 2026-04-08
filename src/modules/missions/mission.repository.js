@@ -12,6 +12,7 @@ class MissionRepository {
 
     const missions = await Mission.find(filter)
       .populate("coordinatorId", "displayName userName email phoneNumber")
+      .populate({ path: "comboSupplyId", select: "name incidentType supplies", populate: { path: "supplies.supplyId", select: "name unit category" } })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
@@ -28,24 +29,21 @@ class MissionRepository {
   }
 
   async findById(id) {
-    return await Mission.findById(id).populate(
-      "coordinatorId",
-      "displayName userName email phoneNumber",
-    );
+    return await Mission.findById(id)
+      .populate("coordinatorId", "displayName userName email phoneNumber")
+      .populate({ path: "comboSupplyId", select: "name incidentType supplies", populate: { path: "supplies.supplyId", select: "name unit category" } });
   }
 
   async findByCode(code) {
-    return await Mission.findOne({ code }).populate(
-      "coordinatorId",
-      "displayName userName email phoneNumber",
-    );
+    return await Mission.findOne({ code })
+      .populate("coordinatorId", "displayName userName email phoneNumber")
+      .populate({ path: "comboSupplyId", select: "name incidentType supplies", populate: { path: "supplies.supplyId", select: "name unit category" } });
   }
 
   async update(id, data) {
-    return await Mission.findByIdAndUpdate(id, data, { new: true }).populate(
-      "coordinatorId",
-      "displayName userName email phoneNumber",
-    );
+    return await Mission.findByIdAndUpdate(id, data, { new: true })
+      .populate("coordinatorId", "displayName userName email phoneNumber")
+      .populate({ path: "comboSupplyId", select: "name incidentType supplies", populate: { path: "supplies.supplyId", select: "name unit category" } });
   }
 
   async delete(id) {

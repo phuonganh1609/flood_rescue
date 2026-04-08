@@ -119,7 +119,8 @@ class TimelineService {
     });
   }
 
-  async acceptTimeline(timelineId, actorUserId) {
+  async acceptTimeline(timelineId, actorUserId, payload = {}) {
+    const { warehouseId } = payload;
     const timeline = await this.getTimelineById(timelineId);
     await this.assertMissionCanExecute(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
@@ -141,6 +142,31 @@ class TimelineService {
       err.statusCode = 409;
       err.errorCode = "TIMELINE_CONFLICT";
       throw err;
+    }
+
+    // Create combo supply request records for the manager to approve
+    const missionId = extractId(transitioned.missionId);
+    const teamId = extractId(transitioned.teamId);
+
+    try {
+      const mission = await missionRepository.findById(missionId);
+      if (mission?.comboSupplyId) {
+        const { comboSupplyRepository } = await import("../comboSupply/comboSupply.repository.js");
+        const { missionSupplyService } = await import("../missionSupplies/missionSupply.service.js");
+        const comboSupply = await comboSupplyRepository.findById(mission.comboSupplyId.toString());
+        if (comboSupply) {
+          await missionSupplyService.createComboSupplyRequest({
+            missionId,
+            teamId,
+            comboSupply,
+            warehouseId: warehouseId || null,
+            createdBy: actorUserId,
+          });
+        }
+      }
+    } catch (comboErr) {
+      // Non-blocking: log but don't fail the accept
+      console.error("[acceptTimeline] Combo supply creation error:", comboErr.message);
     }
 
     await missionRequestRepository.markPendingInProgressByMission(

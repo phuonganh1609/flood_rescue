@@ -4,6 +4,7 @@ import http from "http";
 import app from "./app.js";
 import { connectDB } from "./config/database.js";
 import { initializeSocket } from "./sockets/socket.server.js";
+import { initTelegramBot } from "./modules/telegram/telegram.bot.js";
 
 // Load .env.test for test runs, otherwise default to .env
 if (process.env.NODE_ENV === "test") {
@@ -24,6 +25,9 @@ async function startServer() {
 
     // Initialize Socket.io
     initializeSocket(server);
+
+    // Initialize Telegram Bot (polling)
+    await initTelegramBot();
 
     // Start server
     server.listen(PORT, () => {

@@ -18,7 +18,7 @@ import timelineRoute from "./modules/timelines/timeline.routes.js";
 import timelineSupplyRoute from "./modules/timelineSupplies/timelineSupply.routes.js";
 import missionSupplyRoute from "./modules/missionSupplies/missionSupply.routes.js";
 import teamRequestRoute from "./modules/teamRequests/teamRequest.routes.js";
-import missionVehicleRoute from "./modules/missionVehicles/missionVehicles.route.js";
+import comboSupplyRoute from "./modules/comboSupply/comboSupply.route.js";
 import userRoute from "./modules/users/user.routes.js";
 import "./modules/notifications/notify.listener.js"; // Initialize event listeners
 import { notFound, errorHandler } from "./middlewares/error.middleware.js";
@@ -26,6 +26,8 @@ import supplyRoute from "./modules/supply/supply.routes.js";
 import inventoryRoute from "./modules/inventory/inventoryItem.route.js";
 import warehouseRoute from "./modules/warehouse/warehouse.route.js";
 import vehicleRoute from "./modules/vehicles/vehicle.routes.js";
+import cloudinaryRoute from "./modules/cloudinary/cloudinary.routes.js";
+import telegramRoute from "./modules/telegram/telegram.routes.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -117,7 +119,9 @@ app.use("/api/inventory", inventoryRoute);
 app.use("/api/warehouse", warehouseRoute);
 app.use("/api/vehicles", vehicleRoute);
 app.use("/api/users", userRoute);
-app.use("/api/mission-vehicles", missionVehicleRoute);
+app.use("/api/cloudinary", cloudinaryRoute);
+app.use("/api/telegram", telegramRoute);
+app.use("/api/combo-supplies", comboSupplyRoute);
 
 // Error handling middlewares (must be after all routes)
 app.use(notFound);

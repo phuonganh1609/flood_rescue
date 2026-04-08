@@ -39,6 +39,11 @@ const missionSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    comboSupplyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ComboSupply",
+      default: null,
+    },
   },
   {
     timestamps: true,

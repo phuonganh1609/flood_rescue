@@ -41,9 +41,22 @@ export const SCENARIOS = {
 // --- Sub-schemas ---
 const MediaSchema = new Schema(
   {
-    imageUrl: { type: String, required: true },
+    publicId: { type: String, required: true },
+    secureUrl: { type: String, required: true },
+    thumbnailUrl: { type: String },
+    format: { type: String },
+    width: { type: Number },
+    height: { type: Number },
+    bytes: { type: Number },
+    resourceType: { type: String, default: "image" },
+    context: { type: Map, of: String },
     description: { type: String },
     uploadedAt: { type: Date, default: Date.now },
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    imageUrl: { type: String },
   },
   { _id: false },
 );

@@ -1,9 +1,7 @@
 import { authRepository } from "../auth/auth.repository.js";
 import { requestRepository } from "./request.repository.js";
-import { REQUEST_STATUS, TERMINAL_STATUSES, SCENARIOS } from "./request.model.js";
+import { REQUEST_STATUS, TERMINAL_STATUSES } from "./request.model.js";
 import { eventBus } from "../../utils/events.js";
-import Supply from "../supply/supply.model.js";
-import { missionSupplyRepository } from "../missionSupplies/missionSupply.repository.js";
 
 /**
  * Allowed state transitions for the Request state machine (Unified Flow 2.2)
@@ -58,70 +56,74 @@ class RequestService {
    * Create a new request (Citizen self-service)
    * Validates: 1 active request per Citizen
    */
+  async createRequest(userId, requestData) {
+    const user = await authRepository.findUserById(userId);
+    if (!user) {
+      const err = new Error("User does not exist");
+      err.statusCode = 404;
+      throw err;
+    }
 
+    // Business rule: 1 active request per citizen
+    const activeRequest = await requestRepository.findActiveRequest(userId);
+    if (activeRequest) {
+      const err = new Error(
+        "You already have an active request. " +
+          "Please wait until it is closed or cancelled before creating a new one.",
+      );
+      err.statusCode = 400;
+      throw err;
+    }
 
-async createRequest(userId, requestData) {
-  // 1. Check user & active request (Giữ nguyên logic cũ của bạn)
-  const user = await authRepository.findUserById(userId);
-  if (!user) throw new Error("User does not exist");
-  
-  const activeRequest = await requestRepository.findActiveRequest(userId);
-  if (activeRequest) throw new Error("You already have an active request.");
+    const {
+      type,
+      incidentType,
+      location,
+      description,
+      peopleCount,
+      requestSupplies,
+      media: mediaInput,
+    } = requestData;
 
-  const { scenario, peopleCount, requestSupplies, location, description, type, incidentType, imageUrls } = requestData;
-  let finalRequestSupplies = [];
+    const media = (mediaInput || []).map((item) => ({
+      publicId: item.publicId,
+      secureUrl: item.secureUrl,
+      thumbnailUrl: item.thumbnailUrl,
+      format: item.format,
+      width: item.width,
+      height: item.height,
+      bytes: item.bytes,
+      resourceType: item.resourceType || "image",
+      description: item.description,
+      uploadedAt: item.uploadedAt || new Date(),
+      uploadedBy: userId,
+    }));
 
-  // ==========================================
-  // 🔥 SỬA LOGIC MAPPING ENUM Ở ĐÂY
-  // ==========================================
-  if (scenario) {
-    const scenarioData = SCENARIOS[scenario];
-    if (!scenarioData) throw new Error("Scenario không hợp lệ");
-
-    // Chuyển tất cả needs sang VIẾT HOA để khớp với Enum Database
-    const normalizedNeeds = scenarioData.needs.map(n => n.toUpperCase());
-
-    const supplies = await Supply.find({
-      category: { $in: normalizedNeeds }, // Bây giờ sẽ tìm 'FOOD', 'WATER'...
-      isActive: true
+    const newRequest = await requestRepository.createRequest({
+      userId,
+      userName: user.displayName || user.userName,
+      phoneNumber: user.phoneNumber,
+      createdBy: userId,
+      source: "CITIZEN",
+      type,
+      incidentType: incidentType || "Other",
+      location,
+      description,
+      peopleCount: peopleCount || 1,
+      requestSupplies: requestSupplies || [],
+      media,
     });
 
-    console.log(`Tìm thấy ${supplies.length} vật tư cho scenario ${scenario}`);
+    eventBus.emit("REQUEST_SUBMITTED", {
+      requestId: newRequest._id,
+      userId,
+    });
 
-    finalRequestSupplies = supplies.map(s => ({
-      supplyId: s._id,
-      requestedQty: peopleCount || 1
-    }));
-  } else {
-    finalRequestSupplies = requestSupplies || [];
+    return {
+      message: "Request created successfully",
+      data: newRequest,
+    };
   }
-
-  // Nếu vẫn rỗng, có thể do DB chưa có vật tư nào thuộc Category đó
-  if (finalRequestSupplies.length === 0) {
-    console.error("KHÔNG CÓ VẬT TƯ: Hãy kiểm tra bảng Supply xem đã có món nào thuộc category tương ứng chưa.");
-  }
-
-  // 3. Tạo Request chính
-  const newRequest = await requestRepository.createRequest({
-    userId,
-    userName: user.displayName || user.userName,
-    phoneNumber: user.phoneNumber,
-    location,
-    description,
-    createdBy: userId,
-      source: "CITIZEN",
-    type: type || "Relief",
-    incidentType: incidentType || "Other",
-    scenario,
-    peopleCount,
-    requestSupplies: finalRequestSupplies,
-    media: (imageUrls || []).map(url => ({ imageUrl: url, uploadedAt: new Date() }))
-  });
-
-
-
-  return { success: true, data: newRequest };
-}
 
   /**
    * Create a request on behalf of a citizen (Coordinator only)
@@ -141,7 +143,7 @@ async createRequest(userId, requestData) {
       peopleCount,
       priority,
       requestSupplies,
-      imageUrls,
+      media: mediaInput,
     } = requestData;
 
     let userId = null;
@@ -182,9 +184,18 @@ async createRequest(userId, requestData) {
       phoneNumber = inputPhoneNumber;
     }
 
-    const media = (imageUrls || []).map((url) => ({
-      imageUrl: url,
-      uploadedAt: new Date(),
+    const media = (mediaInput || []).map((item) => ({
+      publicId: item.publicId,
+      secureUrl: item.secureUrl,
+      thumbnailUrl: item.thumbnailUrl,
+      format: item.format,
+      width: item.width,
+      height: item.height,
+      bytes: item.bytes,
+      resourceType: item.resourceType || "image",
+      description: item.description,
+      uploadedAt: item.uploadedAt || new Date(),
+      uploadedBy: coordinatorId,
     }));
 
     const newRequest = await requestRepository.createRequest({
@@ -281,7 +292,6 @@ async createRequest(userId, requestData) {
 
     if (approved) {
       eventBus.emit("REQUEST_VERIFIED", { requestId, citizenId });
-      
     } else {
       eventBus.emit("REQUEST_REJECTED", {
         requestId,

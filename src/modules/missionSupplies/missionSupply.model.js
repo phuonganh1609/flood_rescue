@@ -11,10 +11,11 @@ const missionSupplySchema = new mongoose.Schema(
   {
     missionId: { type: mongoose.Schema.Types.ObjectId, ref: "Mission", required: false, index: true },
     supplyId: { type: mongoose.Schema.Types.ObjectId, ref: "Supply", required: true, index: true },
-    requestId: { type: mongoose.Schema.Types.ObjectId, ref: "Request", index: true }, // Link tới Request gốc
+    requestId: { type: mongoose.Schema.Types.ObjectId, ref: "Request", index: true },
     warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse", default: null },
+    teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team", default: null, index: true },
+    comboSupplyId: { type: mongoose.Schema.Types.ObjectId, ref: "ComboSupply", default: null },
     
-    // Đổi tên từ plannedQty thành requestedQty để khớp với code tạo của bạn
     requestedQty: { type: Number, required: true, min: 0, default: 0 },
     
     allocatedQty: { type: Number, min: 0, default: 0 },

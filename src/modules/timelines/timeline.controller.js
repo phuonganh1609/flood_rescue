@@ -82,7 +82,7 @@ class TimelineController {
     if (!timelineId) return;
 
     try {
-      const timeline = await timelineService.acceptTimeline(timelineId, req.user.id);
+      const timeline = await timelineService.acceptTimeline(timelineId, req.user.id, req.body);
       return sendSuccess(res, {
         data: timeline,
         message: "Timeline accepted successfully",

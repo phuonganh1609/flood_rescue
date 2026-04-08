@@ -9,6 +9,22 @@ import {
   NOTIFICATION_EVENTS,
 } from "../../sockets/notification.emitter.js";
 import NotifyModel from "./notify.model.js";
+import {
+  sendTelegramToUser,
+  sendTelegramToUsers,
+  escapeHTML,
+} from "../telegram/telegram.service.js";
+
+// ─── Telegram Helper ──────────────────────────────────────────────────────────
+/**
+ * Tạo tin nhắn Telegram HTML chuẩn
+ * @param {string} emoji
+ * @param {string} title  - Plain text (sẽ được escape)
+ * @param {string} body   - Plain text (sẽ được escape)
+ */
+function tgMsg(emoji, title, body) {
+  return `${emoji} <b>${escapeHTML(title)}</b>\n${escapeHTML(body)}`;
+}
 
 const TEAM_MEMBER_ROLE = "TEAM_MEMBER";
 
@@ -82,6 +98,8 @@ eventBus.on("REQUEST_SUBMITTED", async (payload) => {
       // Emit real-time notification
       emitToUser(userId, NOTIFICATION_EVENTS.NEW_NOTIFICATION, result.data);
       await emitUnreadCountForUser(userId);
+      // Telegram
+      await sendTelegramToUser(userId, tgMsg("🆘", "Yêu cầu cứu hộ mới", "Có yêu cầu cứu hộ mới cần xác minh"));
     }
   } catch (error) {
     console.error("Error in REQUEST_SUBMITTED listener:", error);
@@ -188,6 +206,8 @@ eventBus.on("REQUEST_AUTO_CLOSED", async (payload) => {
 
       emitToUser(userId, NOTIFICATION_EVENTS.REQUEST_AUTO_CLOSED, result.data);
       await emitUnreadCountForUser(userId);
+      // Telegram
+      await sendTelegramToUser(userId, tgMsg("🔒", "Yêu cầu đã đóng", "Yêu cầu cứu hộ đã tự động đóng do đã hoàn thành đủ mục tiêu"));
     }
   } catch (error) {
     console.error("Error in REQUEST_AUTO_CLOSED listener:", error);
@@ -221,6 +241,10 @@ eventBus.on("TEAM_APPLICATION_SUBMITTED", async (payload) => {
         result.data,
       );
       await emitUnreadCountForUser(userId);
+      // Telegram (chỉ gửi cho Coordinator)
+      if (role === "COORDINATOR") {
+        await sendTelegramToUser(userId, tgMsg("📋", "Đơn ứng tuyển mới", `${payload.citizenName} vừa nộp đơn ứng tuyển Rescue Team`));
+      }
     }
   } catch (error) {
     console.error("Error in TEAM_APPLICATION_SUBMITTED listener:", error);
@@ -303,6 +327,10 @@ eventBus.on("TEAM_APPLICATION_WITHDRAWN", async (payload) => {
         result.data,
       );
       await emitUnreadCountForUser(userId);
+      // Telegram (chỉ gửi cho Coordinator)
+      if (role === "COORDINATOR") {
+        await sendTelegramToUser(userId, tgMsg("↩️", "Đơn ứng tuyển bị rút", `${payload.citizenName} đã rút đơn ứng tuyển Rescue Team`));
+      }
     }
   } catch (error) {
     console.error("Error in TEAM_APPLICATION_WITHDRAWN listener:", error);
@@ -380,6 +408,8 @@ eventBus.on("MISSION_ASSIGNED", async (payload) => {
         teamResult.data,
       );
       await emitUnreadCountForUser(teamMemberId);
+      // Telegram
+      await sendTelegramToUser(teamMemberId, tgMsg("📌", "Nhiệm vụ mới", `Đội của bạn có nhiệm vụ cứu hộ mới - Mission #${missionLabel}`));
     }
   } catch (error) {
     console.error("Error in MISSION_ASSIGNED listener:", error);
@@ -420,6 +450,8 @@ eventBus.on("MISSION_ACCEPTED", async (payload) => {
 
       emitToUser(userId, NOTIFICATION_EVENTS.MISSION_ACCEPTED, result.data);
       await emitUnreadCountForUser(userId);
+      // Telegram
+      await sendTelegramToUser(userId, tgMsg("👍", "Đội đã nhận nhiệm vụ", `Đội "${teamName}" đã nhận nhiệm vụ #${missionId}`));
     }
 
     const teamMemberIds = await resolveTeamMemberIds([teamId], {
@@ -438,6 +470,8 @@ eventBus.on("MISSION_ACCEPTED", async (payload) => {
 
       emitToUser(teamMemberId, NOTIFICATION_EVENTS.MISSION_ACCEPTED, result.data);
       await emitUnreadCountForUser(teamMemberId);
+      // Telegram
+      await sendTelegramToUser(teamMemberId, tgMsg("👍", "Nhiệm vụ đã được xác nhận", `Một thành viên trong đội đã xác nhận nhiệm vụ #${missionId}${teamName ? ` (${teamName})` : ""}`));
     }
   } catch (error) {
     console.error("Error in MISSION_ACCEPTED listener:", error);
@@ -526,6 +560,8 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
 
       emitToUser(userId, NOTIFICATION_EVENTS.MISSION_COMPLETED, result.data);
       await emitUnreadCountForUser(userId);
+      // Telegram
+      await sendTelegramToUser(userId, tgMsg("🏁", "Nhiệm vụ hoàn thành", `Nhiệm vụ #${missionId} hoàn thành thành công`));
     }
 
     const teamMemberIds = await resolveTeamMemberIds([teamId], {
@@ -548,6 +584,8 @@ eventBus.on("MISSION_COMPLETED", async (payload) => {
         teamResult.data,
       );
       await emitUnreadCountForUser(teamMemberId);
+      // Telegram
+      await sendTelegramToUser(teamMemberId, tgMsg("🏁", "Nhiệm vụ hoàn thành", `Đội của bạn đã hoàn thành nhiệm vụ #${missionId}`));
     }
   } catch (error) {
     console.error("Error in MISSION_COMPLETED listener:", error);
@@ -608,6 +646,8 @@ eventBus.on("MISSION_FAILED", async (payload) => {
 
       emitToUser(userId, NOTIFICATION_EVENTS.MISSION_FAILED, result.data);
       await emitUnreadCountForUser(userId);
+      // Telegram
+      await sendTelegramToUser(userId, tgMsg("⚠️", "Nhiệm vụ thất bại", `Nhiệm vụ #${missionId} thất bại - cần phân công lại`));
     }
 
     const teamMemberIds = await resolveTeamMemberIds([teamId], {
@@ -626,6 +666,8 @@ eventBus.on("MISSION_FAILED", async (payload) => {
 
       emitToUser(teamMemberId, NOTIFICATION_EVENTS.MISSION_FAILED, teamResult.data);
       await emitUnreadCountForUser(teamMemberId);
+      // Telegram
+      await sendTelegramToUser(teamMemberId, tgMsg("⚠️", "Nhiệm vụ thất bại", `Nhiệm vụ #${missionId} của đội chưa thành công${reason ? ` (Lý do: ${reason})` : ``}`));
     }
   } catch (error) {
     console.error("Error in MISSION_FAILED listener:", error);
@@ -683,6 +725,8 @@ eventBus.on("MISSION_ABORTED", async (payload) => {
 
       emitToUser(teamMemberId, NOTIFICATION_EVENTS.MISSION_ABORTED, teamResult.data);
       await emitUnreadCountForUser(teamMemberId);
+      // Telegram
+      await sendTelegramToUser(teamMemberId, tgMsg("🛑", "Nhiệm vụ bị huỷ", `Nhiệm vụ #${missionLabel} đã bị điều phối viên huỷ. Vui lòng dừng thực thi và chờ điều động tiếp theo.`));
     }
 
     const coordinators = await authService.getCurrentUsersByRole("Rescue Coordinator");
@@ -701,6 +745,8 @@ eventBus.on("MISSION_ABORTED", async (payload) => {
 
       emitToUser(userId, NOTIFICATION_EVENTS.MISSION_ABORTED, result.data);
       await emitUnreadCountForUser(userId);
+      // Telegram
+      await sendTelegramToUser(userId, tgMsg("🛑", "Nhiệm vụ bị huỷ", `Nhiệm vụ #${missionLabel} đã được abort.${teamNameText}`));
     }
   } catch (error) {
     console.error("Error in MISSION_ABORTED listener:", error);
@@ -741,6 +787,8 @@ eventBus.on("MISSION_WITHDRAWN", async (payload) => {
 
       emitToUser(userId, NOTIFICATION_EVENTS.MISSION_WITHDRAWN, result.data);
       await emitUnreadCountForUser(userId);
+      // Telegram
+      await sendTelegramToUser(userId, tgMsg("↩️", "Đội từ chối nhiệm vụ", `Đội "${teamName}" đã từ chối nhiệm vụ - cần phân công lại${withdrawalReason ? ` (Lý do: ${withdrawalReason})` : ``}`));
     }
 
     const teamMemberIds = await resolveTeamMemberIds([teamId], {
@@ -763,6 +811,8 @@ eventBus.on("MISSION_WITHDRAWN", async (payload) => {
         teamResult.data,
       );
       await emitUnreadCountForUser(teamMemberId);
+      // Telegram
+      await sendTelegramToUser(teamMemberId, tgMsg("↩️", "Thành viên rút khỏi nhiệm vụ", `Một thành viên trong đội đã rút khỏi nhiệm vụ #${missionId}${withdrawalReason ? ` (Lý do: ${withdrawalReason})` : ``}`));
     }
   } catch (error) {
     console.error("Error in MISSION_WITHDRAWN listener:", error);
@@ -796,6 +846,8 @@ eventBus.on("MISSION_REASSIGNED", async (payload) => {
         result.data,
       );
       await emitUnreadCountForUser(teamMemberId);
+      // Telegram
+      await sendTelegramToUser(teamMemberId, tgMsg("🔄", "Nhiệm vụ được chuyển giao", `Nhiệm vụ #${missionId} đã được chuyển cho đội bạn`));
     }
   } catch (error) {
     console.error("Error in MISSION_REASSIGNED listener:", error);
