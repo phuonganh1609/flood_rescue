@@ -23,6 +23,7 @@ const missionRequestSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    comboSupplyId: { type: mongoose.Schema.Types.ObjectId, ref: "ComboSupply", index: true },
     status: {
       type: String,
       enum: Object.values(MISSION_REQUEST_STATUS),

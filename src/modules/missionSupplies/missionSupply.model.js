@@ -12,12 +12,12 @@ const missionSupplySchema = new mongoose.Schema(
     missionId: { type: mongoose.Schema.Types.ObjectId, ref: "Mission", required: false, index: true },
     supplyId: { type: mongoose.Schema.Types.ObjectId, ref: "Supply", required: true, index: true },
     requestId: { type: mongoose.Schema.Types.ObjectId, ref: "Request", index: true },
-    warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse", default: null },
+    warehouseId: { type: mongoose.Schema.Types.ObjectId, ref: "Warehouse", index: true },
     teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team", default: null, index: true },
-    comboSupplyId: { type: mongoose.Schema.Types.ObjectId, ref: "ComboSupply", default: null },
-    
+    comboSupplyId: { type: mongoose.Schema.Types.ObjectId, ref: "ComboSupply", defaul: null, index: true },
+
     requestedQty: { type: Number, required: true, min: 0, default: 0 },
-    
+
     allocatedQty: { type: Number, min: 0, default: 0 },
     claimedQty: { type: Number, min: 0, default: 0 },
     status: {
