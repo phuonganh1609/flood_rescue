@@ -1,9 +1,8 @@
-const categories = ["Adult", "Child", "Elderly", "Injured", "Specialized", "Other"];
+import Joi from "joi";
 
 export const createComboSupplyValidation = Joi.object({
   name: Joi.string().required(),
   type: Joi.string().valid("Citizen", "Rescue Team").required(),
-  category: Joi.string().valid(...categories).required(),
   description: Joi.string().required(),
   supplies: Joi.array().items(
     Joi.object({

@@ -1,33 +1,38 @@
 import TimelineVehicle from "./timelineVehicle.model.js";
+import Vehicle from "../vehicles/vehicle.model.js"; // Giả sử đường dẫn model Vehicle của bạn
 
 class TimelineVehicleRepository {
-  async getByTimelineId(timelineId) {
-    return await TimelineVehicle.find({ timelineId })
-      .populate({
-        path: "missionVehicleId",
-        populate: [
-          { path: "vehicleId", select: "licensePlate type capacity location" },
-        ],
-      })
-      .populate("vehicleId", "licensePlate type capacity location")
-      .sort({ claimedAt: -1 });
+  async findByTimeline(timelineId) {
+    return await TimelineVehicle.find({ timelineId }).populate("vehicleId");
   }
 
-  async findOneByTimelineAndMissionVehicle(timelineId, missionVehicleId, session = null) {
-    return await TimelineVehicle.findOne({ timelineId, missionVehicleId }).session(session);
+  async findActiveClaim(timelineId, vehicleId) {
+    return await TimelineVehicle.findOne({
+      timelineId,
+      vehicleId,
+      returnedAt: { $exists: false },
+    });
   }
 
-  async create(data, session = null) {
-    const result = await TimelineVehicle.create([data], { session });
-    return result[0];
+  async create(data) {
+    return await TimelineVehicle.create(data);
   }
 
-  async countByMissionVehicle(missionVehicleId, session = null) {
-    return await TimelineVehicle.countDocuments({ missionVehicleId }).session(session);
+  async updateReturn(id) {
+    return await TimelineVehicle.findByIdAndUpdate(
+      id,
+      { returnedAt: new Date() },
+      { new: true }
+    );
   }
 
-  async countReturnedByMissionVehicle(missionVehicleId, session = null) {
-    return await TimelineVehicle.countDocuments({ missionVehicleId, returnedAt: { $ne: null } }).session(session);
+  // Kiểm tra xem xe có đang bị team khác mượn không
+  async isVehicleBusy(vehicleId) {
+    const active = await TimelineVehicle.findOne({
+      vehicleId,
+      returnedAt: { $exists: false }
+    });
+    return !!active;
   }
 }
 

@@ -8,12 +8,7 @@ const timelineVehicleSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    missionVehicleId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "MissionVehicle",
-      required: true,
-      index: true,
-    },
+
     vehicleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Vehicle",

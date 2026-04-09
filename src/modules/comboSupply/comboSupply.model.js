@@ -14,12 +14,7 @@ const ComboSupplySchema = new Schema(
       enum: ["Citizen", "Rescue Team"],
       required: true,
     },
-    // Thêm phân loại cụ thể (Người lớn, trẻ em, bị thương...)
-    category: {
-      type: String,
-      enum: ["Adult", "Child", "Elderly", "Injured", "Specialized", "Other"],
-      required: true,
-    },
+
     description: {
       type: String,
       required: true,

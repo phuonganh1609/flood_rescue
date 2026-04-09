@@ -9,10 +9,21 @@ class ComboSupplyRepository {
     return await ComboSupply.findById(id).populate("supplies.supplyId");
   }
 
-  async findAll(query = {}) {
+  async findAll(query = {}, userRole = null) {
     const filters = {};
-    if (query.type) filters.type = query.type; // Lọc theo Citizen hoặc Rescue Team
-    if (query.category) filters.category = query.category; // Lọc theo Adult, Child...
+
+    // 1. Logic lọc theo Role
+    if (userRole === 'Citizen') {
+      filters.type = 'Citizen';
+    } else if (userRole === 'Rescue Team') {
+      filters.type = 'Rescue Team';
+    } else {
+      // Admin, Manager, Coordinator có thể xem theo query truyền lên hoặc xem tất cả
+      if (query.type) filters.type = query.type;
+    }
+
+    // Các filter khác giữ nguyên
+    if (query.category) filters.category = query.category;
     if (query.isActive !== undefined) filters.isActive = query.isActive;
 
     const limit = query.limit ? parseInt(query.limit) : 20;
