@@ -15,11 +15,15 @@ const locationSchema = Joi.object({
     }),
 }).required();
 
+const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+
 const requestSupplyItemSchema = Joi.object({
-  name: Joi.string()
+  supplyId: Joi.string()
+    .pattern(objectIdPattern)
     .required()
     .messages({
-      "string.pattern.base": "supplyName must be a valid supply name",
+      "string.pattern.base": "supplyId must be a valid ObjectId",
+      "any.required": "supplyId is required",
     }),
   requestedQty: Joi.number().integer().min(1).required().messages({
     "number.min": "Requested quantity must be at least 1",
@@ -57,6 +61,14 @@ const addRequestSchema = Joi.object({
     "number.min": "People count must be at least 0",
     "number.max": "People count cannot exceed 100",
   }),
+
+  comboSupplyId: Joi.string()
+    .pattern(objectIdPattern)
+    .optional()
+    .allow(null, "")
+    .messages({
+      "string.pattern.base": "comboSupplyId must be a valid ObjectId",
+    }),
 
   requestSupplies: Joi.array()
     .items(requestSupplyItemSchema)
@@ -220,6 +232,14 @@ const createRequestOnBehalfSchema = Joi.object({
     .default("Normal")
     .messages({
       "any.only": "Priority must be Critical, High, or Normal",
+    }),
+
+  comboSupplyId: Joi.string()
+    .pattern(objectIdPattern)
+    .optional()
+    .allow(null, "")
+    .messages({
+      "string.pattern.base": "comboSupplyId must be a valid ObjectId",
     }),
 
   requestSupplies: Joi.array().items(requestSupplyItemSchema).default([]),

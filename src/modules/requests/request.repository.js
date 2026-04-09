@@ -30,6 +30,15 @@ class RequestRepository {
   }
 
   /**
+   * Find request by ID with requestSupplies.supplyId populated (needed for snapshot building)
+   */
+  async findRequestByIdWithSupplies(requestId) {
+    return await Request.findById(requestId)
+      .populate("userId", "displayName userName email phoneNumber")
+      .populate("requestSupplies.supplyId", "name unit category");
+  }
+
+  /**
    * Check if user has an active (non-terminal) request
    * @returns {Promise<Object|null>} the active request, or null if none
    */

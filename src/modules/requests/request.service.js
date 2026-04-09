@@ -2,6 +2,7 @@ import { authRepository } from "../auth/auth.repository.js";
 import { requestRepository } from "./request.repository.js";
 import { REQUEST_STATUS, TERMINAL_STATUSES } from "./request.model.js";
 import { eventBus } from "../../utils/events.js";
+import { comboSupplyRepository } from "../comboSupply/comboSupply.repository.js";
 
 /**
  * Allowed state transitions for the Request state machine (Unified Flow 2.2)
@@ -81,9 +82,25 @@ class RequestService {
       location,
       description,
       peopleCount,
-      requestSupplies,
+      comboSupplyId,
+      requestSupplies: rawSupplies,
       media: mediaInput,
     } = requestData;
+
+    // Resolve requestSupplies from combo if comboSupplyId is provided
+    let requestSupplies = rawSupplies || [];
+    if (comboSupplyId) {
+      const combo = await comboSupplyRepository.findById(comboSupplyId);
+      if (!combo) {
+        const err = new Error(`ComboSupply not found: ${comboSupplyId}`);
+        err.statusCode = 404;
+        throw err;
+      }
+      requestSupplies = (combo.supplies || []).map((item) => ({
+        supplyId: item.supplyId._id?.toString?.() || item.supplyId.toString(),
+        requestedQty: item.quantity,
+      }));
+    }
 
     const media = (mediaInput || []).map((item) => ({
       publicId: item.publicId,
@@ -110,7 +127,8 @@ class RequestService {
       location,
       description,
       peopleCount: peopleCount || 1,
-      requestSupplies: requestSupplies || [],
+      comboSupplyId: comboSupplyId || null,
+      requestSupplies,
       media,
     });
 
@@ -142,9 +160,25 @@ class RequestService {
       description,
       peopleCount,
       priority,
-      requestSupplies,
+      comboSupplyId,
+      requestSupplies: rawSupplies,
       media: mediaInput,
     } = requestData;
+
+    // Resolve requestSupplies from combo if comboSupplyId is provided
+    let requestSupplies = rawSupplies || [];
+    if (comboSupplyId) {
+      const combo = await comboSupplyRepository.findById(comboSupplyId);
+      if (!combo) {
+        const err = new Error(`ComboSupply not found: ${comboSupplyId}`);
+        err.statusCode = 404;
+        throw err;
+      }
+      requestSupplies = (combo.supplies || []).map((item) => ({
+        supplyId: item.supplyId._id?.toString?.() || item.supplyId.toString(),
+        requestedQty: item.quantity,
+      }));
+    }
 
     let userId = null;
     let userName;
@@ -211,7 +245,8 @@ class RequestService {
       peopleCount: peopleCount || 1,
       priority: priority || "Normal",
       status: REQUEST_STATUS.VERIFIED, // auto-verified
-      requestSupplies: requestSupplies || [],
+      comboSupplyId: comboSupplyId || null,
+      requestSupplies,
       media,
     });
 

@@ -11,12 +11,14 @@ const createMissionSchema = Joi.object({
   description: Joi.string().max(1000).allow("", null),
   priority: Joi.string().valid("Critical", "High", "Normal").default("Normal"),
   type: Joi.string().valid("RESCUE", "RELIEF").required(),
+  comboSupplyId: objectId.optional().allow(null, "").label("comboSupplyId"),
 });
 
 const updateMissionSchema = Joi.object({
   name: Joi.string().trim().min(3).max(200),
   description: Joi.string().max(1000).allow("", null),
   priority: Joi.string().valid("Critical", "High", "Normal"),
+  comboSupplyId: objectId.optional().allow(null, "").label("comboSupplyId"),
 }).min(1); // Require at least one field to update
 
 const addRequestsSchema = Joi.object({

@@ -284,7 +284,8 @@ class MissionRequestRepository {
       MissionRequest.find(filter)
         .populate({
           path: "requestId",
-          select: "userName phoneNumber location peopleCount priority requestSupplies media",
+          select: "userName phoneNumber location peopleCount priority requestSupplies media comboSupplyId",
+          populate: { path: "requestSupplies.supplyId", select: "name unit category" },
         })
         .sort({ createdAt: 1 })
         .skip(skip)

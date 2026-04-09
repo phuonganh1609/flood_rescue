@@ -232,7 +232,7 @@ class MissionService {
 
     for (const requestId of uniqueRequestIds) {
       const [request, existing] = await Promise.all([
-        requestRepository.findRequestById(requestId),
+        requestRepository.findRequestByIdWithSupplies(requestId),
         missionRequestRepository.findByMissionAndRequest(id, requestId),
       ]);
 
@@ -268,7 +268,12 @@ class MissionService {
           peopleNeeded: request.peopleCount || 0,
           peopleRescued: 0,
           peopleRemaining: request.peopleCount || 0,
-          requestSuppliesSnapshot: request.requestSupplies || [],
+          requestSuppliesSnapshot: (request.requestSupplies || []).map((item) => ({
+            supplyId: item.supplyId?._id?.toString() || item.supplyId?.toString(),
+            name: item.supplyId?.name || "",
+            unit: item.supplyId?.unit || "",
+            requestedQty: item.requestedQty,
+          })),
           note: note || null,
         }),
       );
