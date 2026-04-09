@@ -11,7 +11,8 @@ class ComboSupplyRepository {
 
   async findAll(query = {}) {
     const filters = {};
-    if (query.incidentType) filters.incidentType = query.incidentType;
+    if (query.type) filters.type = query.type; // Lọc theo Citizen hoặc Rescue Team
+    if (query.category) filters.category = query.category; // Lọc theo Adult, Child...
     if (query.isActive !== undefined) filters.isActive = query.isActive;
 
     const limit = query.limit ? parseInt(query.limit) : 20;
