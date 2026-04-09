@@ -6,8 +6,9 @@ class ComboSupplyService {
     return await comboSupplyRepository.create(payload);
   }
 
-  async getComboSupplies(query) {
-    return await comboSupplyRepository.findAll(query);
+  async getComboSupplies(query, user) {
+    // Truyền role của user vào repository
+    return await comboSupplyRepository.findAll(query, user.role);
   }
 
   async getComboSupplyById(id) {

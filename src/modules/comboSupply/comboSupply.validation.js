@@ -2,7 +2,7 @@ import Joi from "joi";
 
 export const createComboSupplyValidation = Joi.object({
   name: Joi.string().required(),
-  incidentType: Joi.string().valid("Flood", "Trapped", "Injured", "Landslide", "Other").required(),
+  type: Joi.string().valid("Citizen", "Rescue Team").required(),
   description: Joi.string().required(),
   supplies: Joi.array().items(
     Joi.object({
@@ -15,7 +15,8 @@ export const createComboSupplyValidation = Joi.object({
 
 export const updateComboSupplyValidation = Joi.object({
   name: Joi.string().optional(),
-  incidentType: Joi.string().valid("Flood", "Trapped", "Injured", "Landslide", "Other").optional(),
+  type: Joi.string().valid("Citizen", "Rescue Team").optional(),
+  category: Joi.string().valid(...categories).optional(),
   description: Joi.string().optional(),
   supplies: Joi.array().items(
     Joi.object({

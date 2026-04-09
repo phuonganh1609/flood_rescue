@@ -23,8 +23,10 @@ export const createComboSupply = async (req, res) => {
 
 export const getComboSupplies = async (req, res) => {
   try {
-    const result = await comboSupplyService.getComboSupplies(req.query);
+    // req.user chứa thông tin user đã login (có trường role)
+    const result = await comboSupplyService.getComboSupplies(req.query, req.user);
     const { data, ...meta } = result;
+
     return response.sendSuccess(res, {
       data,
       meta,

@@ -8,11 +8,13 @@ const ComboSupplySchema = new Schema(
       required: true,
       unique: true,
     },
-    incidentType: {
+    // Thay đổi từ incidentType sang type
+    type: {
       type: String,
-      enum: ["Flood", "Trapped", "Injured", "Landslide", "Other"],
+      enum: ["Citizen", "Rescue Team"],
       required: true,
     },
+
     description: {
       type: String,
       required: true,

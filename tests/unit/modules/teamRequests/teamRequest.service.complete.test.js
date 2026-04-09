@@ -21,6 +21,7 @@ jest.unstable_mockModule("../../../../src/modules/teamRequests/teamRequest.repos
     findById: jest.fn(),
     markComplete: jest.fn(),
     countIncompleteByMissionAndTeam: jest.fn(),
+    findCompletedByMissionAndTeam: jest.fn(),
   },
 }));
 
@@ -108,6 +109,7 @@ describe("TeamRequestService.completeTeamRequest", () => {
     });
 
     teamRequestRepository.countIncompleteByMissionAndTeam.mockResolvedValue(0);
+    teamRequestRepository.findCompletedByMissionAndTeam.mockResolvedValue([{ outcome: "COMPLETED" }]);
 
     const result = await teamRequestService.completeTeamRequest(
       teamRequestId,
@@ -171,6 +173,7 @@ describe("TeamRequestService.completeTeamRequest", () => {
     });
 
     teamRequestRepository.countIncompleteByMissionAndTeam.mockResolvedValue(0);
+    teamRequestRepository.findCompletedByMissionAndTeam.mockResolvedValue([{ outcome: "PARTIAL" }]);
 
     const result = await teamRequestService.completeTeamRequest(
       teamRequestId,
