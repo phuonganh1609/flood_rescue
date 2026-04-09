@@ -46,7 +46,6 @@ const MediaSchema = new Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
-    imageUrl: { type: String },
   },
   { _id: false },
 );
