@@ -43,6 +43,11 @@ router.get(
   validate(getMissionRequestsQuerySchema, "query"),
   missionController.getMissionRequests,
 );
+router.get(
+  "/:id/accept-info",
+  authorize(["Rescue Team"]),
+  missionController.getAcceptInfo,
+);
 router.patch(
   "/:id",
   authorize(["Rescue Coordinator", "Admin"]),

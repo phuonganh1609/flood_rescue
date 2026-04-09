@@ -16,7 +16,6 @@ export const createComboSupplyValidation = Joi.object({
 export const updateComboSupplyValidation = Joi.object({
   name: Joi.string().optional(),
   type: Joi.string().valid("Citizen", "Rescue Team").optional(),
-  category: Joi.string().valid(...categories).optional(),
   description: Joi.string().optional(),
   supplies: Joi.array().items(
     Joi.object({

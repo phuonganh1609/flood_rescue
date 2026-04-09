@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import TimelineSupply from "./timelineSupply.model.js";
+import TimelineSupply, { TIMELINE_SUPPLY_STATUS } from "./timelineSupply.model.js";
 import MissionSupply from "../missionSupplies/missionSupply.model.js";
 import InventoryItem from "../inventory/inventoryItem.model.js";
 import Supply from "../supply/supply.model.js";
@@ -17,68 +17,77 @@ class TimelineSupplyService {
         ],
       })
       .populate("supplyId", "name unit category")
+      .populate("comboSupplyId", "name type")
+      .populate("warehouseId", "name location")
       .sort({ claimedAt: -1 });
   }
 
-  async claimSupply(timelineId, missionSupplyId, carriedQty) {
+  async approveSupply(timelineSupplyId, approvalData) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      if (carriedQty <= 0) throw new Error("Carried quantity must be greater than zero");
-
-      // 1. Validate Timeline exists
-      const timeline = await Timeline.findById(timelineId).session(session);
-      if (!timeline) throw new Error("Timeline not found");
-
-      // 2. Validate MissionSupply
-      const missionSupply = await MissionSupply.findById(missionSupplyId).session(session);
-      if (!missionSupply) throw new Error("MissionSupply not found");
-      if (missionSupply.status !== "ALLOCATED" && missionSupply.status !== "FULLY_CLAIMED") {
-        throw new Error("Supply not allocated by Manager yet");
+      const timelineSupply = await TimelineSupply.findById(timelineSupplyId).session(session);
+      if (!timelineSupply) throw new Error("TimelineSupply not found");
+      if (timelineSupply.status !== TIMELINE_SUPPLY_STATUS.RESERVED) {
+        throw new Error(`Cannot approve: current status is ${timelineSupply.status}, expected RESERVED`);
       }
 
-      // 3. Ensure not claimed before
-      const existing = await TimelineSupply.findOne({ timelineId, missionSupplyId }).session(session);
-      if (existing) throw new Error("This team already claimed this mission supply");
-
-      // 4. Validate quantity
-      const availableToClaim = missionSupply.allocatedQty - missionSupply.claimedQty;
-      if (carriedQty > availableToClaim) {
-        throw new Error(`Cannot claim more than available. Only ${availableToClaim} left to claim.`);
+      const approvedQty = approvalData.approvedQty ?? timelineSupply.requestedQty;
+      
+      // Validate approvedQty
+      if (approvedQty <= 0) {
+        throw new Error("Approved quantity must be greater than 0");
       }
-
-      // 5. Create TimelineSupply
-      const timelineSupply = await TimelineSupply.create([{
-        timelineId,
-        missionSupplyId,
-        supplyId: missionSupply.supplyId,
-        carriedQty,
-        claimedAt: new Date()
-      }], { session });
-
-      // 6. Update MissionSupply
-      missionSupply.claimedQty += carriedQty;
-      if (missionSupply.claimedQty === missionSupply.allocatedQty) {
-        missionSupply.status = "FULLY_CLAIMED";
+      if (approvedQty > timelineSupply.requestedQty) {
+        throw new Error(`Approved quantity (${approvedQty}) cannot exceed requested quantity (${timelineSupply.requestedQty})`);
       }
-      await missionSupply.save({ session });
-
-      // 7. Update InventoryItem (deduct from quantity and reservedQuantity)
-      const inventoryItem = await InventoryItem.findById(missionSupply.inventoryItemId).session(session);
-      if (inventoryItem) {
-        inventoryItem.quantity -= carriedQty;
-        inventoryItem.reservedQuantity -= carriedQty;
-        // Adjust status if needed
-        if (inventoryItem.quantity - inventoryItem.reservedQuantity === 0 && inventoryItem.reservedQuantity === 0) {
-          inventoryItem.status = "OUT_OF_STOCK";
+      
+      // If manager adjusts quantity down, release the difference from inventory
+      if (approvedQty < timelineSupply.requestedQty) {
+        const diff = timelineSupply.requestedQty - approvedQty;
+        const inventoryItem = await InventoryItem.findById(timelineSupply.inventoryItemId).session(session);
+        if (inventoryItem) {
+          inventoryItem.reservedQuantity -= diff;
+          await inventoryItem.save({ session });
         }
-        await inventoryItem.save({ session });
+      }
+
+      timelineSupply.approvedQty = approvedQty;
+      timelineSupply.status = TIMELINE_SUPPLY_STATUS.APPROVED;
+      await timelineSupply.save({ session });
+
+      // Check if all supplies AND vehicles for this timeline are approved/rejected
+      const { TIMELINE_STATUS } = await import("../timelines/timeline.model.js");
+      const { timelineRepository } = await import("../timelines/timeline.repository.js");
+      const TimelineVehicle = (await import("../timelineVehicles/timelineVehicle.model.js")).default;
+      const { TIMELINE_VEHICLE_STATUS } = await import("../timelineVehicles/timelineVehicle.model.js");
+      
+      const allSupplies = await TimelineSupply.find({ timelineId: timelineSupply.timelineId }).session(session);
+      const allVehicles = await TimelineVehicle.find({ timelineId: timelineSupply.timelineId }).session(session);
+      
+      const suppliesReviewed = allSupplies.every(s => 
+        s.status === TIMELINE_SUPPLY_STATUS.APPROVED || s.status === TIMELINE_SUPPLY_STATUS.REJECTED
+      );
+      const vehiclesReviewed = allVehicles.every(v =>
+        v.status === TIMELINE_VEHICLE_STATUS.APPROVED || v.status === TIMELINE_VEHICLE_STATUS.REJECTED
+      );
+      const hasApprovedSupply = allSupplies.some(s => s.status === TIMELINE_SUPPLY_STATUS.APPROVED);
+      const hasApprovedVehicle = allVehicles.some(v => v.status === TIMELINE_VEHICLE_STATUS.APPROVED);
+
+      // Only auto-transition if ALL items reviewed AND at least one approved
+      if (suppliesReviewed && vehiclesReviewed && (hasApprovedSupply || hasApprovedVehicle)) {
+        await timelineRepository.transitionStatus(
+          timelineSupply.timelineId,
+          TIMELINE_STATUS.PENDING_APPROVAL,
+          { status: TIMELINE_STATUS.CLAIMING_SUPPLIES },
+          session
+        );
       }
 
       await session.commitTransaction();
       session.endSession();
-      return timelineSupply[0];
+      return timelineSupply;
     } catch (err) {
       await session.abortTransaction();
       session.endSession();
@@ -86,30 +95,119 @@ class TimelineSupplyService {
     }
   }
 
-  async returnSupply(timelineId, missionSupplyId) {
+  async rejectSupply(timelineSupplyId, rejectionData = {}) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const timelineSupply = await TimelineSupply.findById(timelineSupplyId).session(session);
+      if (!timelineSupply) throw new Error("TimelineSupply not found");
+      if (timelineSupply.status !== TIMELINE_SUPPLY_STATUS.RESERVED) {
+        throw new Error(`Cannot reject: current status is ${timelineSupply.status}, expected RESERVED`);
+      }
+
+      // Release reserved inventory
+      const inventoryItem = await InventoryItem.findById(timelineSupply.inventoryItemId).session(session);
+      if (inventoryItem) {
+        inventoryItem.reservedQuantity -= timelineSupply.requestedQty;
+        await inventoryItem.save({ session });
+      }
+
+      timelineSupply.status = TIMELINE_SUPPLY_STATUS.REJECTED;
+      if (rejectionData.note) {
+        timelineSupply.note = rejectionData.note;
+      }
+      await timelineSupply.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+      return timelineSupply;
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
+    }
+  }
+
+  async claimSupply(timelineSupplyId) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
       // 1. Find TimelineSupply
-      const timelineSupply = await TimelineSupply.findOne({ timelineId, missionSupplyId }).session(session);
-      if (!timelineSupply) throw new Error("Supply claim record not found");
-      if (timelineSupply.returnedAt) throw new Error("Supply already returned");
+      const timelineSupply = await TimelineSupply.findById(timelineSupplyId).session(session);
+      if (!timelineSupply) throw new Error("TimelineSupply not found");
+      if (timelineSupply.status !== TIMELINE_SUPPLY_STATUS.APPROVED) {
+        throw new Error(`Cannot claim: current status is ${timelineSupply.status}, expected APPROVED`);
+      }
 
-      // 2. Need to know supply name to find distributed quantity
+      // 2. Set carriedQty = approvedQty and update status
+      timelineSupply.carriedQty = timelineSupply.approvedQty;
+      timelineSupply.claimedAt = new Date();
+      timelineSupply.status = TIMELINE_SUPPLY_STATUS.CLAIMED;
+      await timelineSupply.save({ session });
+
+      // 3. Update InventoryItem (deduct from quantity and reservedQuantity)
+      const inventoryItem = await InventoryItem.findById(timelineSupply.inventoryItemId).session(session);
+      if (!inventoryItem) {
+        throw new Error(`InventoryItem ${timelineSupply.inventoryItemId} not found - cannot deduct stock`);
+      }
+      
+      inventoryItem.quantity -= timelineSupply.carriedQty;
+      inventoryItem.reservedQuantity -= timelineSupply.carriedQty;
+      
+      // Adjust status if needed
+      if (inventoryItem.quantity === 0) {
+        inventoryItem.status = "OUT_OF_STOCK";
+      }
+      await inventoryItem.save({ session });
+
+      await session.commitTransaction();
+      session.endSession();
+      return timelineSupply;
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
+    }
+  }
+
+  async returnSupply(timelineSupplyId) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // 1. Find TimelineSupply
+      const timelineSupply = await TimelineSupply.findById(timelineSupplyId).session(session);
+      if (!timelineSupply) throw new Error("TimelineSupply not found");
+      if (timelineSupply.status !== TIMELINE_SUPPLY_STATUS.CLAIMED) {
+        throw new Error(`Cannot return: current status is ${timelineSupply.status}, expected CLAIMED`);
+      }
+
+      // 2. Get supply info for matching
       const supply = await Supply.findById(timelineSupply.supplyId).session(session);
       if (!supply) throw new Error("Supply definition not found");
 
       // 3. Find TeamRequests to sum up distributed quantities
-      const timeline = await Timeline.findById(timelineId).session(session);
+      const timeline = await Timeline.findById(timelineSupply.timelineId).session(session);
       const teamRequests = await TeamRequest.find({
         missionId: timeline.missionId,
         teamId: timeline.teamId
       }).session(session);
 
       let totalDistributed = 0;
+      const supplyIdStr = timelineSupply.supplyId.toString();
+      
       for (const tr of teamRequests) {
-        const supplyDelivered = tr.suppliesDeliveredTotal.find(s => s.name === supply.name);
+        // Match by supplyId if available, fallback to name for backward compatibility
+        const supplyDelivered = tr.suppliesDeliveredTotal.find(s => {
+          if (s.supplyId) {
+            return s.supplyId.toString() === supplyIdStr;
+          }
+          // Fallback to name matching for old data
+          return s.name === supply.name;
+        });
+        
         if (supplyDelivered) {
           totalDistributed += supplyDelivered.deliveredQty;
         }
@@ -125,32 +223,21 @@ class TimelineSupplyService {
       // 5. Update TimelineSupply
       timelineSupply.returnedQty = returnedQty;
       timelineSupply.returnedAt = new Date();
+      timelineSupply.status = TIMELINE_SUPPLY_STATUS.RETURNED;
       await timelineSupply.save({ session });
 
       // 6. Return to Inventory if > 0
-      let missionSupply = null;
       if (returnedQty > 0) {
-        missionSupply = await MissionSupply.findById(missionSupplyId).session(session);
-        const inventoryItem = await InventoryItem.findById(missionSupply.inventoryItemId).session(session);
-        if (inventoryItem) {
-          inventoryItem.quantity += returnedQty;
-          inventoryItem.status = "ACTIVE"; // because we just added items back
-          await inventoryItem.save({ session });
+        const inventoryItem = await InventoryItem.findById(timelineSupply.inventoryItemId).session(session);
+        if (!inventoryItem) {
+          throw new Error(`InventoryItem ${timelineSupply.inventoryItemId} not found - cannot return stock`);
         }
-      }
-
-      // 7. Check if all timelines returned to update MissionSupply status to RETURNED
-      const totalTimelinesCount = await TimelineSupply.countDocuments({ missionSupplyId }).session(session);
-      const returnedTimelinesCount = await TimelineSupply.countDocuments({ missionSupplyId, returnedAt: { $ne: null } }).session(session);
-      
-      if (totalTimelinesCount > 0 && totalTimelinesCount === returnedTimelinesCount) {
-        if (!missionSupply) {
-          missionSupply = await MissionSupply.findById(missionSupplyId).session(session);
+        
+        inventoryItem.quantity += returnedQty;
+        if (inventoryItem.status === "OUT_OF_STOCK") {
+          inventoryItem.status = "ACTIVE";
         }
-        if (missionSupply) {
-          missionSupply.status = "RETURNED";
-          await missionSupply.save({ session });
-        }
+        await inventoryItem.save({ session });
       }
 
       await session.commitTransaction();

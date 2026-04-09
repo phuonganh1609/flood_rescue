@@ -394,6 +394,10 @@ class MissionRequestService {
     return updated;
   }
 
+  /**
+   * @deprecated This method is no longer used. Supply requirements are now created
+   * when teams accept timelines via TimelineSupply records.
+   */
   async createSupplyRequirement(missionRequest, userId) {
   const supplies = missionRequest.requestSuppliesSnapshot || [];
   if (supplies.length === 0) return;

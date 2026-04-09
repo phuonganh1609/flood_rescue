@@ -11,6 +11,10 @@ import User from "../users/user.model.js";
 import { teamRequestService } from "../teamRequests/teamRequest.service.js";
 import Supply from "../supply/supply.model.js";
 import MissionSupply from "../missionSupplies/missionSupply.model.js";
+import ComboSupply from "../comboSupply/comboSupply.model.js";
+import Warehouse from "../warehouses/warehouse.model.js";
+import InventoryItem from "../inventory/inventoryItem.model.js";
+import Vehicle from "../vehicles/vehicle.model.js";
 
 class MissionService {
   async buildMissionMetrics(missionId) {
@@ -455,11 +459,6 @@ class MissionService {
       teamIds: assignedTeamIds,
     });
 
-    // Auto-create MissionSupply for each request
-    for (const mr of missionRequests) {
-      await missionRequestService.createSupplyRequirement(mr, userId);
-    }
-
     const updatedMission = await missionRepository.update(id, { status: "PLANNED" });
 
     const requestIds = [
@@ -575,6 +574,88 @@ class MissionService {
     }
 
     return await missionRepository.delete(id);
+  }
+
+  async getAcceptInfo(missionId) {
+    // 1. Get mission requests with supply snapshots (batch request fetch)
+    const missionRequests = await missionRequestRepository.findByMissionId(missionId);
+    const requestIds = missionRequests.map(mr => mr.requestId).filter(Boolean);
+    
+    // Batch fetch all requests at once
+    const requests = await Promise.all(
+      requestIds.map(id => requestRepository.findRequestById(id))
+    );
+    const requestMap = new Map(requests.map(r => [r._id.toString(), r]));
+    
+    const populatedRequests = missionRequests.map(mr => ({
+      _id: mr._id,
+      missionRequestId: mr._id,
+      requestId: mr.requestId,
+      request: requestMap.get(mr.requestId?.toString()),
+      requestSuppliesSnapshot: mr.requestSuppliesSnapshot || [],
+    }));
+
+    // 2. Get available Citizen combos
+    const citizenCombos = await ComboSupply.find({ type: "Citizen", isActive: true })
+      .populate("supplies.supplyId", "name unit category")
+      .lean();
+
+    // 3. Get available Rescue Team combos
+    const teamCombos = await ComboSupply.find({ type: "Rescue Team", isActive: true })
+      .populate("supplies.supplyId", "name unit category")
+      .lean();
+
+    // 4. Get warehouses with inventory availability
+    const warehouses = await Warehouse.find({ status: "ACTIVE" }).lean();
+    
+    // Get all unique supply IDs from combos
+    const allSupplyIds = new Set();
+    [...citizenCombos, ...teamCombos].forEach(combo => {
+      combo.supplies.forEach(s => {
+        const supplyId = s.supplyId?._id || s.supplyId;
+        allSupplyIds.add(supplyId.toString());
+      });
+    });
+
+    // Batch fetch ALL inventory items at once
+    const allInventory = await InventoryItem.find({
+      warehouse: { $in: warehouses.map(w => w._id) },
+      itemType: "SUPPLY",
+      supplyID: { $in: Array.from(allSupplyIds) },
+    })
+      .populate("supplyID", "name unit category")
+      .lean();
+
+    // Group inventory by warehouse
+    const inventoryByWarehouse = allInventory.reduce((acc, item) => {
+      const wId = item.warehouse.toString();
+      if (!acc[wId]) acc[wId] = [];
+      acc[wId].push({
+        _id: item._id,
+        supply: item.supplyID,
+        quantity: item.quantity,
+        reservedQuantity: item.reservedQuantity,
+        available: item.quantity - item.reservedQuantity,
+        status: item.status,
+      });
+      return acc;
+    }, {});
+
+    const warehousesWithInventory = warehouses.map(warehouse => ({
+      ...warehouse,
+      inventory: inventoryByWarehouse[warehouse._id.toString()] || [],
+    }));
+
+    // 5. Get available vehicles
+    const vehicles = await Vehicle.find({ status: "ACTIVE" }).lean();
+
+    return {
+      missionRequests: populatedRequests,
+      citizenCombos,
+      teamCombos,
+      warehouses: warehousesWithInventory,
+      vehicles,
+    };
   }
 }
 

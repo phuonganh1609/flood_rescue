@@ -220,6 +220,18 @@ class MissionController {
       return sendError(res, MissionController.toErrorPayload(error));
     }
   }
+
+  async getAcceptInfo(req, res) {
+    try {
+      const data = await missionService.getAcceptInfo(req.params.id);
+      return sendSuccess(res, {
+        data,
+        message: "Accept info retrieved successfully",
+      });
+    } catch (error) {
+      return sendError(res, MissionController.toErrorPayload(error));
+    }
+  }
 }
 
 export default new MissionController();

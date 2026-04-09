@@ -65,6 +65,8 @@ class MissionSupplyService {
   }
 
   /**
+   * @deprecated This method is no longer used. Combo supplies are now expanded
+   * into TimelineSupply records when teams accept timelines.
    * Called when team accepts a timeline.
    * Expands the comboSupply into individual MissionSupply records.
    */

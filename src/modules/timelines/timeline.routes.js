@@ -10,6 +10,7 @@ import {
   cancelTimelineSchema,
   completeFromTeamRequestsSchema,
   completeTimelineAutoSchema,
+  acceptTimelineSchema,
 } from "./timeline.validation.js";
 
 const router = express.Router();
@@ -29,7 +30,7 @@ router.get(
   timelineController.getTimelineById,
 );
 
-router.patch("/:id/accept", authorize(["Rescue Team"]), timelineController.accept);
+router.patch("/:id/accept", authorize(["Rescue Team"]), validate(acceptTimelineSchema), timelineController.accept);
 router.post("/:id/confirm-supply-claim", authorize(["Rescue Team"]), timelineController.confirmSupplyClaim);
 router.patch("/:id/arrive", authorize(["Rescue Team"]), timelineController.arrive);
 

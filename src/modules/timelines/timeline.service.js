@@ -14,10 +14,20 @@ import {
   EXECUTING_TIMELINE_STATUSES,
   TERMINAL_TIMELINE_STATUSES,
 } from "./timeline.repository.js";
+import { comboSupplyRepository } from "../comboSupply/comboSupply.repository.js";
+import TimelineSupply, { TIMELINE_SUPPLY_STATUS } from "../timelineSupplies/timelineSupply.model.js";
+import TimelineVehicle, { TIMELINE_VEHICLE_STATUS } from "../timelineVehicles/timelineVehicle.model.js";
+import InventoryItem from "../inventory/inventoryItem.model.js";
+import Vehicle from "../vehicles/vehicle.model.js";
 
 const TIMELINE_TRANSITIONS = {
   [TIMELINE_STATUS.PLANNED]: [TIMELINE_STATUS.ASSIGNED, TIMELINE_STATUS.CANCELLED],
   [TIMELINE_STATUS.ASSIGNED]: [
+    TIMELINE_STATUS.PENDING_APPROVAL,
+    TIMELINE_STATUS.WITHDRAWN,
+    TIMELINE_STATUS.CANCELLED,
+  ],
+  [TIMELINE_STATUS.PENDING_APPROVAL]: [
     TIMELINE_STATUS.CLAIMING_SUPPLIES,
     TIMELINE_STATUS.WITHDRAWN,
     TIMELINE_STATUS.CANCELLED,
@@ -120,63 +130,182 @@ class TimelineService {
   }
 
   async acceptTimeline(timelineId, actorUserId, payload = {}) {
-    const { warehouseId } = payload;
+    const { warehouseId, citizenCombos = [], teamCombos = [], vehicles = [] } = payload;
     const timeline = await this.getTimelineById(timelineId);
     await this.assertMissionCanExecute(extractId(timeline.missionId));
     await this.assertTeamActionAllowed(timeline, actorUserId);
-    assertTimelineTransition(timeline.status, TIMELINE_STATUS.CLAIMING_SUPPLIES);
+    assertTimelineTransition(timeline.status, TIMELINE_STATUS.PENDING_APPROVAL);
 
-    const transitioned = await timelineRepository.transitionStatus(
-      timelineId,
-      TIMELINE_STATUS.ASSIGNED,
-      {
-        status: TIMELINE_STATUS.CLAIMING_SUPPLIES,
-        startedAt: new Date(),
-      },
-    );
-
-    if (!transitioned) {
-      const err = new Error(
-        "Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại",
-      );
-      err.statusCode = 409;
-      err.errorCode = "TIMELINE_CONFLICT";
-      throw err;
-    }
-
-    // Create combo supply request records for the manager to approve
-    const missionId = extractId(transitioned.missionId);
-    const teamId = extractId(transitioned.teamId);
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
     try {
-      const mission = await missionRepository.findById(missionId);
-      if (mission?.comboSupplyId) {
-        const { comboSupplyRepository } = await import("../comboSupply/comboSupply.repository.js");
-        const { missionSupplyService } = await import("../missionSupplies/missionSupply.service.js");
-        const comboSupply = await comboSupplyRepository.findById(mission.comboSupplyId.toString());
-        if (comboSupply) {
-          await missionSupplyService.createComboSupplyRequest({
-            missionId,
-            teamId,
-            comboSupply,
-            warehouseId: warehouseId || null,
-            createdBy: actorUserId,
-          });
+      // 1. Process citizen combos
+      for (const citizenCombo of citizenCombos) {
+        const comboSupply = await comboSupplyRepository.findById(citizenCombo.comboSupplyId);
+        if (!comboSupply) {
+          throw new Error(`ComboSupply ${citizenCombo.comboSupplyId} không tồn tại`);
+        }
+        if (comboSupply.type !== "Citizen") {
+          throw new Error(`ComboSupply ${comboSupply.name} không phải loại Citizen`);
+        }
+
+        for (const supplyItem of comboSupply.supplies) {
+          const effectiveQty = supplyItem.quantity * citizenCombo.quantity;
+          const supplyId = supplyItem.supplyId._id || supplyItem.supplyId;
+
+          // Find inventory item
+          const inventoryItem = await InventoryItem.findOne({
+            itemType: "SUPPLY",
+            supplyID: supplyId,
+            warehouse: warehouseId,
+          }).session(session);
+
+          if (!inventoryItem) {
+            throw new Error(`Supply ${supplyId} không có trong kho ${warehouseId}`);
+          }
+
+          const available = inventoryItem.quantity - inventoryItem.reservedQuantity;
+          if (available < effectiveQty) {
+            throw new Error(
+              `Không đủ supply ${supplyId}. Cần ${effectiveQty}, còn ${available}`
+            );
+          }
+
+          // Reserve inventory
+          inventoryItem.reservedQuantity += effectiveQty;
+          await inventoryItem.save({ session });
+
+          // Create TimelineSupply
+          await TimelineSupply.create([{
+            timelineId,
+            supplyId,
+            comboSupplyId: citizenCombo.comboSupplyId,
+            comboType: "Citizen",
+            missionRequestId: citizenCombo.missionRequestId,
+            warehouseId,
+            inventoryItemId: inventoryItem._id,
+            requestedQty: effectiveQty,
+            approvedQty: 0,
+            carriedQty: 0,
+            returnedQty: 0,
+            status: TIMELINE_SUPPLY_STATUS.RESERVED,
+          }], { session });
         }
       }
-    } catch (comboErr) {
-      // Non-blocking: log but don't fail the accept
-      console.error("[acceptTimeline] Combo supply creation error:", comboErr.message);
+
+      // 2. Process team combos
+      for (const teamCombo of teamCombos) {
+        const comboSupply = await comboSupplyRepository.findById(teamCombo.comboSupplyId);
+        if (!comboSupply) {
+          throw new Error(`ComboSupply ${teamCombo.comboSupplyId} không tồn tại`);
+        }
+        if (comboSupply.type !== "Rescue Team") {
+          throw new Error(`ComboSupply ${comboSupply.name} không phải loại Rescue Team`);
+        }
+
+        for (const supplyItem of comboSupply.supplies) {
+          const effectiveQty = supplyItem.quantity * teamCombo.quantity;
+          const supplyId = supplyItem.supplyId._id || supplyItem.supplyId;
+
+          // Find inventory item
+          const inventoryItem = await InventoryItem.findOne({
+            itemType: "SUPPLY",
+            supplyID: supplyId,
+            warehouse: warehouseId,
+          }).session(session);
+
+          if (!inventoryItem) {
+            throw new Error(`Supply ${supplyId} không có trong kho ${warehouseId}`);
+          }
+
+          const available = inventoryItem.quantity - inventoryItem.reservedQuantity;
+          if (available < effectiveQty) {
+            throw new Error(
+              `Không đủ supply ${supplyId}. Cần ${effectiveQty}, còn ${available}`
+            );
+          }
+
+          // Reserve inventory
+          inventoryItem.reservedQuantity += effectiveQty;
+          await inventoryItem.save({ session });
+
+          // Create TimelineSupply
+          await TimelineSupply.create([{
+            timelineId,
+            supplyId,
+            comboSupplyId: teamCombo.comboSupplyId,
+            comboType: "Rescue Team",
+            warehouseId,
+            inventoryItemId: inventoryItem._id,
+            requestedQty: effectiveQty,
+            approvedQty: 0,
+            carriedQty: 0,
+            returnedQty: 0,
+            status: TIMELINE_SUPPLY_STATUS.RESERVED,
+          }], { session });
+        }
+      }
+
+      // 3. Reserve vehicles
+      for (const vehicleReq of vehicles) {
+        const vehicle = await Vehicle.findById(vehicleReq.vehicleId).session(session);
+        if (!vehicle || vehicle.status !== "ACTIVE") {
+          throw new Error(`Vehicle ${vehicleReq.vehicleId} không khả dụng`);
+        }
+
+        // Check if vehicle is already reserved
+        const existingReservation = await TimelineVehicle.findOne({
+          vehicleId: vehicleReq.vehicleId,
+          status: { $in: [TIMELINE_VEHICLE_STATUS.RESERVED, TIMELINE_VEHICLE_STATUS.APPROVED, TIMELINE_VEHICLE_STATUS.CLAIMED] }
+        }).session(session);
+
+        if (existingReservation) {
+          throw new Error(`Vehicle ${vehicleReq.vehicleId} đã được team khác đặt trước`);
+        }
+
+        // Create TimelineVehicle (do NOT change vehicle status yet - only after manager approves)
+        await TimelineVehicle.create([{
+          timelineId,
+          vehicleId: vehicleReq.vehicleId,
+          status: TIMELINE_VEHICLE_STATUS.RESERVED,
+        }], { session });
+      }
+
+      // 4. Transition timeline to PENDING_APPROVAL
+      const transitioned = await timelineRepository.transitionStatus(
+        timelineId,
+        TIMELINE_STATUS.ASSIGNED,
+        {
+          status: TIMELINE_STATUS.PENDING_APPROVAL,
+          startedAt: new Date(),
+        },
+        session
+      );
+
+      if (!transitioned) {
+        throw new Error("Timeline đã được cập nhật bởi thao tác khác. Vui lòng tải lại dữ liệu và thử lại");
+      }
+
+      await session.commitTransaction();
+      session.endSession();
+
+      // Post-transaction: emit event for manager notification
+      eventBus.emit("TIMELINE_PENDING_APPROVAL", {
+        timelineId,
+        missionId: extractId(timeline.missionId),
+        teamId: extractId(timeline.teamId),
+      });
+
+      return transitioned;
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      const error = new Error(err.message || "Lỗi khi accept timeline");
+      error.statusCode = err.statusCode || 400;
+      error.errorCode = err.errorCode || "ACCEPT_TIMELINE_FAILED";
+      throw error;
     }
-
-    await missionRequestRepository.markPendingInProgressByMission(
-      extractId(transitioned.missionId),
-    );
-    await this.syncAllForTimeline(transitioned);
-    await this.syncRequestStatusesForMission(extractId(transitioned.missionId));
-    await this.emitMissionAcceptedForMission(transitioned, actorUserId);
-
-    return transitioned;
   }
 
   async confirmSupplyClaim(timelineId, actorUserId, payload = {}) {
@@ -541,6 +670,47 @@ class TimelineService {
     return transitioned;
   }
 
+  async releaseTimelineReservations(timelineId) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // Release supply reservations
+      const reservedSupplies = await TimelineSupply.find({
+        timelineId,
+        status: TIMELINE_SUPPLY_STATUS.RESERVED,
+      }).session(session);
+
+      for (const ts of reservedSupplies) {
+        const inventoryItem = await InventoryItem.findById(ts.inventoryItemId).session(session);
+        if (inventoryItem) {
+          inventoryItem.reservedQuantity -= ts.requestedQty;
+          await inventoryItem.save({ session });
+        }
+        ts.status = TIMELINE_SUPPLY_STATUS.REJECTED;
+        ts.note = (ts.note || "") + " [Auto-rejected: timeline withdrawn/cancelled]";
+        await ts.save({ session });
+      }
+
+      // Mark vehicle reservations as rejected (vehicles don't have inventory reservation)
+      await TimelineVehicle.updateMany(
+        { timelineId, status: "RESERVED" },
+        { 
+          status: "REJECTED",
+          note: "[Auto-rejected: timeline withdrawn/cancelled]"
+        },
+        { session }
+      );
+
+      await session.commitTransaction();
+      session.endSession();
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
+    }
+  }
+
   async withdrawTimeline(timelineId, actorUserId, payload) {
     const { withdrawalReason, note } = payload;
     const timeline = await this.getTimelineById(timelineId);
@@ -548,9 +718,14 @@ class TimelineService {
     await this.assertTeamActionAllowed(timeline, actorUserId);
     assertTimelineTransition(timeline.status, TIMELINE_STATUS.WITHDRAWN);
 
+    // Release reservations if timeline is in PENDING_APPROVAL
+    if (timeline.status === TIMELINE_STATUS.PENDING_APPROVAL) {
+      await this.releaseTimelineReservations(timelineId);
+    }
+
     const transitioned = await timelineRepository.transitionStatus(
       timelineId,
-      TIMELINE_STATUS.ASSIGNED,
+      [TIMELINE_STATUS.ASSIGNED, TIMELINE_STATUS.PENDING_APPROVAL],
       {
         status: TIMELINE_STATUS.WITHDRAWN,
         completedAt: new Date(),
@@ -579,9 +754,14 @@ class TimelineService {
     const timeline = await this.getTimelineById(timelineId);
     assertTimelineTransition(timeline.status, TIMELINE_STATUS.CANCELLED);
 
+    // Release reservations if timeline is in PENDING_APPROVAL
+    if (timeline.status === TIMELINE_STATUS.PENDING_APPROVAL) {
+      await this.releaseTimelineReservations(timelineId);
+    }
+
     const transitioned = await timelineRepository.transitionStatus(
       timelineId,
-      TIMELINE_STATUS.ASSIGNED,
+      [TIMELINE_STATUS.ASSIGNED, TIMELINE_STATUS.PENDING_APPROVAL],
       {
         status: TIMELINE_STATUS.CANCELLED,
         completedAt: new Date(),

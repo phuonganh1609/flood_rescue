@@ -29,16 +29,9 @@ export const getTimelineSupplies = async (req, res) => {
 
 export const claimSupply = async (req, res) => {
   try {
-    const { timelineId, missionSupplyId, carriedQty } = req.body;
+    const { id } = req.params;
 
-    if (!timelineId || !missionSupplyId || carriedQty === undefined) {
-      return response.sendError(res, {
-        message: "Missing required fields: timelineId, missionSupplyId, carriedQty",
-        statusCode: 400,
-      });
-    }
-
-    const result = await timelineSupplyService.claimSupply(timelineId, missionSupplyId, Number(carriedQty));
+    const result = await timelineSupplyService.claimSupply(id);
 
     return response.sendSuccess(res, {
       data: result,
@@ -56,16 +49,9 @@ export const claimSupply = async (req, res) => {
 
 export const returnSupply = async (req, res) => {
   try {
-    const { timelineId, missionSupplyId } = req.body;
+    const { id } = req.params;
 
-    if (!timelineId || !missionSupplyId) {
-      return response.sendError(res, {
-        message: "Missing required fields: timelineId, missionSupplyId",
-        statusCode: 400,
-      });
-    }
-
-    const result = await timelineSupplyService.returnSupply(timelineId, missionSupplyId);
+    const result = await timelineSupplyService.returnSupply(id);
 
     return response.sendSuccess(res, {
       data: result,
@@ -76,6 +62,46 @@ export const returnSupply = async (req, res) => {
     return response.sendError(res, {
       message: err.message,
       statusCode: 400,
+    });
+  }
+};
+
+export const approveSupply = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const approvalData = req.body;
+
+    const result = await timelineSupplyService.approveSupply(id, approvalData);
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Supply approved successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: err.statusCode || 400,
+    });
+  }
+};
+
+export const rejectSupply = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rejectionData = req.body;
+
+    const result = await timelineSupplyService.rejectSupply(id, rejectionData);
+
+    return response.sendSuccess(res, {
+      data: result,
+      message: "Supply rejected successfully",
+    });
+  } catch (err) {
+    console.error(err);
+    return response.sendError(res, {
+      message: err.message,
+      statusCode: err.statusCode || 400,
     });
   }
 };

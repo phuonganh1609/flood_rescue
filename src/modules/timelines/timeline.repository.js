@@ -7,6 +7,7 @@ const ACTIVE_TIMELINE_STATUSES = [
 ];
 
 const EXECUTING_TIMELINE_STATUSES = [
+  TIMELINE_STATUS.PENDING_APPROVAL,
   TIMELINE_STATUS.CLAIMING_SUPPLIES,
   TIMELINE_STATUS.EN_ROUTE,
   TIMELINE_STATUS.ON_SITE,
@@ -76,12 +77,15 @@ class TimelineRepository {
       .populate("teamId");
   }
 
-  async transitionStatus(id, fromStatuses, updateData) {
+  async transitionStatus(id, fromStatuses, updateData, session = null) {
     const allowedFrom = Array.isArray(fromStatuses) ? fromStatuses : [fromStatuses];
+    const options = { new: true };
+    if (session) options.session = session;
+    
     return await Timeline.findOneAndUpdate(
       { _id: id, status: { $in: allowedFrom } },
       updateData,
-      { new: true },
+      options,
     )
       .populate("missionId")
       .populate("teamId");

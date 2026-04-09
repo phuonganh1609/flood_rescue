@@ -44,6 +44,40 @@ const completeTimelineAutoSchema = Joi.object({
   note: Joi.string().max(1000).allow("", null),
 });
 
+const acceptTimelineSchema = Joi.object({
+  warehouseId: objectId.label("warehouseId").required(),
+  citizenCombos: Joi.array().items(
+    Joi.object({
+      missionRequestId: objectId.label("missionRequestId").required(),
+      comboSupplyId: objectId.label("comboSupplyId").required(),
+      quantity: Joi.number().integer().min(1).required(),
+    })
+  ).default([]),
+  teamCombos: Joi.array().items(
+    Joi.object({
+      comboSupplyId: objectId.label("comboSupplyId").required(),
+      quantity: Joi.number().integer().min(1).required(),
+    })
+  ).default([]),
+  vehicles: Joi.array().items(
+    Joi.object({
+      vehicleId: objectId.label("vehicleId").required(),
+    })
+  ).default([]),
+}).custom((value, helpers) => {
+  const hasItems = value.citizenCombos.length > 0 || 
+                   value.teamCombos.length > 0 || 
+                   value.vehicles.length > 0;
+  
+  if (!hasItems) {
+    return helpers.error("any.custom", {
+      message: "Phải chọn ít nhất 1 citizen combo, team combo, hoặc vehicle"
+    });
+  }
+  
+  return value;
+});
+
 export {
   listTimelinesSchema,
   completeTimelineSchema,
@@ -52,5 +86,6 @@ export {
   cancelTimelineSchema,
   completeFromTeamRequestsSchema,
   completeTimelineAutoSchema,
+  acceptTimelineSchema,
 };
 
