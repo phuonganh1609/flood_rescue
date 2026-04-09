@@ -278,6 +278,10 @@ class MissionService {
             unit: item.supplyId?.unit || "",
             requestedQty: item.requestedQty,
           })),
+          requestCombosSnapshot: (request.requestCombos || []).map((item) => ({
+            comboSupplyId: item.comboSupplyId?._id?.toString() || item.comboSupplyId?.toString(),
+            quantity: item.quantity,
+          })),
           note: note || null,
         }),
       );
@@ -593,6 +597,7 @@ class MissionService {
       requestId: mr.requestId,
       request: requestMap.get(mr.requestId?.toString()),
       requestSuppliesSnapshot: mr.requestSuppliesSnapshot || [],
+      requestCombosSnapshot: mr.requestCombosSnapshot || [],
     }));
 
     // 2. Get available Citizen combos

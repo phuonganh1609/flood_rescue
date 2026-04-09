@@ -284,8 +284,11 @@ class MissionRequestRepository {
       MissionRequest.find(filter)
         .populate({
           path: "requestId",
-          select: "userName phoneNumber location peopleCount priority requestSupplies media comboSupplyId",
-          populate: { path: "requestSupplies.supplyId", select: "name unit category" },
+          select: "userName phoneNumber location peopleCount priority requestSupplies media comboSupplyId requestCombos",
+          populate: [
+            { path: "requestSupplies.supplyId", select: "name unit category" },
+            { path: "requestCombos.comboSupplyId", select: "name type supplies groupKey" },
+          ],
         })
         .sort({ createdAt: 1 })
         .skip(skip)

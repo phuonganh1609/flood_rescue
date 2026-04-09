@@ -14,7 +14,12 @@ const ComboSupplySchema = new Schema(
       enum: ["Citizen", "Rescue Team"],
       required: true,
     },
-
+    // Map combo với nhóm thành viên gia đình (dùng cho Relief)
+    groupKey: {
+      type: String,
+      enum: ["adult", "child", "elderly", "injured"],
+      default: null,
+    },
     description: {
       type: String,
       required: true,

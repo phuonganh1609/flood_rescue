@@ -62,6 +62,19 @@ const RequestSupplySchema = new Schema(
   { _id: false },
 );
 
+// Schema cho combo đã chọn với số lượng (thay thế comboSupplyId đơn)
+const RequestComboSchema = new Schema(
+  {
+    comboSupplyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ComboSupply",
+      required: true,
+    },
+    quantity: { type: Number, required: true, min: 1 },
+  },
+  { _id: false },
+);
+
 // --- Main schema ---
 const RequestSchema = new Schema(
   {
@@ -135,10 +148,17 @@ const RequestSchema = new Schema(
       default: REQUEST_STATUS.SUBMITTED,
     },
 
+    // Deprecated: dùng requestCombos thay thế
     comboSupplyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "ComboSupply",
       default: null,
+    },
+
+    // Danh sách combo đã chọn với số lượng (cho Relief với nhiều nhóm)
+    requestCombos: {
+      type: [RequestComboSchema],
+      default: [],
     },
 
     requestSupplies: {

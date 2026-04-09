@@ -82,14 +82,47 @@ class RequestService {
       location,
       description,
       peopleCount,
-      comboSupplyId,
+      comboSupplyId, // Deprecated, giữ để backward compat
+      requestCombos = [], // Danh sách combo mới với số lượng
       requestSupplies: rawSupplies,
       media: mediaInput,
     } = requestData;
 
-    // Resolve requestSupplies from combo if comboSupplyId is provided
+    // Resolve requestSupplies từ requestCombos (mới) hoặc comboSupplyId (cũ)
     let requestSupplies = rawSupplies || [];
-    if (comboSupplyId) {
+    
+    if (requestCombos.length > 0) {
+      // Merge supplies từ tất cả combo trong requestCombos
+      const suppliesMap = new Map();
+      
+      for (const { comboSupplyId: comboId, quantity } of requestCombos) {
+        if (!comboId || quantity <= 0) continue;
+        
+        const combo = await comboSupplyRepository.findById(comboId);
+        if (!combo) {
+          const err = new Error(`ComboSupply not found: ${comboId}`);
+          err.statusCode = 404;
+          throw err;
+        }
+        
+        for (const item of combo.supplies || []) {
+          const supplyId = item.supplyId._id?.toString?.() || item.supplyId.toString();
+          const effectiveQty = item.quantity * quantity;
+          
+          if (suppliesMap.has(supplyId)) {
+            suppliesMap.set(supplyId, suppliesMap.get(supplyId) + effectiveQty);
+          } else {
+            suppliesMap.set(supplyId, effectiveQty);
+          }
+        }
+      }
+      
+      requestSupplies = Array.from(suppliesMap.entries()).map(([supplyId, requestedQty]) => ({
+        supplyId,
+        requestedQty,
+      }));
+    } else if (comboSupplyId) {
+      // Backward compat: nếu không có requestCombos, dùng comboSupplyId cũ
       const combo = await comboSupplyRepository.findById(comboSupplyId);
       if (!combo) {
         const err = new Error(`ComboSupply not found: ${comboSupplyId}`);
@@ -127,7 +160,8 @@ class RequestService {
       location,
       description,
       peopleCount: peopleCount || 1,
-      comboSupplyId: comboSupplyId || null,
+      comboSupplyId: comboSupplyId || null, // Deprecated
+      requestCombos: requestCombos.length > 0 ? requestCombos : [],
       requestSupplies,
       media,
     });
@@ -160,14 +194,47 @@ class RequestService {
       description,
       peopleCount,
       priority,
-      comboSupplyId,
+      comboSupplyId, // Deprecated
+      requestCombos = [], // Danh sách combo mới với số lượng
       requestSupplies: rawSupplies,
       media: mediaInput,
     } = requestData;
 
-    // Resolve requestSupplies from combo if comboSupplyId is provided
+    // Resolve requestSupplies từ requestCombos (mới) hoặc comboSupplyId (cũ)
     let requestSupplies = rawSupplies || [];
-    if (comboSupplyId) {
+    
+    if (requestCombos.length > 0) {
+      // Merge supplies từ tất cả combo trong requestCombos
+      const suppliesMap = new Map();
+      
+      for (const { comboSupplyId: comboId, quantity } of requestCombos) {
+        if (!comboId || quantity <= 0) continue;
+        
+        const combo = await comboSupplyRepository.findById(comboId);
+        if (!combo) {
+          const err = new Error(`ComboSupply not found: ${comboId}`);
+          err.statusCode = 404;
+          throw err;
+        }
+        
+        for (const item of combo.supplies || []) {
+          const supplyId = item.supplyId._id?.toString?.() || item.supplyId.toString();
+          const effectiveQty = item.quantity * quantity;
+          
+          if (suppliesMap.has(supplyId)) {
+            suppliesMap.set(supplyId, suppliesMap.get(supplyId) + effectiveQty);
+          } else {
+            suppliesMap.set(supplyId, effectiveQty);
+          }
+        }
+      }
+      
+      requestSupplies = Array.from(suppliesMap.entries()).map(([supplyId, requestedQty]) => ({
+        supplyId,
+        requestedQty,
+      }));
+    } else if (comboSupplyId) {
+      // Backward compat
       const combo = await comboSupplyRepository.findById(comboSupplyId);
       if (!combo) {
         const err = new Error(`ComboSupply not found: ${comboSupplyId}`);
@@ -245,7 +312,8 @@ class RequestService {
       peopleCount: peopleCount || 1,
       priority: priority || "Normal",
       status: REQUEST_STATUS.VERIFIED, // auto-verified
-      comboSupplyId: comboSupplyId || null,
+      comboSupplyId: comboSupplyId || null, // Deprecated
+      requestCombos: requestCombos.length > 0 ? requestCombos : [],
       requestSupplies,
       media,
     });

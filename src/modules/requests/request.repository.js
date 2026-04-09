@@ -23,10 +23,9 @@ class RequestRepository {
    * Find request by ID
    */
   async findRequestById(requestId) {
-    return await Request.findById(requestId).populate(
-      "userId",
-      "displayName userName email phoneNumber",
-    );
+    return await Request.findById(requestId)
+      .populate("userId", "displayName userName email phoneNumber")
+      .populate("requestCombos.comboSupplyId", "name type supplies groupKey");
   }
 
   /**
@@ -35,7 +34,8 @@ class RequestRepository {
   async findRequestByIdWithSupplies(requestId) {
     return await Request.findById(requestId)
       .populate("userId", "displayName userName email phoneNumber")
-      .populate("requestSupplies.supplyId", "name unit category");
+      .populate("requestSupplies.supplyId", "name unit category")
+      .populate("requestCombos.comboSupplyId", "name type supplies groupKey");
   }
 
   /**

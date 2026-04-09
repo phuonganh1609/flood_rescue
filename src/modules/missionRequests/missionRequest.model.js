@@ -23,7 +23,16 @@ const missionRequestSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Deprecated: dùng requestCombosSnapshot thay thế
     comboSupplyId: { type: mongoose.Schema.Types.ObjectId, ref: "ComboSupply", index: true },
+    // Snapshot của requestCombos từ Request (để giữ lịch sử combo đã chọn)
+    requestCombosSnapshot: {
+      type: [{
+        comboSupplyId: { type: mongoose.Schema.Types.ObjectId, ref: "ComboSupply", required: true },
+        quantity: { type: Number, required: true, min: 1 },
+      }],
+      default: [],
+    },
     status: {
       type: String,
       enum: Object.values(MISSION_REQUEST_STATUS),

@@ -30,6 +30,20 @@ const requestSupplyItemSchema = Joi.object({
   }),
 });
 
+// Schema cho combo đã chọn với số lượng
+const requestComboItemSchema = Joi.object({
+  comboSupplyId: Joi.string()
+    .pattern(objectIdPattern)
+    .required()
+    .messages({
+      "string.pattern.base": "comboSupplyId must be a valid ObjectId",
+      "any.required": "comboSupplyId is required",
+    }),
+  quantity: Joi.number().integer().min(1).required().messages({
+    "number.min": "Quantity must be at least 1",
+  }),
+});
+
 // --- Create Request ---
 const addRequestSchema = Joi.object({
   type: Joi.string().valid("Rescue", "Relief").required().messages({
@@ -68,6 +82,14 @@ const addRequestSchema = Joi.object({
     .allow(null, "")
     .messages({
       "string.pattern.base": "comboSupplyId must be a valid ObjectId",
+    }),
+
+  // Danh sách combo đã chọn với số lượng (thay thế comboSupplyId đơn)
+  requestCombos: Joi.array()
+    .items(requestComboItemSchema)
+    .default([])
+    .messages({
+      "array.base": "requestCombos must be an array",
     }),
 
   requestSupplies: Joi.array()
@@ -241,6 +263,9 @@ const createRequestOnBehalfSchema = Joi.object({
     .messages({
       "string.pattern.base": "comboSupplyId must be a valid ObjectId",
     }),
+
+  // Danh sách combo đã chọn với số lượng
+  requestCombos: Joi.array().items(requestComboItemSchema).default([]),
 
   requestSupplies: Joi.array().items(requestSupplyItemSchema).default([]),
 
