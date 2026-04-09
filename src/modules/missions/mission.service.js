@@ -12,7 +12,7 @@ import { teamRequestService } from "../teamRequests/teamRequest.service.js";
 import Supply from "../supply/supply.model.js";
 import MissionSupply from "../missionSupplies/missionSupply.model.js";
 import ComboSupply from "../comboSupply/comboSupply.model.js";
-import Warehouse from "../warehouses/warehouse.model.js";
+import Warehouse from "../warehouse/warehouse.model.js";
 import InventoryItem from "../inventory/inventoryItem.model.js";
 import Vehicle from "../vehicles/vehicle.model.js";
 
