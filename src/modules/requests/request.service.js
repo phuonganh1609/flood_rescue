@@ -17,7 +17,7 @@ const ALLOWED_TRANSITIONS = {
     REQUEST_STATUS.REJECTED,
     REQUEST_STATUS.CANCELLED,
   ],
-  [REQUEST_STATUS.VERIFIED]: [REQUEST_STATUS.IN_PROGRESS],
+  [REQUEST_STATUS.VERIFIED]: [REQUEST_STATUS.IN_PROGRESS, REQUEST_STATUS.CANCELLED],
   [REQUEST_STATUS.IN_PROGRESS]: [
     REQUEST_STATUS.PARTIALLY_FULFILLED,
     REQUEST_STATUS.FULFILLED,
@@ -361,8 +361,7 @@ class RequestService {
   /**
    * Cancel a request
    * - Citizen can cancel their own SUBMITTED request
-   * - Coordinator can cancel any SUBMITTED request
-   * Only requests in SUBMITTED status can be cancelled.
+   * - Coordinator can cancel SUBMITTED or VERIFIED requests
    */
   async cancelRequest(requestId, { reason, userId, userRole }) {
     const request = await this._getRequestOrThrow(requestId);
@@ -379,10 +378,16 @@ class RequestService {
       throw err;
     }
 
-    // Only SUBMITTED requests can be cancelled
-    if (request.status !== REQUEST_STATUS.SUBMITTED) {
+    // Citizens can only cancel SUBMITTED requests
+    // Coordinators can cancel SUBMITTED or VERIFIED requests
+    const allowedStatuses =
+      userRole === "Rescue Coordinator"
+        ? [REQUEST_STATUS.SUBMITTED, REQUEST_STATUS.VERIFIED]
+        : [REQUEST_STATUS.SUBMITTED];
+
+    if (!allowedStatuses.includes(request.status)) {
       const err = new Error(
-        `Cannot cancel request in ${request.status} status. Only SUBMITTED requests can be cancelled.`,
+        `Cannot cancel request in ${request.status} status. Allowed: ${allowedStatuses.join(", ")}.`,
       );
       err.statusCode = 400;
       throw err;
